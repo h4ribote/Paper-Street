@@ -32,9 +32,6 @@ CREATE TABLE IF NOT EXISTS countries (
     region_id INT,
     name VARCHAR(100) NOT NULL, -- e.g., Neo Venice, Arcadia
     currency_code VARCHAR(3) NOT NULL, -- e.g., VND, ARC
-    tax_rate DECIMAL(21, 0) DEFAULT 2000 COMMENT 'Basis points: 2000 = 20.00%', 
-    leverage_limit DECIMAL(21, 0) DEFAULT 100, -- 100 = 1.00x
-    description TEXT,
     FOREIGN KEY (region_id) REFERENCES regions(region_id)
 );
 
@@ -111,6 +108,7 @@ CREATE TABLE IF NOT EXISTS users (
     user_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
     country_id INT,
+    fee_tier ENUM('STANDARD', 'PREMIUM', 'VIP') DEFAULT 'STANDARD' COMMENT 'Commission rate tier',
     created_at BIGINT DEFAULT 0,
     FOREIGN KEY (country_id) REFERENCES countries(country_id)
 ) AUTO_INCREMENT = 10001; -- Human users start from 10001
@@ -210,7 +208,7 @@ CREATE TABLE IF NOT EXISTS positions (
 
 -- 注文 (Active & Historical Orders)
 CREATE TABLE IF NOT EXISTS orders (
-    order_id VARCHAR(36) PRIMARY KEY, -- UUID keep as string
+    order_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT NOT NULL,
     instrument_id INT NOT NULL,
     side ENUM('BUY', 'SELL') NOT NULL,
@@ -234,8 +232,8 @@ CREATE TABLE IF NOT EXISTS orders (
 -- 約定履歴 (Executions / Trade Tape)
 CREATE TABLE IF NOT EXISTS executions (
     execution_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    buy_order_id VARCHAR(36) NOT NULL,
-    sell_order_id VARCHAR(36) NOT NULL,
+    buy_order_id BIGINT NOT NULL,
+    sell_order_id BIGINT NOT NULL,
     instrument_id INT NOT NULL,
     price DECIMAL(21, 0) NOT NULL,
     quantity DECIMAL(21, 0) NOT NULL,
@@ -278,103 +276,5 @@ CREATE TABLE IF NOT EXISTS news_feed (
     related_sector_id INT,
     related_country_id INT
 );
-
-/*
--- --------------------------------------------------------
--- 5. Seeding Data (初期データ投入)
--- --------------------------------------------------------
-
--- Regions
-INSERT INTO regions (name) VALUES 
-('Northern Alliance'), ('Eastern Coalition'), ('Southern Resource Pact'), ('Oceanic Tech Arch');
-
--- Countries
--- Tax Rate: 2000 = 20.00%
--- Leverage: 5000 = 50.00x
-INSERT INTO countries (region_id, name, currency_code, tax_rate, leverage_limit, description) VALUES
-(4, 'Neo Venice', 'VND', 0,    5000, 'Tax Haven, High Cost of Living. Capital Gain Tax 0%.'),
-(1, 'Arcadia',    'ARC', 3000, 2500, 'Tech Utopia. High Tax, but Algo/Bot access enabled.'),
-(2, 'Boros Fed',  'BRB', 1500, 10000,'Industrial Giant. High Leverage allowed, Political Risk.'),
-(3, 'El Dorado',  'DRL', 1000, 2000, 'Resource Kingdom. Volatile currency.'),
-(3, 'San Verde',  'VDP', 500,  1000, 'Agri-Republic. Low cost, safe but slow infrastructure.');
-
--- Macro Indicators Seed (Initial Values)
--- 1. Arcadia (Stable, Low Growth)
-INSERT INTO macro_indicators (country_id, type, value, published_at) VALUES 
-(2, 'GDP_GROWTH', 150, UNIX_TIMESTAMP() * 1000), -- 1.5%
-(2, 'INTEREST_RATE', 450, UNIX_TIMESTAMP() * 1000), -- 4.5%
-(2, 'CPI', 200, UNIX_TIMESTAMP() * 1000); -- 2.0%
-
--- 2. Eastern Coalition (Boros) - High Growth, High Inflation
-INSERT INTO macro_indicators (country_id, type, value, published_at) VALUES 
-(3, 'GDP_GROWTH', 600, UNIX_TIMESTAMP() * 1000), -- 6.0%
-(3, 'INTEREST_RATE', 800, UNIX_TIMESTAMP() * 1000), -- 8.0%
-(3, 'CPI', 550, UNIX_TIMESTAMP() * 1000); -- 5.5%
-
--- Sectors
-INSERT INTO sectors (code, name) VALUES
-('TECH', 'Technology'),
-('ENERGY', 'Energy'),
-('FIN', 'Finance'),
-('BIO', 'Healthcare'),
-('CONS', 'Consumer'),
-('DEF', 'Defense');
-
--- Companies & Instruments
--- Price Scaling: Assuming 1000 = 1.00 (Currency logic) or raw integer?
--- Instruction: "Other assets (stocks...): 1000 data -> 1000 display"
--- So Stocks are stored as raw integers. $1500 price -> 1500 stored.
--- Currency (USD etc): 1000 data -> 1.000 display.
-
--- 1. OmniCorp
-INSERT INTO companies (country_id, sector_id, name, ticker_symbol, description) 
-VALUES (2, 1, 'OmniCorp', 'OMNI', 'World largest AI company.');
-
-INSERT INTO instruments (ticker, company_id, type, base_price) 
-VALUES ('OMNI', 1, 'STOCK', 1500);
-
--- OmniCorp Financials
-INSERT INTO financial_reports (company_id, fiscal_year, fiscal_quarter, revenue, net_income, eps, published_at)
-VALUES (1, 2025, 1, 50000000000, 12000000000, 4500, UNIX_TIMESTAMP() * 1000); -- EPS 4.50
-
--- 2. Titan Energy
-INSERT INTO companies (country_id, sector_id, name, ticker_symbol, description) 
-VALUES (3, 2, 'Titan Energy', 'TTN', 'Fossil fuel giant transitioning to renewable.');
-
-INSERT INTO instruments (ticker, company_id, type, base_price) 
-VALUES ('TTN', 2, 'STOCK', 85);
-
--- 3. Goliath Bank
-INSERT INTO companies (country_id, sector_id, name, ticker_symbol, description) 
-VALUES (2, 3, 'Goliath Bank', 'GLT', 'Too big to fail investment bank.');
-
-INSERT INTO instruments (ticker, company_id, type, base_price) 
-VALUES ('GLT', 3, 'STOCK', 320);
-
--- 4. Chimera Genetics
-INSERT INTO companies (country_id, sector_id, name, ticker_symbol, description) 
-VALUES (2, 4, 'Chimera Genetics', 'CHM', 'Gene editing pioneer.');
-
-INSERT INTO instruments (ticker, company_id, type, base_price) 
-VALUES ('CHM', 4, 'STOCK', 45);
-
--- 5. Shadow Fund
-INSERT INTO companies (country_id, sector_id, name, ticker_symbol, description) 
-VALUES (1, 3, 'Shadow Fund', 'SHD', 'Algorithmic Hedge Fund.');
-
-INSERT INTO instruments (ticker, company_id, type, base_price) 
-VALUES ('SHD', 5, 'STOCK', 10000);
-
--- Initialize Season 1
--- Times are placeholders (0), to be updated by app logic or current unix time in app
-INSERT INTO seasons (name, theme_code, start_at, end_at) 
-VALUES ('Season 1: The Great Depression', 'BEAR_MARKET_HARD', UNIX_TIMESTAMP() * 1000, (UNIX_TIMESTAMP() + 7776000) * 1000);
-
--- Bots Seeding (User IDs < 10000)
-INSERT INTO users (user_id, username, country_id, created_at) VALUES 
-(1, 'MarketMaker_01', 1, UNIX_TIMESTAMP() * 1000),
-(2, 'Whale_Soros', 4, UNIX_TIMESTAMP() * 1000),
-(3, 'HFT_Bot_Alpha', 2, UNIX_TIMESTAMP() * 1000);
-*/
 
 SET FOREIGN_KEY_CHECKS = 1;

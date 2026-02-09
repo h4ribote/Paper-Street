@@ -79,6 +79,18 @@
 *   **Limit (指値)**: 指定価格で待つ。流動性供給者（Maker）として手数料リベートを得られる（予定）。
 *   **Stop / Stop Limit**: 損切りやブレイクアウト狙い。
 
+### 取引手数料と税金 (Fees & Taxes)
+#### 1. 手数料 (Commission)
+*   **株式・債券 (Stocks/Bonds)**: 「証券会社モデル」。
+    *   基本手数料: 取引額の 0.1%。
+    *   買い注文は発注時に、売り注文は約定時に決済通貨から追加徴収。
+*   **Crypto/FX**: 「取引所モデル (Maker/Taker)」。
+    *   **Maker (指値)**: -0.02% (リベート) または 無料。
+    *   **Taker (成行)**: 0.10% (支払い)。
+    *   受け取る通貨から差し引く (Deduct from Asset)。
+*   **Tier制度 (fee_tier)**: 
+    *   高ランクのプレイヤーは割引あり。
+
 ## 7. ゲーム進行 (Seasonal System)
 MMOとしての長期的なモチベーションを維持するため、シーズン制を導入します。
 
@@ -87,7 +99,7 @@ MMOとしての長期的なモチベーションを維持するため、シー�
 *   **ランキング**: 「総資産額」「最大瞬間ROI」などでランキングを決定。
 *   **報酬**:
     *   **称号 (Titles)**: "Wolf of Paper Street", "Market Wizard" など。
-    *   **Boost**: 上位プレイヤーは、次シーズンのステータス（手数料割引、情報取得速度など）を微強化。
+    *   **Boost**: 上位プレイヤーは、次シーズンのスタート時の`fee_tier`が優遇される。
 
 ### シーズンテーマ (Dynamic Meta)
 シーズンごとに市場の「ルール」や「トレンド」が変化します。
@@ -109,5 +121,5 @@ MMOとしての長期的なモチベーションを維持するため、シー�
 *   **Infrastructure**: Docker & Docker Compose
     *   **App Container**: FastAPIサーバー
     *   **DB Container**: MySQL
-    *   **Bot Containers**: 複数のPythonスクリプト（Market Maker, Whale等）を独立したコンテナとして起動し、API経由またはDB経由で市場に参加させる。
+    *   **Bot Containers**: 複数のPythonスクリプト（Market Maker, Whale等）を独立したコンテナとして起動し、API経由で市場に参加させる。
 *   **Real-time**: WebSocket (FastAPI標準のサポートを利用)
