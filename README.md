@@ -2,7 +2,7 @@
 
 **Real-time Financial MMO Simulation**
 
-[詳細設計ドキュメント (GAME_DESIGN.md) はこちら](./GAME_DESIGN.md)
+[詳細設計ドキュメント (GAME_DESIGN.md) はこちら](./docs/GAME_DESIGN.md)
 
 ## 概要 (Overview)
 Paper Street は、「Wall Street Junior」などの金融シミュレーションゲームにインスパイアされた、Webブラウザベースの**リアルタイム金融MMO**です。
@@ -29,4 +29,4 @@ Paper Street は、「Wall Street Junior」などの金融シミュレーショ�
 *   **Infra**: Docker & Docker Compose (Microservices for Bots)
 
 ## ドキュメント
-プロジェクトの詳細な仕様については [GAME_DESIGN.md](./GAME_DESIGN.md) を参照してください。
+プロジェクトの詳細な仕様については [GAME_DESIGN.md](./docs/GAME_DESIGN.md) を参照してください。
