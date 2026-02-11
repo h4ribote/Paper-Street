@@ -110,6 +110,8 @@
 ### Technology (TECH)
 *   **OmniCorp (OMNI)**: [Arcadia] 世界最大のAI企業。生活のあらゆるインフラを握っている。「Omni sees everything.」
     *   **Supply Chain**: 半導体原料としてレアメタル（El Dorado）を大量に消費。電力価格の影響を強く受ける。
+*   **Quantum Dynamics (QDY)**: [Arcadia] 量子コンピューティングのハードウェアメーカー。OmniCorpと競合しつつも、AI開発に必要な計算能力を提供している。
+    *   **Supply Chain**: 極低温環境を維持するため、Novaya Zemlyaの冷却システム技術に依存。
 *   **CyberLife (CYB)**: [Neo Venice] 人工義体やサイバネティクス技術のトップシェア。倫理的な問題を度々起こす。
     *   **Supply Chain**: Titan Energyから特殊な合成燃料を購入。
 *   **Silicon Dragon (SLD)**: [Pearl River] 半導体およびマイクロチップの世界最大手。
@@ -118,6 +120,8 @@
 ### Energy (ENERGY)
 *   **Titan Energy (TTN)**: [Boros] 旧時代の化石燃料採掘大手だが、再生可能エネルギーへの転換を進めている。
     *   **Supply Chain (Upstream)**: 原油・天然ガスを世界中に供給。特にBoros国内の重工業（Iron Fist Armaments）への供給責任を持つ。
+*   **Nebula Mining (NEB)**: [Novaya Zemlya] 小惑星採掘ベンチャー。レアメタル供給の新たな源泉として期待されるが、コストが高く失敗リスクも高い。
+    *   **Supply Chain (Upstream)**: 宇宙空間から持ち帰った鉱物を精錬し、Silicon DragonやAegis Systemsに供給。
 *   **Helios Solar (SOL)**: [El Dorado] 砂漠地帯を利用した大規模太陽光発電を行う。
     *   **Supply Chain (Upstream)**: クリーンエネルギーをOmniCorpのデータセンター群に供給。
 *   **Atomos Energy (ATM)**: [Novaya Zemlya] 次世代原子炉と地熱発電を運営。安価で安定したベースロード電源を供給。
@@ -129,6 +133,8 @@
 
 ### Healthcare / Bio (BIO)
 *   **Chimera Genetics (CHM)**: [Arcadia] 遺伝子編集技術のパイオニア。「デザイナーベビー」問題で倫理的な議論を呼ぶ。寿命延長技術を富裕層に提供。
+*   **Verde Pharma (VPH)**: [San Verde] 農業廃棄物を利用した安価なジェネリック医薬品メーカー。途上国向けのシェアが高い。
+    *   **Supply Chain**: Red Ox Foodから廃棄される有機物を原料として安く調達している。
 *   **Panacea Corp (PAN)**: [El Dorado] ジャングル奥地の希少植物から特効薬を開発する製薬会社。特許を独占し、高額で販売している。
     *   **Supply Chain**: ジャングルの植生保護のため、San Verdeの農業企業と対立することがある。
 
@@ -174,11 +180,13 @@
 ### Energy (エネルギー)
 *   **Crude Oil (原油)**: [Titan Energy] 旧世界の血液。プラスチック原料としても必須。
 *   **Natural Gas (天然ガス)**: [Titan Energy] 火力発電や暖房用。
+*   **Hydrogen (水素)**: [Helios Solar] クリーンエネルギーの貯蔵・輸送媒体として注目される。
 *   **Uranium (ウラン)**: [Atomos Energy] 原子力発電の燃料。
 *   **Energy Credits (電力証書)**: [Helios Solar, Atomos Energy] データセンターやAI企業の稼働に不可欠。
 
 ### Metals / Materials (金属・素材)
 *   **Rare Earth Metals (レアアース)**: [El Dorado] 半導体、バッテリー、先端兵器の製造に必須。供給不足はテックセクターに打撃。
+*   **Lithium (リチウム)**: [El Dorado] EVバッテリーやモバイル機器に必須。Nebula Miningも宇宙からの供給を目指している。
 *   **Steel (鉄鋼)**: [Boros] ビル建設、兵器、自動車などの基礎素材。
 *   **Water (工業用水/飲料水)**: [San Verde, Novaya Zemlya] 気候変動により価値が高騰。半導体洗浄にも大量に必要。
 
@@ -188,4 +196,5 @@
 
 ### Technology / Components (技術・部品)
 *   **Semiconductors (半導体)**: [Silicon Dragon] 「産業の米」。あらゆる電子機器に搭載される。
+*   **Cyber-Implants (サイバーインプラント)**: [CyberLife] 人体拡張用パーツ。医療・軍事両面で需要がある。
 *   **Bio-Gel (バイオジェル)**: [Chimera Genetics] 医療ポッドや再生治療に使われる特殊素材。
