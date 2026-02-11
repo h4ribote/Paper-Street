@@ -271,4 +271,55 @@ CREATE TABLE IF NOT EXISTS resources (
     description TEXT
 );
 
+-- --------------------------------------------------------
+-- 5. Liquidity Pools (FX Market)
+-- --------------------------------------------------------
+
+-- 流動性プール (Liquidity Pools for FX)
+-- ARCを基軸通貨とし、各通貨とのペアを管理
+CREATE TABLE IF NOT EXISTS liquidity_pools (
+    pool_id INT AUTO_INCREMENT PRIMARY KEY,
+    currency_id INT NOT NULL COMMENT 'The other currency paired with ARC',
+    current_tick INT NOT NULL DEFAULT 0,
+    tick_spacing INT NOT NULL DEFAULT 1,
+    liquidity DECIMAL(21, 0) DEFAULT 0,
+
+    -- Fee tracking (Global)
+    fee_growth_global_0 DECIMAL(21, 0) DEFAULT 0,
+    fee_growth_global_1 DECIMAL(21, 0) DEFAULT 0,
+
+    created_at BIGINT DEFAULT 0,
+
+    FOREIGN KEY (currency_id) REFERENCES currencies(currency_id),
+    UNIQUE(currency_id)
+);
+
+-- 流動性ポジション / 指値注文 (Liquidity Positions / Limit Orders)
+CREATE TABLE IF NOT EXISTS liquidity_positions (
+    position_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    pool_id INT NOT NULL,
+    user_id BIGINT NOT NULL,
+
+    tick_lower INT NOT NULL,
+    tick_upper INT NOT NULL,
+
+    liquidity DECIMAL(21, 0) DEFAULT 0,
+
+    -- Fee tracking (Inside)
+    fee_growth_inside_0_last DECIMAL(21, 0) DEFAULT 0,
+    fee_growth_inside_1_last DECIMAL(21, 0) DEFAULT 0,
+    tokens_owed_0 DECIMAL(21, 0) DEFAULT 0,
+    tokens_owed_1 DECIMAL(21, 0) DEFAULT 0,
+
+    -- Limit Order Specifics
+    is_limit_order BOOLEAN DEFAULT FALSE,
+    status ENUM('ACTIVE', 'FILLED', 'CLOSED', 'WITHDRAWN') DEFAULT 'ACTIVE',
+
+    created_at BIGINT DEFAULT 0,
+    updated_at BIGINT DEFAULT 0,
+
+    FOREIGN KEY (pool_id) REFERENCES liquidity_pools(pool_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+
 SET FOREIGN_KEY_CHECKS = 1;
