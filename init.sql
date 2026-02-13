@@ -352,4 +352,19 @@ CREATE TABLE IF NOT EXISTS margin_pools (
     UNIQUE(asset_id, currency_id)
 );
 
+-- --------------------------------------------------------
+-- 7. Indices (Simple Physical Basket)
+-- --------------------------------------------------------
+
+-- インデックス構成銘柄 (Index Constituents)
+CREATE TABLE IF NOT EXISTS index_constituents (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    index_asset_id INT NOT NULL,
+    component_asset_id INT NOT NULL,
+    -- weight removed: implicitly 1 unit each
+    FOREIGN KEY (index_asset_id) REFERENCES assets(asset_id),
+    FOREIGN KEY (component_asset_id) REFERENCES assets(asset_id),
+    UNIQUE(index_asset_id, component_asset_id)
+);
+
 SET FOREIGN_KEY_CHECKS = 1;

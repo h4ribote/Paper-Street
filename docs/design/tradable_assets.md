@@ -44,3 +44,14 @@
 | Semiconductors (半導体) | TECH | Pearl River (Silicon Dragon) | RVD |
 | Cyber-Implants (インプラント) | TECH | Neo Venice (CyberLife) | VND |
 | Bio-Gel (バイオジェル) | TECH | Arcadia (Chimera Genetics) | ARC |
+
+## Indices (指数)
+
+詳細については [Indices](./INDICES.md) を参照してください。
+
+| Ticker | Type | Description |
+| :--- | :--- | :--- |
+| PSI10 | INDEX | Top 10 companies. |
+| TCH | INDEX | Technology sector companies. |
+| EGY | INDEX | Energy sector companies. |
+| BIO | INDEX | Bio-Tech sector companies. |
