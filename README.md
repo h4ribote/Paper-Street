@@ -4,6 +4,10 @@
 
 [詳細設計ドキュメント (GAME_DESIGN.md) はこちら](./docs/GAME_DESIGN.md)
 
+[APIエンドポイント一覧 (API_ENDPOINTS.md) はこちら](./docs/API_ENDPOINTS.md)
+
+[WebSocket仕様書 (WEBSOCKET.md) はこちら](./docs/WEBSOCKET.md)
+
 ## 概要 (Overview)
 Paper Street は、「Wall Street Junior」などの金融シミュレーションゲームにインスパイアされた、Webブラウザベースの**リアルタイム金融MMO**です。
 プレイヤーはプロフェッショナルな機関投資家として、高度な情報端末（The Terminal）を駆使し、ボットや他プレイヤーがひしめく市場で資産を競い合います。
