@@ -39,15 +39,10 @@ Paper Streetでは、実際の金融理論に基づいた高度な経済モデ�
 ---
 
 ## 3. 手数料体系 (Fees)
-取引手数料は `fee_tier` によって決定されます。Maker（指値/流動性提供）手数料を低く設定することで、流動性供給を促します。
+取引手数料および信用取引の金利は、プレイヤーの **Trader Rank (トレーダーランク)** によって決定されます。
+上位ランクほど、Maker/Taker手数料が削減され、金利優遇（Interest Discount）が適用されます。
 
-FX市場における流動性プールへの手数料支払いは、`maker_fee` に基づいて計算されます。
-
-| fee_tier | maker_fee | taker_fee |
-| --- | --- | --- |
-| Standard | 0.02% | 0.10% |
-| Premium | 0.01% | 0.05% |
-| VIP | 0.00% | 0.00% |
+詳細なランク定義とレートについては、[Trader Rank & Progression System](./TRADER_RANK_SYSTEM.md) を参照してください。
 
 ---
 
@@ -67,7 +62,7 @@ MMOとしての長期的なモチベーション維持と、経済のリセッ�
 *   **ランキング**: 「総資産額」「最大瞬間ROI」などでランキングを決定し、勝者を称えます。
 *   **報酬**:
     *   **称号 (Titles)**: "Wolf of Paper Street", "Market Wizard" など。
-    *   **Boost**: 上位プレイヤーは、次シーズンのスタート時の `fee_tier` が優遇されます。
+    *   **Boost**: ランクとランキングの実績に応じて、次シーズンの初期XPにボーナスが付与され、有利な条件（Rank引継ぎ）で開始できます。詳細は [Trader Rank & Progression System](./TRADER_RANK_SYSTEM.md) を参照してください。
 
 ### 4.2. シーズンテーマ (Dynamic Meta)
 シーズンごとに市場の「ルール」や「トレンド」が変化します。
