@@ -50,6 +50,11 @@
 * **ロング金利 (Borrow Rate)**: $`U_{cash}`$ が高いほど上昇。
 * **貸出料 (Short Fee)**: $`U_{asset}`$ が高いほど上昇。
 
+> **注意 (Liquidation Risk)**:
+> 累積した金利は、ポジションの「含み損」の一部として計算されます。
+> そのため、価格変動がなくても、高金利状態が続けばロスカット（強制決済）されるリスクがあります。
+> 詳細は [Isolated Margin Model](./ISOLATED_MARGIN_MODEL.md) を参照してください。
+
 ---
 
 ## 3. データベース設計 (Schema Update)
