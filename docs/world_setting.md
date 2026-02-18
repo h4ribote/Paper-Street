@@ -51,6 +51,7 @@
 ---
 
 ## 3. 架空国家リスト (Fictional Countries)
+**Note**: 国家の数は固定されており、ゲーム進行中に新たに追加されたり、既存の国家が消滅したりすることはありません（定数として扱います）。
 
 ### 1. Arcadia (アルカディア)
 *   **地域**: Northern Alliance
@@ -118,6 +119,7 @@
 ---
 
 ## 4. 企業・セクター (Sectors & Companies)
+**Note**: 企業のリストは固定されており、ゲーム進行中に新規上場や倒産によって企業数が増減することはありません（定数として扱います）。
 
 ### Technology (TECH)
 *   **OmniCorp (OMNI)**: [Arcadia] 世界最大のAI企業。生活のあらゆるインフラを握っている。「Omni sees everything.」
