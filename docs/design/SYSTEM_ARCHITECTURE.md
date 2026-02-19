@@ -25,7 +25,6 @@
 *   **Authentication**: Discord OAuth2 + JWT
     *   ユーザー認証はDiscordアカウントを使用。ログイン成功時にJWT (JSON Web Token) を発行し、以降のAPIリクエストの認証に使用する。
 
----
 
 ## 2. データベース設計と整合性 (Database Integrity)
 金融シミュレーションにおいてデータの正確性は最優先事項です。
@@ -74,7 +73,6 @@
     *   `quantity` (BIGINT): 保有数量（正=ロング, 負=ショート）
     *   `average_price` (BIGINT): 平均取得単価
 
----
 
 ## 3. スケーラビリティとパフォーマンス (Scalability & Performance)
 MMOとして多数の同時接続と注文処理に耐える設計を目指します。

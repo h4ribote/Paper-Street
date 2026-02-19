@@ -13,7 +13,6 @@
 5.  **Market Impact**: Botの注文により板（Order Book）が食われ、価格が変動。
 6.  **Player Action**: プレイヤーがニュースまたは値動きを見て追随。
 
----
 
 ## 2. ニュースの種類と生成ロジック
 
@@ -53,7 +52,6 @@
 
 *   **例**: 「Stardust Luxuryの新作ドレス、著名インフルエンサーが着用し話題に。」
 
----
 
 ## 3. 「情報の非対称性」の導入 (Information Asymmetry)
 
@@ -68,7 +66,6 @@ MMOとしての面白さを出すため、**「誰がいつニュースを知る
     *   低性能Botは **500ms〜2s** で反応。
     *   これにより、ニュース直後はBot同士の戦いで乱高下し、人間が介入する余地が生まれます。
 
----
 
 ## 4. センチメントとBotの挙動 (Math Model)
 
@@ -96,7 +93,6 @@ target_price = current_price + target_delta
 4.  **揺らぎ (Jitter)**:
     *   すべてのBotが同じ計算をすると価格が即座に張り付くため、Botごとに `impact_factor` に乱数（ノイズ）を混ぜます。
 
----
 
 ## 5. UI/UX デザイン案 (The Terminal)
 
@@ -113,7 +109,6 @@ target_price = current_price + target_delta
     *   `[EARNINGS]`, `[MACRO]`, `[RUMOR]`, `[WAR]` などのタグを先頭に付与。
     *   ユーザーはタグや保有銘柄（Related Assets）でフィルタリング可能。
 
----
 
 ## 6. コンテンツ作成のための具体例 (Content Ideas)
 
