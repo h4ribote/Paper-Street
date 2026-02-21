@@ -171,6 +171,7 @@ CREATE TABLE IF NOT EXISTS asset_balances (
     asset_id INT NOT NULL,
     quantity DECIMAL(21, 0) DEFAULT 0,
     average_price DECIMAL(21, 0) DEFAULT 0,
+    average_acquired_at BIGINT DEFAULT 0 COMMENT 'Weighted average timestamp for dividend boost',
     updated_at BIGINT DEFAULT 0,
     FOREIGN KEY (user_id) REFERENCES users(user_id),
     FOREIGN KEY (asset_id) REFERENCES assets(asset_id),
