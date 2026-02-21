@@ -22,6 +22,15 @@ Paper Streetでは、実際の金融理論に基づいた高度な経済モデ�
 *   **Bonds**: イールドカーブの概念を導入。
     *   **Short-term (Bills)**: 満期 **7日**。シーズンを通して3%程度の低利回りだが、安全な資金退避先。
     *   **Long-term (Bonds)**: 満期 **28日**。シーズンを通して10%程度の高利回りだが、満期前の売却による元本割れリスクあり。
+    *   **価格計算 (Bond Pricing)**:
+        市場金利（Policy Rate + Risk Premium）と残存期間に基づき、割引現在価値モデルで理論価格が決定されます。
+        $$P = \sum_{t=1}^{T} \frac{C}{(1+r)^t} + \frac{F}{(1+r)^T}$$
+        *   $P$: 債券価格
+        *   $C$: クーポン支払額（利息）
+        *   $F$: 額面価格 (Face Value)
+        *   $r$: 市場金利 (Yield to Maturity)
+        *   $T$: 満期までの期間
+    *   **金利リスク**: 金利 ($r$) が1%上昇すると、債券価格はデュレーション（残存期間に比例）の分だけ下落します。短期債より長期債の方が金利変動の影響を大きく受けます。
 *   **Forex**: 為替変動を利用した取引。**Uniswap V3形式の集中流動性 (Concentrated Liquidity)** を採用したAMMを使用し、基軸通貨である**ARC**と各通貨のペア（例: VDP/ARC, BRB/ARC）で取引されます。
     *   **Algorithm**: **Tickごとの流動性計算 (Tick-based Liquidity)** を行うモデルを採用。従来の定数積モデル ($x \times y = k$) とは異なり、特定の価格帯（Tick）に流動性を集中させることで、資本効率の高い取引を実現します。
     *   **ARC基軸**: すべての通貨ペアはARCを介して行われます。例えば、VDPからBRBへの変換は、VDP→ARC→BRBの順にプールを経由して実行されます。
@@ -98,11 +107,20 @@ MMOとしての長期的なモチベーション維持と、経済のリセッ�
     
     $$Dividend\ per\ Share = \frac{Net\ Income \times Payout\ Ratio}{Total\ Shares\ Outstanding}$$
 
-    *   **配当性向 (Payout Ratio)** の決定要因:
-        *   **基本方針**: 成熟企業（Utility, Finance）は高く（40-60%）、成長企業（Tech）は低く（0-20%）設定されます。
-        *   **業績連動**: 当期純利益が予測を上回った場合、ボーナス配当として性向が引き上げられることがあります。
-        *   **安定配当**: 一時的な赤字であっても、潤沢な内部留保（Retained Earnings）がある場合、過去の配当水準を維持しようとします（配当性向が100%を超える場合もあります）。
-        *   **無配**: 純利益がマイナスで、かつ内部留保も不足している場合は無配（0 Dividend）となります。
+    *   **配当性向 (Payout Ratio) の動的決定ロジック**:
+        配当性向は固定値ではなく、企業の財務健全性と「サプライズ」に基づいて毎期変動します。
+
+        $$Payout\ Ratio = Target\ Ratio + \alpha \times Surprise\ Factor + \beta \times Reserve\ Buffer$$
+
+        *   **Target Ratio (目標性向)**: セクターごとに設定された基準値。
+            *   **成熟企業 (Utility, Finance)**: 50% (0.50)
+            *   **成長企業 (Tech, Biotech)**: 10% (0.10)
+        *   **Surprise Factor (業績連動係数)**:
+            *   計算式: `(Actual_EPS - Guidance_EPS) / Guidance_EPS`
+            *   予想を上回る利益が出た場合、その余剰分の一部を株主に還元します ($\alpha \approx 0.5$)。
+        *   **Reserve Buffer (内部留保調整)**:
+            *   企業の現金保有量が「運転資金のX倍」を超えている場合、自社株買いや増配を行いやすくなります ($\beta \approx 0.2$)。
+            *   逆に現金不足時は、黒字でも無配に転落するリスクがあります。
 
 *   **権利確定 (Eligibility)**:
     Day 14の終了時（23:59 UTC）に株式を保有しており、かつ**加重平均取得日時（Weighted Average Acquisition Time）から3日（72時間）以上経過している**プレイヤーに配当権が付与されます。
