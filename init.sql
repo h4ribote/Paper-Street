@@ -151,7 +151,7 @@ CREATE TABLE IF NOT EXISTS transaction_logs (
     amount DECIMAL(21, 0) NOT NULL COMMENT 'Signed integer: +Deposit, -Withdrawal',
     balance_after DECIMAL(21, 0) NOT NULL COMMENT 'Snapshot of balance after tx',
     
-    type ENUM('DEPOSIT', 'WITHDRAW', 'TRADE_BUY', 'TRADE_SELL', 'FEE', 'TAX', 'DIVIDEND', 'INTEREST', 'TRANSFER') NOT NULL,
+    type ENUM('DEPOSIT', 'WITHDRAW', 'TRADE_BUY', 'TRADE_SELL', 'FEE', 'TAX', 'DIVIDEND', 'INTEREST', 'TRANSFER', 'INSURANCE_PAYOUT') NOT NULL,
     reference_id VARCHAR(50) COMMENT 'Order ID or External Tx ID',
     description TEXT,
     
@@ -398,3 +398,11 @@ CREATE TABLE IF NOT EXISTS index_constituents (
 );
 
 SET FOREIGN_KEY_CHECKS = 1;
+
+-- --------------------------------------------------------
+-- 8. Initial System Data
+-- --------------------------------------------------------
+
+-- System Accounts
+-- user_id=1: Insurance Fund (Receives fees, Covers bankruptcies)
+INSERT INTO users (user_id, username, rank, created_at) VALUES (1, 'Paper Street Insurance Fund', 'Leviathan', 0);
