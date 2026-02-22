@@ -47,6 +47,15 @@ Indexが市場価格と理論価格（構成銘柄の合計価値）から乖離
     *   APはIndexを安く買い、Redemptionを行って現物を高く売ることで利益を得ます。
     *   -> Index買い圧力により価格是正。
 
+### 多通貨対応 (Multi-Currency Support)
+Indexの価格は、常に基軸通貨である **ARC** で表示されます。
+構成銘柄がARC以外の通貨（例: BRB, DRL, VDP）で取引される場合、システムはリアルタイムの為替レート（Spot Rate）を用いて価格を換算します。
+
+*   **価格計算式**: `Index Price (ARC) = Σ (Component Price_i (Local) × Exchange Rate_i (Local/ARC))`
+    *   **Exchange Rate**: 通貨ペアの仲値（Mid-price）を使用します。
+    *   **為替リスク**: Index価格は、構成銘柄の価格変動だけでなく、為替レートの変動によっても上下します。例えば、構成銘柄の株価が変わらなくても、その取引通貨がARCに対して下落すれば、Index価格も下落します。
+    *   **例**: `RSC` (Global Resources) Index は、BRB建ての原油やDRL建てのレアアースを含んでおり、これらの通貨の対ARCレートの影響を強く受けます。
+
 
 ## 3. 特徴
 *   **分散投資**: 1つのIndexを買うだけで、多数の銘柄に分散投資する効果が得られます。

@@ -55,3 +55,4 @@
 | TCH | INDEX | Technology sector companies. |
 | EGY | INDEX | Energy sector companies. |
 | BIO | INDEX | Bio-Tech sector companies. |
+| RSC | INDEX | Basket of key global resources (Energy, Metals, Food). |
