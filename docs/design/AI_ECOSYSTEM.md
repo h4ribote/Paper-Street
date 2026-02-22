@@ -33,6 +33,9 @@ Paper Street では、実際の市場と同様に、取引の大半はボット�
 9.  **Arbitrageurs (裁定取引 - ハイブリッド)**:
     *   Index価格と構成銘柄の価格差を利用した裁定取引を行うボットです。
 
+### 1.2. ボットの資金配分 (Bot Capital Allocation)
+Market Makers, Whales, その他のボットが市場に提供する流動性の規模（初期資産）については、[Initial Asset Allocation](./INITIAL_ASSET_ALLOCATION.md) を参照してください。
+
 
 ## 2. Botの挙動改善と脆弱性対策 (Bot Intelligence)
 単純なアルゴリズムBotはプレイヤーに見切られ、搾取されるリスクがあります。これを防ぐため、高度なロジックと多様性を導入します。

@@ -16,6 +16,9 @@ Paper Streetでは、実際の金融理論に基づいた高度な経済モデ�
 *   **流動性ティア (Liquidity Tiers)**: 流動性の低い銘柄（Small Cap）に対しては、スプレッドを強制的に広げることで、操縦コストを引き上げます。
 *   **Botの「異常検知」ロジック**: 急激な価格上昇に対し、追随するのではなく「警戒（売り向かう）」するAIロジックを導入し、安易な釣り上げを阻止します。
 
+### 1.3. 初期経済バランス (Initial Economic Balance)
+ゲーム開始時（Day 1）の総資産供給量や、プレイヤー、国家、企業、ボットへの資産配分については、[Initial Asset Allocation](./INITIAL_ASSET_ALLOCATION.md) を参照してください。
+
 
 ## 2. 資産クラス (Asset Classes)
 *   **Stocks**: セクター分類（Tech, Energy, Finance等）と、ファンダメンタルズ（PER, EPS）に基づく価格形成。
