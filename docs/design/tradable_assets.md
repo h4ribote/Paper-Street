@@ -26,6 +26,14 @@
 | Void Cargo | VDC | LOG | Arcadia | ARC |
 | Horizon Logistics | HRZ | LOG | Arcadia | ARC |
 
+## Perpetual Bonds (Consols)
+
+| Name | Ticker | Issuer | Base Coupon | Payment Freq. | Initial Yield |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| Arcadia Consol | ARCB | Arcadia | 2.50 ARC | Weekly | 2.5% |
+| Boros Consol | BRSB | Boros | 5.00 ARC | Weekly | 5.0% |
+| San Verde Consol | SVDB | San Verde | 10.00 ARC | Weekly | 10.0% |
+
 ## Resources & Commodities (資源・コモディティ)
 
 | Resource Name | Type | Primary Origin | Trading Currency |

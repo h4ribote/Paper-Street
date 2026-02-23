@@ -130,6 +130,17 @@ CREATE TABLE IF NOT EXISTS assets (
     FOREIGN KEY (resource_id) REFERENCES resources(resource_id)
 );
 
+-- 永久債パラメータ (Perpetual Bonds)
+CREATE TABLE IF NOT EXISTS perpetual_bonds (
+    asset_id INT PRIMARY KEY,
+    issuer_country_id INT NOT NULL COMMENT '発行国',
+    base_coupon DECIMAL(21, 0) NOT NULL COMMENT '1単位あたりの固定利息額 (例: 5 ARC)',
+    payment_frequency ENUM('DAILY', 'WEEKLY') DEFAULT 'WEEKLY' COMMENT '利払い頻度',
+    
+    FOREIGN KEY (asset_id) REFERENCES assets(asset_id),
+    FOREIGN KEY (issuer_country_id) REFERENCES countries(country_id)
+);
+
 -- --------------------------------------------------------
 -- 2. User & Accounts (プレイヤーデータ)
 -- --------------------------------------------------------
@@ -437,3 +448,34 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- System Accounts
 -- user_id=1: Insurance Fund (Receives fees, Covers bankruptcies)
 INSERT INTO users (user_id, username, rank, created_at) VALUES (1, 'Paper Street Insurance Fund', 'Leviathan', 0);
+
+-- --------------------------------------------------------
+
+-- --------------------------------------------------------
+-- 9. Initial Perpetual Bonds & Countries
+-- --------------------------------------------------------
+
+-- Insert Region
+INSERT INTO regions (name, description) VALUES ('Global', 'Global Region');
+SET @region_id = LAST_INSERT_ID();
+
+-- Insert Countries
+INSERT INTO countries (region_id, name) VALUES (@region_id, 'Arcadia');
+SET @arcadia_id = LAST_INSERT_ID();
+INSERT INTO countries (region_id, name) VALUES (@region_id, 'Boros');
+SET @boros_id = LAST_INSERT_ID();
+INSERT INTO countries (region_id, name) VALUES (@region_id, 'San Verde');
+SET @san_verde_id = LAST_INSERT_ID();
+
+-- Insert Bond Assets and Link
+-- ARCB: 2.50 ARC -> 250 (Scale 100)
+INSERT INTO assets (ticker, type, base_price, created_at) VALUES ('ARCB', 'BOND', 10000, UNIX_TIMESTAMP()*1000);
+INSERT INTO perpetual_bonds (asset_id, issuer_country_id, base_coupon) VALUES (LAST_INSERT_ID(), @arcadia_id, 250);
+
+-- BRSB: 5.00 ARC -> 500 (Scale 100)
+INSERT INTO assets (ticker, type, base_price, created_at) VALUES ('BRSB', 'BOND', 10000, UNIX_TIMESTAMP()*1000);
+INSERT INTO perpetual_bonds (asset_id, issuer_country_id, base_coupon) VALUES (LAST_INSERT_ID(), @boros_id, 500);
+
+-- SVDB: 10.00 ARC -> 1000 (Scale 100)
+INSERT INTO assets (ticker, type, base_price, created_at) VALUES ('SVDB', 'BOND', 10000, UNIX_TIMESTAMP()*1000);
+INSERT INTO perpetual_bonds (asset_id, issuer_country_id, base_coupon) VALUES (LAST_INSERT_ID(), @san_verde_id, 1000);

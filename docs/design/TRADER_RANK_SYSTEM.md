@@ -46,7 +46,7 @@
 | **News Reader** | ニュースフィードの詳細を3件開く。 | ニュースが価格変動のトリガーであることを意識させる。 |
 | **Tourist** | 異なる2つの地域（例: ArcadiaとBoros）の銘柄を保有する。 | 地域分散（Geopolitical Diversification）の概念に触れる。 |
 | **Penny Pincher** | 1株あたりの価格が 100 ARC 未満の銘柄を購入する。 | 低位株（Small Cap）への誘導。 |
-| **Safety First** | 「債券（Bond）」または「短期証券（Bill）」を購入する。 | リスクオフ資産の存在を教える。 |
+| **Safety First** | 「国債（Consol Bond）」を購入する。 | リスクオフ資産（利息収入）の存在を教える。 |
 
 #### 2. Grade B: Shark Tasks (実務)
 
