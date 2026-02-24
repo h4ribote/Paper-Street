@@ -28,7 +28,7 @@ $$GDP = C + I + G + (X - M)$$
     *   `Sum(Inventory_Change)`: 在庫変動額（期末在庫 - 期首在庫）。
 *   **G (Government Spending)**: 政府支出
     *   `Sum(B2G_Sales)`: 企業から政府への売上（公共事業、防衛装備品など）。
-    *   `Sum(Basic_Income)`: プレイヤーへのベーシックインカム支給総額。
+    *   `Sum(Task_Rewards)`: プレイヤーへのタスク完了報酬総額（Grade Cタスク等）。
 *   **X (Exports)**: 輸出
     *   他国（リージョン外）への販売額。※現状はグローバル市場のため、地域間貿易として計算。
 *   **M (Imports)**: 輸入
