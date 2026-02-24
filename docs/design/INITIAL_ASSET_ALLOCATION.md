@@ -1,185 +1,96 @@
 # Initial Asset Allocation
 
-このドキュメントでは、ゲーム開始時（Day 1）における各エンティティの初期資産（ARC: Arcadian Credit）の配分を定義します。
-
-## 概要 (Overview)
-*   **総資産供給量 (Total Supply)**: **200,000,000 ARC**
-*   **プレイヤー資産比率**: 5.0% (10,000,000 ARC)
-    *   プレイヤーの資産が全体市場に与える影響を限定的（5%以内）にするため、総資産を2億ARCに設定しました。
-
-## 配分詳細 (Allocation Breakdown)
-
-| エンティティ種別 (Entity Type) | 数 (Count) | 合計資産 (Total ARC) | 1体あたり (Per Entity) | 比率 (%) | 詳細 (Details) |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Players** | 1,000 | 10,000,000 | 10,000 | 5.00% | 初期資金: 10,000 ARC/人 |
-| **National AIs** | 7 | 100,000,000 | (varies) | 50.00% | 為替介入や国債売買を行うための巨額資金。 |
-| **Whales (Institutional)** | 3 | 40,000,000 | ~13,333,333 | 20.00% | 相場を動かす機関投資家。 |
-| **Corporations** | 21 | 30,000,000 | (varies) | 15.00% | 事業活動（仕入れ・投資）用資金。 |
-| **Market Makers** | 5 | 15,000,000 | 3,000,000 | 7.50% | 現金50% : 商品50% で初期化。 |
-| **Insurance Fund** | 1 | 3,000,000 | 3,000,000 | 1.50% | ロスカット補償用のシード資金。 |
-| **Arbitrageurs** | 2 | 1,000,000 | 500,000 | 0.50% | インデックス裁定取引ボット。 |
-| **News Reactors** | 2 | 400,000 | 200,000 | 0.20% | ニュース反応ボット。 |
-| **Other Bots** | 12 | 600,000 | 50,000 | 0.30% | Momentum, Dip, Reversal, Grid (各3体)。 |
-| **TOTAL** | **1,053** | **200,000,000** | - | **100.00%** | |
-
-## 詳細設定 (Detailed Settings)
-
-### 1. National AIs (国家AI)
-国家AIは、自国通貨の防衛や経済政策の実行に必要な最も潤沢な資金を持ちます。
-
-*   **Arcadia (Tech Utopia)**: **22,000,000 ARC**
-    *   基軸通貨国であり、世界経済の中心であるため、最大の資金を保有します。
-*   **Other 6 Nations**: **13,000,000 ARC each**
-    *   Boros Federation, El Dorado, Neo Venice, San Verde, Novaya Zemlya, Pearl River Zone
-    *   合計: 13,000,000 * 6 = 78,000,000 ARC
-
-### 2. Whales (機関投資家)
-大口注文でトレンドを形成したり、逆張りを行ったりする強力なボットです。
-
-*   **Whale 1**: 13,300,000 ARC
-*   **Whale 2**: 13,300,000 ARC
-*   **Whale 3**: 13,400,000 ARC
-
-### 3. Corporations (企業)
-企業の規模（時価総額ベースのTier）に応じて初期資金が異なります。
-
-*   **Tier 1 (Large Cap)**: **2,000,000 ARC each** (8社)
-    *   OmniCorp, Goliath Bank, Titan Energy, Trans-Oceanic, Red Ox Food, Iron Fist Armaments, Silicon Dragon, Global News Network
-    *   合計: 16,000,000 ARC
-*   **Tier 2 (Mid Cap)**: **1,000,000 ARC each** (8社)
-    *   Quantum Dynamics, CyberLife, Aegis Systems, Helios Solar, Atomos Energy, Chimera Genetics, Stardust Luxury, Horizon Logistics
-    *   合計: 8,000,000 ARC
-*   **Tier 3 (Small Cap / Venture)**: **1,200,000 ARC each** (5社)
-    *   Nebula Mining, Shadow Fund, Verde Pharma, Panacea Corp, Void Cargo
-    *   合計: 6,000,000 ARC
-    *   *Note*: ベンチャー企業は運転資金として現金比率が高めに設定されています。
-
-### 4. Market Makers (マーケットメイカー)
-流動性提供のため、現金と在庫（Asset Inventory）をバランスよく保有します。
-
-*   **初期配分**:
-    *   **Cash**: 1,500,000 ARC
-    *   **Inventory**: 1,500,000 ARC相当の株式・コモディティ
-
-### 5. Other Bots (その他ボット)
-特定の戦略に特化した小規模なボット群です。
-
-*   **Momentum Chasers**: 3体 (50,000 ARC each)
-*   **Dip Buyers**: 3体 (50,000 ARC each)
-*   **Reversal Snipers**: 3体 (50,000 ARC each)
-*   **Grid Traders**: 3体 (50,000 ARC each)
+このドキュメントでは、ゲーム開始時（Day 1）における各エンティティの初期資産（ARC: Arcadian Credit および 各国通貨）の配分メカニズムを定義します。
 
 
-## 初期市場レート (Initial Market Rates)
+## 設計方針 (Design Philosophy)
 
-### 為替レート (Exchange Rates)
-全ての通貨ペアはARCを基軸（Quote Currency）として取引されます。
+1.  **ボトムアップ・アプローチ (Bottom-up Allocation)**:
+    *   全体のパイ（総発行量）を固定せず、各プレイヤー、企業、国家に必要な「活動資金」を積み上げて総資産を決定します。
+    *   5%程度のプレイヤー比率を目安とします。
 
-| Currency Name | Code | Initial Rate (ARC) | Origin | Notes |
+2.  **現地通貨ベースの定義 (Local Currency First)**:
+    *   企業や国家の資産は、ARC換算額ではなく、その本拠地で使用される**現地通貨（Local Currency）の絶対量**で定義します。
+
+3.  **整数ベースの管理 (Integer-based Definition)**:
+    *   割り算による端数を排除し、設定ファイル（Config）で管理しやすい整数値を採用します。
+
+
+## エンティティ別配分 (Allocation by Entity)
+
+### 1. Players (プレイヤー)
+全プレイヤーに固定の初期資金を配分します。
+
+*   **Initial Cash**: **10,000 ARC** (固定)
+*   **Target Count**: 1,000 players (想定)
+*   **Total Allocation**: 10,000,000 ARC
+
+### 2. Whales & Institutions (機関投資家)
+**通貨ブロック（地域）**ごとに資金を分割して保有します。
+これにより、特定の経済圏内での大規模な実需取引や裁定取引を担当します。
+
+| Entity Name | Focus Region | Currencies | Initial Assets (Each) |
 | :--- | :--- | :--- | :--- | :--- |
-| **Boros Ruble** | **BRB** | **0.50** | Boros Federation | 工業輸出に適した安値圏。 |
-| **Dorado Real** | **DRL** | **2.00** | El Dorado | 豊富な資源を背景とした強気相場。 |
-| **Venice Dollar** | **VND** | **1.00** | Neo Venice | 金融ハブとしてARCと等価(Parity)で開始。 |
-| **Verde Peso** | **VDP** | **0.20** | San Verde | 農業国であり、最も安価な通貨。 |
-| **Zemlya Ruble** | **ZMR** | **0.60** | Novaya Zemlya | エネルギー資源国。 |
-| **River Dollar** | **RVD** | **0.40** | Pearl River Zone | 製造業特区。BRBと同様に安値を維持。 |
+| **Whale 1** | Northern / Eastern | **ARC, BRB, DRL** | **5,000,000** |
+| **Whale 2** | Oceanic / Southern | **VND, VDP** | **7,500,000** |
+| **Whale 3** | Energy / Industrial | **ZMR, RVD** | **7,500,000** |
 
-### 商品価格 (Commodity Prices)
-商品は産出国または主要企業の拠点通貨で価格が設定されます。
+### 3. National AIs (国家AI)
+自国通貨の防衛資金（現地通貨）と、介入用の外貨準備（ARC）をそれぞれ物理的な枚数で保有します。
+為替レートに関わらず、この数量が初期インベントリとして付与されます。
 
-| Commodity | Origin Company | Origin Currency | Initial Price (Local) | Initial Price (ARC Est.) | Unit |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Crude Oil** | Titan Energy | **BRB** | **100.00** | 50.00 | Barrel |
-| **Rare Earth** | El Dorado (State) | **DRL** | **50.00** | 100.00 | kg |
-| **Grain** | San Verde (State) | **VDP** | **20.00** | 4.00 | Bushel |
-| **Semiconductors** | Silicon Dragon | **RVD** | **250.00** | 100.00 | Chip |
-| **Hydrogen** | Helios Solar | **DRL** | **10.00** | 20.00 | Unit |
-| **Uranium** | Atomos Energy | **ZMR** | **500.00** | 300.00 | kg |
+*   **Arcadia (基軸国)**:
+    *   **ARC Reserve**: **30,000,000 ARC**
+    *   *Note*: 基軸国のため外貨準備（他国通貨）は初期状態では持ちません。
 
+*   **Other 6 Nations (他6カ国)**:
+    *   **Local Currency Reserve**: **20,000,000 (Local)**
+    *   **ARC Reserve (Foreign Reserve)**: **10,000,000 ARC**
 
-## 詳細資産内訳 (Detailed Asset Breakdown)
+| Nation | Currency | Local Reserve | ARC Reserve |
+| :--- | :--- | :--- | :--- |
+| **Boros Federation** | BRB | 20,000,000 BRB | 10,000,000 ARC |
+| **El Dorado** | DRL | 20,000,000 DRL | 10,000,000 ARC |
+| **Neo Venice** | VND | 20,000,000 VND | 10,000,000 ARC |
+| **San Verde** | VDP | 20,000,000 VDP | 10,000,000 ARC |
+| **Novaya Zemlya** | ZMR | 20,000,000 ZMR | 10,000,000 ARC |
+| **Pearl River Zone** | RVD | 20,000,000 RVD | 10,000,000 ARC |
 
-### 1. National AIs (Foreign Reserves)
-国家AIは、自国通貨の安定化のために「自国通貨」と「外貨準備（ARC）」を保有します。
-各国の資産総額は13,000,000 ARC相当です。内訳は自国通貨50%（6.5M ARC相当）、ARC準備50%（6.5M ARC）となります。
+### 4. Corporations (企業)
+企業の規模（Tier）ごとに**現地通貨ベースでの資金量**と**生産能力（Capacity）ベースの在庫量**を固定します。
 
-| Nation | Currency | Exchange Rate | **Local Currency Holding** | **ARC Reserve** |
+| Tier | Scale | Cash (Local Currency) | Inventory (Product) | Count |
 | :--- | :--- | :--- | :--- | :--- |
-| **Arcadia** | ARC | 1.00 | 22,000,000 ARC | - |
-| **Boros Federation** | BRB | 0.50 | **13,000,000 BRB** | 6,500,000 ARC |
-| **El Dorado** | DRL | 2.00 | **3,250,000 DRL** | 6,500,000 ARC |
-| **Neo Venice** | VND | 1.00 | **6,500,000 VND** | 6,500,000 ARC |
-| **San Verde** | VDP | 0.20 | **32,500,000 VDP** | 6,500,000 ARC |
-| **Novaya Zemlya** | ZMR | 0.60 | **10,833,333 ZMR** | 6,500,000 ARC |
-| **Pearl River Zone** | RVD | 0.40 | **16,250,000 RVD** | 6,500,000 ARC |
+| **Tier 1** | Large Cap | **5,000,000** | Capacity × **2 Quarters** | 8 |
+| **Tier 2** | Mid Cap | **2,000,000** | Capacity × **2 Quarters** | 8 |
+| **Tier 3** | Small Cap | **1,000,000** | Capacity × **3 Quarters** | 5 |
 
-### 2. Corporations (Treasury & Inventory)
-企業は運転資金としての現金（70%）と在庫（30%）を保有します。
-現金は原則として**本拠地のある国の通貨 (Local Currency)** で保有します。
+*   **現金（Cash）**: 本拠地のある国の通貨で保有します。
+*   **在庫（Inventory）**: 生産能力（Max Capacity）のNヶ月分として計算されます。
 
-#### Tier 1 (Total Value: 2,000,000 ARC / Cash: 1,400,000 ARC Value)
-| Company | HQ | Currency | **Initial Cash Holding** |
-| :--- | :--- | :--- | :--- |
-| **OmniCorp** | Arcadia | ARC | **1,400,000 ARC** |
-| **Goliath Bank** | Arcadia | ARC | **1,400,000 ARC** |
-| **Titan Energy** | Boros | BRB | **2,800,000 BRB** |
-| **Trans-Oceanic** | Neo Venice | VND | **1,400,000 VND** |
-| **Red Ox Food** | San Verde | VDP | **7,000,000 VDP** |
-| **Iron Fist Armaments** | Boros | BRB | **2,800,000 BRB** |
-| **Silicon Dragon** | Pearl River | RVD | **3,500,000 RVD** |
-| **Global News Network** | Neo Venice | VND | **1,400,000 VND** |
+### 5. Market Makers (マーケットメイカー)
+各通貨ペアおよび主要商品の流動性プールに、対等な価値ではなく**固定の数量**を供給します。
+初期為替レートとの乖離は、市場開始直後の裁定取引（Arbitrage）によって調整されることを許容します。
 
-#### Tier 2 (Total Value: 1,000,000 ARC / Cash: 700,000 ARC Value)
-| Company | HQ | Currency | **Initial Cash Holding** |
-| :--- | :--- | :--- | :--- |
-| **Quantum Dynamics** | Arcadia | ARC | **700,000 ARC** |
-| **CyberLife** | Neo Venice | VND | **700,000 VND** |
-| **Aegis Systems** | Arcadia | ARC | **700,000 ARC** |
-| **Helios Solar** | El Dorado | DRL | **350,000 DRL** |
-| **Atomos Energy** | Novaya Zemlya | ZMR | **1,166,666 ZMR** |
-| **Chimera Genetics** | Arcadia | ARC | **700,000 ARC** |
-| **Stardust Luxury** | Neo Venice | VND | **700,000 VND** |
-| **Horizon Logistics** | Arcadia | ARC | **700,000 ARC** |
+*   **Base Allocation per Pair**:
+    *   **ARC Side**: **1,000,000 ARC**
+    *   **Local Side**: **2,000,000 (Local)**
+    *   *Note*: これにより、初期プール比率は `1 ARC : 2 Local` (Rate = 0.50) となりますが、実際のTick設定時に調整可能です。
 
-#### Tier 3 (Total Value: 1,200,000 ARC / Cash: 840,000 ARC Value)
-*Tier 3はベンチャー企業のため、現金比率が同じ70%でも評価額ベースで少し多めに設定されています。*
+### 6. Algorithmic Traders (Other Bots)
+特定の戦略に特化した小規模なボット群です。商品の取引に集中させるため、それぞれ3つの通貨グループに分かれて資金を保有します。
 
-| Company | HQ | Currency | **Initial Cash Holding** |
-| :--- | :--- | :--- | :--- |
-| **Nebula Mining** | Novaya Zemlya | ZMR | **1,400,000 ZMR** |
-| **Shadow Fund** | Neo Venice | VND | **840,000 VND** |
-| **Verde Pharma** | San Verde | VDP | **4,200,000 VDP** |
-| **Panacea Corp** | El Dorado | DRL | **420,000 DRL** |
-| **Void Cargo** | Arcadia | ARC | **840,000 ARC** |
+*   **対象ボット**: Momentum Chaser, Dip Buyer, Reversal Sniper, Grid Trader
+*   **合計**: 12体 (4 types × 3 groups)
 
-### 3. Market Makers (Liquidity Inventory)
-マーケットメイカーは、全通貨ペアおよび主要商品の流動性を提供するため、バスケットを保有します。
+#### Group A: Northern / Eastern Mix
+*   **保有通貨**: [**ARC**, **BRB**, **DRL**]
+*   **初期資産**: 各通貨 **200,000** ずつ
 
-#### Currency Specialists (3 Bots)
-*   **Total Assets per Bot**: 3,000,000 ARC
-*   **ARC Allocation (40%)**: 1,200,000 ARC
-*   **Foreign Currency Allocation (60%)**: 1,800,000 ARC Value (300,000 ARC Value per currency)
+#### Group B: Oceanic / Southern Agri
+*   **保有通貨**: [**VND**, **VDP**]
+*   **初期資産**: 各通貨 **300,000** ずつ
 
-| Currency | Rate | ARC Value | **Holding Amount** |
-| :--- | :--- | :--- | :--- |
-| **BRB** | 0.50 | 300,000 | **600,000 BRB** |
-| **DRL** | 2.00 | 300,000 | **150,000 DRL** |
-| **VND** | 1.00 | 300,000 | **300,000 VND** |
-| **VDP** | 0.20 | 300,000 | **1,500,000 VDP** |
-| **ZMR** | 0.60 | 300,000 | **500,000 ZMR** |
-| **RVD** | 0.40 | 300,000 | **750,000 RVD** |
-
-#### Commodity Specialists (2 Bots)
-*   **Total Assets per Bot**: 3,000,000 ARC
-*   **ARC Allocation (30%)**: 900,000 ARC
-*   **Commodity Allocation (40%)**: 1,200,000 ARC Value (Basket of commodities)
-*   **Local Currency Allocation (30%)**: 900,000 ARC Value (Equally split: 150,000 ARC Value per currency)
-
-| Currency | Rate | ARC Value | **Holding Amount** |
-| :--- | :--- | :--- | :--- |
-| **BRB** | 0.50 | 150,000 | **300,000 BRB** |
-| **DRL** | 2.00 | 150,000 | **75,000 DRL** |
-| **VND** | 1.00 | 150,000 | **150,000 VND** |
-| **VDP** | 0.20 | 150,000 | **750,000 VDP** |
-| **ZMR** | 0.60 | 150,000 | **250,000 ZMR** |
-| **RVD** | 0.40 | 150,000 | **375,000 RVD** |
+#### Group C: Energy / Industrial Zone
+*   **保有通貨**: [**ZMR**, **RVD**]
+*   **初期資産**: 各通貨 **300,000** ずつ
