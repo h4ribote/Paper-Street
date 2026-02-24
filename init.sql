@@ -231,6 +231,7 @@ CREATE TABLE IF NOT EXISTS orders (
     asset_id INT NOT NULL,
     side ENUM('BUY', 'SELL') NOT NULL,
     type ENUM('MARKET', 'LIMIT', 'STOP', 'STOP_LIMIT') NOT NULL,
+    time_in_force ENUM('GTC', 'IOC', 'FOK') DEFAULT 'GTC',
     
     quantity DECIMAL(21, 0) NOT NULL,
     price DECIMAL(21, 0), -- Limit price (scaled)
