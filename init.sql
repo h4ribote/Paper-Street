@@ -175,7 +175,7 @@ CREATE TABLE IF NOT EXISTS transaction_logs (
     amount DECIMAL(21, 0) NOT NULL COMMENT 'Signed integer: +Deposit, -Withdrawal',
     balance_after DECIMAL(21, 0) NOT NULL COMMENT 'Snapshot of balance after tx',
     
-    type ENUM('DEPOSIT', 'WITHDRAW', 'TRADE_BUY', 'TRADE_SELL', 'FEE', 'TAX', 'DIVIDEND', 'INTEREST', 'TRANSFER', 'INSURANCE_PAYOUT') NOT NULL,
+    type ENUM('DEPOSIT', 'WITHDRAW', 'TRADE_BUY', 'TRADE_SELL', 'FEE', 'DIVIDEND', 'INTEREST', 'TRANSFER', 'INSURANCE_PAYOUT') NOT NULL,
     reference_id VARCHAR(50) COMMENT 'Order ID or External Tx ID',
     description TEXT,
     
