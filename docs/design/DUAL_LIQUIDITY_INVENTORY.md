@@ -146,7 +146,7 @@
 
 1.  **金利収入の発生**:
     *   借り手がポジションを維持するために金利（Interest/Fee）を支払います。
-    *   この金利はプールの `total_cash` または `total_assets` に加算されます。
+    *   この金利は全額がプールの `total_cash` または `total_assets` に加算され、100%が貸し手に還元されます。
 2.  **シェア価値の上昇**:
     *   金利収入により、分母（`Total Shares`）が変わらないまま分子（`Total Liquidity`）が増加します。
     *   結果として `Exchange Rate` が上昇します。
