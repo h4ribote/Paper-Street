@@ -57,8 +57,10 @@ Paper Streetでは、実際の金融理論に基づいた高度な経済モデ�
     *   **処理**: `支払額 = 保有数量 × Base Coupon` を計算し、現金（ARCなど）を振り込みます。
 
 *   **Forex**: 為替変動を利用した取引。**Uniswap V3形式の集中流動性 (Concentrated Liquidity)** を採用したAMMを使用し、基軸通貨である**ARC**と各通貨のペア（例: VDP/ARC, BRB/ARC）で取引されます。
+    *   **詳細設計**: 具体的な数学モデル、手数料体系、最適化ロジックについては **[FX Market Model](./FX_MARKET_MODEL.md)** を参照してください。
     *   **Algorithm**: **Tickごとの流動性計算 (Tick-based Liquidity)** を行うモデルを採用。従来の定数積モデル ($x \times y = k$) とは異なり、特定の価格帯（Tick）に流動性を集中させることで、資本効率の高い取引を実現します。
-    *   **ARC基軸**: すべての通貨ペアはARCを介して行われます。例えば、VDPからBRBへの変換は、VDP→ARC→BRBの順にプールを経由して実行されます。
+    *   **手数料体系**: **0.04%** (Low) と **0.20%** (Standard) の2つのFee Tierを提供します。
+    *   **ARC基軸とRouter**: すべての通貨ペアはARCを介して行われます。システム（Router）は手数料や流動性を考慮し、最適なパス（Direct, Split, Multi-hop）を自動的に計算します。
     *   **流動性提供**: プレイヤーは**任意の価格範囲 (Range Order)** を指定して流動性を提供（Mint）し、その範囲内で取引が発生した場合に手数料収入を得ることができます。
 *   **Derivatives**: オプションや先物など。
 

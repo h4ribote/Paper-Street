@@ -306,6 +306,7 @@ CREATE TABLE IF NOT EXISTS news_feed (
 CREATE TABLE IF NOT EXISTS liquidity_pools (
     pool_id INT AUTO_INCREMENT PRIMARY KEY,
     currency_id INT NOT NULL COMMENT 'The other currency paired with ARC',
+    fee_tier_bp INT NOT NULL DEFAULT 20 COMMENT 'Fee Tier in basis points (e.g., 20 = 0.20%, 4 = 0.04%)',
     current_tick INT NOT NULL DEFAULT 0,
     tick_spacing INT NOT NULL DEFAULT 1,
     liquidity DECIMAL(21, 0) DEFAULT 0,
@@ -317,7 +318,7 @@ CREATE TABLE IF NOT EXISTS liquidity_pools (
     created_at BIGINT DEFAULT 0,
 
     FOREIGN KEY (currency_id) REFERENCES currencies(currency_id),
-    UNIQUE(currency_id)
+    UNIQUE(currency_id, fee_tier_bp)
 );
 
 -- 流動性ポジション / 指値注文 (Liquidity Positions / Limit Orders)
