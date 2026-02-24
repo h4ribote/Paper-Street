@@ -28,6 +28,11 @@
 *   **シーズン制**: ランキング、報酬、シーズンごとのテーマ（大恐慌、バブル等）。
 *   **Dual Liquidity Inventory (DLI)**: [詳細設計](./design/DUAL_LIQUIDITY_INVENTORY.md) - 現金と現物の在庫を利用率に応じて管理する、金利とショートコストの動的決定メカニズム。
 
+### [Matching Engine Strict Rules](./design/MATCHING_ENGINE.md)
+*   **アルゴリズム**: 価格優先・時間優先 (Price-Time Priority) の厳格な適用。
+*   **データ整合性**: 整数演算による丸め誤差の排除。
+*   **約定ロジック**: 成行、指値、逆指値の挙動と保護措置。
+
 ### [AI Traders & Bot Ecosystem](./design/AI_ECOSYSTEM.md)
 *   **ボットの役割**: Market Maker, Trend Follower, Mean Reverter, Whale, News Reactor。
 *   **AIの挙動改善**: パラメータのランダム化、反応遅延（Jitter）、学習型AIによる対抗策。
