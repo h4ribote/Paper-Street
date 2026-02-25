@@ -163,10 +163,15 @@ Market Makers, Whales, その他のボットが市場に提供する流動性の
     *   **介入 (Intervention)**: 資産クラスが臨界閾値（支持レベル）を下回った場合に購入します。
     *   **利上げ/利下げ**: グローバルな流動性パラメータに影響を与える金利変更をシミュレートします。
     *   **ペッグ維持**: 通貨がペッグされている場合、レートを狭い帯域内に保つために積極的に取引します。
+    *   **理論為替レートへの回帰**:
+        市場レートが [Theoretical FX Rate](./THEORETICAL_FX_RATE.md) から著しく乖離（例: ±10%以上）した場合、介入を行ってレートを理論値に近づけようとします。
 
-### 3.9. Arbitrageur Logic (Index Arbitrage)
+### 3.9. Arbitrageur Logic (Index & FX Arbitrage)
 *   **目的**: Index価格（市場価格）と、その構成銘柄の合計価値（理論価格/NAV）との間の乖離を利用して、リスクを抑えながら利益を得る（裁定取引）。
 *   **挙動**:
+    *   **FX Arbitrage**:
+        市場レートと [Theoretical FX Rate](./THEORETICAL_FX_RATE.md) の乖離を監視します。
+        乖離が一定閾値（例: 2%）を超えた場合、理論値への収束（Mean Reversion）を期待したポジション構築を行います。
     *   **NAVの監視**: 構成銘柄の最新価格と為替レート（FX Rates）を常に監視し、リアルタイムで理論価格（NAV）を計算します。
         $$NAV_{ARC} = \sum (Price_i \times FX\_Rate_{i/ARC})$$
     *   **乖離の判定**: 市場価格とNAVの差（スプレッド）が、往復の手数料（Creation/Redemption Fee + Trading Fee）およびスリッページコストを上回った場合にエントリーします。
