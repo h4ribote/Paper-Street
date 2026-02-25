@@ -59,25 +59,38 @@
 ### 4. Corporations (企業)
 企業の規模（Tier）ごとに**現地通貨ベースでの資金量**と**生産能力（Capacity）ベースの在庫量**を固定します。
 
-| Tier | Scale | Cash (Local Currency) | Inventory (Product) | Count |
-| :--- | :--- | :--- | :--- | :--- |
-| **Tier 1** | Large Cap | **5,000,000** | Capacity × **2 Quarters** | 8 |
-| **Tier 2** | Mid Cap | **2,000,000** | Capacity × **2 Quarters** | 8 |
-| **Tier 3** | Small Cap | **1,000,000** | Capacity × **3 Quarters** | 5 |
+| Tier | Scale | Cash (Local Currency) | Inventory (Product) | Issued Shares | Count |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Tier 1** | Large Cap | **5,000,000** | Capacity × **2 Quarters** | **10,000,000** | 8 |
+| **Tier 2** | Mid Cap | **2,000,000** | Capacity × **2 Quarters** | **5,000,000** | 8 |
+| **Tier 3** | Small Cap | **1,000,000** | Capacity × **3 Quarters** | **1,000,000** | 5 |
 
 *   **現金（Cash）**: 本拠地のある国の通貨で保有します。
 *   **在庫（Inventory）**: 生産能力（Max Capacity）のNヶ月分として計算されます。
+*   **自社株保有 (Treasury Stock)**: 企業は発行済み株式（Issued Shares）の **50%** を自社株（Treasury Stock）として保有します。
 
 ### 5. Market Makers (マーケットメイカー)
-各通貨ペアおよび主要商品の流動性プールに、対等な価値ではなく**固定の数量**を供給します。
-初期為替レートとの乖離は、市場開始直後の裁定取引（Arbitrage）によって調整されることを許容します。
+主に**株式市場（Order Book）**において、買い注文（Bid）と売り注文（Ask）の両方を提示し、市場の流動性を維持する主体です。
+為替関連の取引は行わず、各企業の株式売買に専念します。
 
-*   **Base Allocation per Pair**:
-    *   **ARC Side**: **1,000,000 ARC**
-    *   **Local Side**: **2,000,000 (Local)**
-    *   *Note*: これにより、初期プール比率は `1 ARC : 2 Local` (Rate = 0.50) となりますが、実際のTick設定時に調整可能です。
+*   **Role**: Provide liquidity to Stock Order Books. (No FX trading)
+*   **Asset Allocation**:
+    *   **Cash (Buy Side Liquidity)**: **5,000,000 ARC** (Total Fund)
+    *   **Inventory (Sell Side Liquidity)**: **20%** of Issued Shares for every corporation.
 
-### 6. Algorithmic Traders (Other Bots)
+### 6. Liquidity Providers (Lender)
+DLI（信用取引プール）およびFX AMMに対して、大規模な流動性を提供する主体です。
+ユーザーが借り入れるための「現金」と「株式」を供給し、市場の安定化と信用取引の活性化を支えます。
+
+*   **Role**: Provide liquidity to DLI (Margin Lending) and AMM (FX).
+*   **Asset Allocation**:
+    *   **DLI Cash Pool**: **20,000,000 ARC** (Total Pool Fund)
+    *   **DLI Stock Pool**: **30%** of Issued Shares for every corporation.
+    *   **FX AMM Liquidity**:
+        *   **ARC Side**: **10,000,000 ARC** (per currency pair/region)
+        *   **Local Side**: **20,000,000 (Local)** (per currency pair/region)
+
+### 7. Algorithmic Traders (Other Bots)
 特定の戦略に特化した小規模なボット群です。商品の取引に集中させるため、それぞれ3つの通貨グループに分かれて資金を保有します。
 
 *   **対象ボット**: Momentum Chaser, Dip Buyer, Reversal Sniper, Grid Trader

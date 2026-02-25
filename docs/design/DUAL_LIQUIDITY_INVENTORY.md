@@ -168,3 +168,13 @@
 2.  `Redeem Amount = Owned Shares * Exchange Rate` を計算。
 3.  プレイヤーの `currency_balances` に `Redeem Amount` を加算。
 4.  プールの `total_cash` から `Redeem Amount` を減算し、`total_cash_shares` から `Owned Shares` を減算。
+
+
+## 7. リスク管理 (Risk Management)
+
+### 7.1. 最大レバレッジ (Maximum Leverage)
+システム全体の健全性を保つため、DLIにおける信用取引の最大レバレッジは **5倍** に制限されます。
+
+*   **Initial Margin Requirement (初期証拠金率)**: **20%**
+    *   新規ポジションを建てる際に必要な最低証拠金の割合です。
+    *   例: 10,000 ARC分のポジションを持つには、最低でも 2,000 ARC の証拠金（Equity）が必要です。
