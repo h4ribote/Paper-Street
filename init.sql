@@ -441,6 +441,55 @@ CREATE TABLE IF NOT EXISTS production_inputs (
     FOREIGN KEY (input_asset_id) REFERENCES assets(asset_id)
 );
 
+-- --------------------------------------------------------
+-- 7.6. Corporate Contracts (Supply Chain Quests)
+-- --------------------------------------------------------
+
+-- コントラクト定義 (Contract Definitions)
+CREATE TABLE IF NOT EXISTS contracts (
+    contract_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    
+    -- Issuer (Corporate or Government)
+    company_id INT NULL,
+    country_id INT NULL,
+    
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    
+    target_asset_id INT NOT NULL,
+    total_required_quantity DECIMAL(21, 0) NOT NULL,
+    current_delivered_quantity DECIMAL(21, 0) DEFAULT 0,
+    
+    unit_price DECIMAL(21, 0) NOT NULL COMMENT 'Fixed buying price per unit',
+    xp_reward_per_unit INT NOT NULL DEFAULT 0,
+    min_rank_required ENUM('Shrimp', 'Fish', 'Shark', 'Whale', 'Leviathan') DEFAULT 'Shark',
+    
+    status ENUM('ACTIVE', 'COMPLETED', 'EXPIRED') DEFAULT 'ACTIVE',
+    
+    start_at BIGINT NOT NULL,
+    expires_at BIGINT NOT NULL,
+    
+    FOREIGN KEY (company_id) REFERENCES companies(company_id),
+    FOREIGN KEY (country_id) REFERENCES countries(country_id),
+    FOREIGN KEY (target_asset_id) REFERENCES assets(asset_id)
+);
+
+-- 納品履歴 (Contract Deliveries)
+CREATE TABLE IF NOT EXISTS contract_deliveries (
+    delivery_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    contract_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    
+    quantity DECIMAL(21, 0) NOT NULL,
+    payout_amount DECIMAL(21, 0) NOT NULL,
+    xp_gained INT NOT NULL,
+    
+    delivered_at BIGINT DEFAULT 0,
+    
+    FOREIGN KEY (contract_id) REFERENCES contracts(contract_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- --------------------------------------------------------

@@ -27,6 +27,7 @@
 *   **資産クラス**: 株式、債券、FX、デリバティブ。
 *   **シーズン制**: ランキング、報酬、シーズンごとのテーマ（大恐慌、バブル等）。
 *   **Dual Liquidity Inventory (DLI)**: [詳細設計](./design/DUAL_LIQUIDITY_INVENTORY.md) - 現金と現物の在庫を利用率に応じて管理する、金利とショートコストの動的決定メカニズム。
+*   **Corporate Contracts (Supply Chain Quests)**: [詳細設計](./design/CONTRACTS.md) - 実需をシミュレートする納品クエスト。上位ランク昇格の必須条件。
 
 ### [Matching Engine Strict Rules](./design/MATCHING_ENGINE.md)
 *   **アルゴリズム**: 価格優先・時間優先 (Price-Time Priority) の厳格な適用。
