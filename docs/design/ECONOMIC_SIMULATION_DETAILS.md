@@ -149,3 +149,13 @@
 *   **売上 (Revenue)**: 製品の販売によって得られた現金。
 *   **費用 (Expenses)**: 原材料購入費 + 固定費（人件費・設備維持費）。
 *   **純利益 (Net Income)**: `売上 - 費用`。これが四半期決算で報告され、配当の原資となります。
+
+### 5.6 Financing Activities (資金調達活動)
+企業Botは、事業活動（調達・生産・販売）に必要な資金（Cash Flow）を管理し、必要に応じて資本市場にアクセスします。
+
+1.  **モニタリング (Monitoring)**:
+    *   `Current Ratio` や `Free Cash Flow` を定期的にチェックし、資金ショートのリスクを評価します。
+2.  **資金調達実行 (Execution)**:
+    *   資金不足アラート（Safety Margin Breach）が発生した場合、または大規模投資（CapEx）が承認された場合、[Equity Financing](./EQUITY_FINANCING.md) プロトコルに従って新株発行（売り注文）を行います。
+3.  **自社株買い実行 (Execution)**:
+    *   余剰資金アラート（Excess Cash）が発生した場合、[Share Buyback](./EQUITY_FINANCING.md) プロトコルに従って自社株買い（買い注文）を行います。
