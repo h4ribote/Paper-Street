@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS macro_indicators (
     indicator_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     country_id INT NOT NULL,
     type ENUM('GDP_GROWTH', 'CPI', 'INTEREST_RATE', 'UNEMPLOYMENT') NOT NULL,
-    value DECIMAL(21, 0) NOT NULL COMMENT 'Scaled value: 550 = 5.50%',
+    value BIGINT NOT NULL COMMENT 'Scaled value: 550 = 5.50%',
     published_at BIGINT NOT NULL,
     FOREIGN KEY (country_id) REFERENCES countries(country_id),
     INDEX idx_macro_country_date (country_id, published_at)
@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS financial_reports (
     
     -- Economic Metrics
     capex DECIMAL(21, 0) DEFAULT 0 COMMENT 'Capital Expenditure this quarter',
-    utilization_rate DECIMAL(21, 0) DEFAULT 0 COMMENT 'Scaled: 10000 = 100.00%',
+    utilization_rate BIGINT DEFAULT 0 COMMENT 'Scaled: 10000 = 100.00%',
     inventory_level BIGINT DEFAULT 0 COMMENT 'Inventory at quarter end',
 
     guidance TEXT COMMENT 'Management guidance/outlook',
@@ -210,7 +210,7 @@ CREATE TABLE IF NOT EXISTS positions (
     quantity DECIMAL(21, 0) NOT NULL,
     entry_price DECIMAL(21, 0) NOT NULL,
     current_price DECIMAL(21, 0) NOT NULL COMMENT 'Last marked price',
-    leverage DECIMAL(21, 0) DEFAULT 100 COMMENT '100 = 1.00x',
+    leverage BIGINT DEFAULT 100 COMMENT '100 = 1.00x',
     margin_used DECIMAL(21, 0) DEFAULT 0,
     unrealized_pl DECIMAL(21, 0) DEFAULT 0,
     created_at BIGINT DEFAULT 0,
@@ -292,7 +292,7 @@ CREATE TABLE IF NOT EXISTS news_feed (
     published_at BIGINT DEFAULT 0,
     source VARCHAR(50) DEFAULT 'Paper Street Wire',
     
-    sentiment_score DECIMAL(21, 0) DEFAULT 0 COMMENT 'Scaled: 100 = 1.00',
+    sentiment_score BIGINT DEFAULT 0 COMMENT 'Scaled: 100 = 1.00',
     related_asset_id INT,
     related_sector_id INT,
     related_country_id INT
