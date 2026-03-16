@@ -40,9 +40,9 @@
 *   **AIの挙動改善**: パラメータのランダム化、反応遅延（Jitter）、学習型AIによる対抗策。
 
 ### [System Architecture & Tech Stack](./design/SYSTEM_ARCHITECTURE.md)
-*   **技術スタック**: Python (FastAPI), MySQL, Docker, Lightweight Charts。
+*   **技術スタック**: Go（インメモリOrderBook）, MySQL, Docker, Lightweight Charts。
 *   **データベース設計**: 統合ポジション管理、整数演算によるデータ整合性の確保。
-*   **スケーラビリティ**: Redisを活用した高速な注文処理（板情報管理）、非同期永続化。
+*   **スケーラビリティ**: 銘柄ごとのGoroutine/Channelで順序保証された高速注文処理、非同期永続化。
 
 
 ## 3. 世界観・設定資料 (Lore & Reference)
