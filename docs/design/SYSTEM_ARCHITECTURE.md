@@ -1,27 +1,22 @@
 # System Architecture & Technology Stack
 
 ## 1. 技術スタック (Tech Stack)
-バックエンドはPythonで統一し、Dockerで環境を構築します。拡張性とメンテナンス性を重視します。
+バックエンドはGoで統一し、銘柄ごとのインメモリOrderBookワーカーを中心に構築します。低レイテンシと厳密な順序保証を最優先にします。
 
 *   **Frontend**: HTML5 / JavaScript (Vanilla ES6+)
     *   ビルドツール不要のシンプルな構成。
     *   **CSS Framework**: Tailwind CSS または Bootstrap 5 でデザインを効率化。
     *   **Charting Library**: Lightweight Charts (TradingView) - 高性能かつ軽量なチャート描画。
-*   **Backend**: Python 3.12+ (FastAPI)
-    *   非同期処理（`asyncio`）を活用し、高頻度な注文処理をさばく。
-    *   **API Specification**: OpenAPI (Swagger UI) を自動生成し、フロントエンド・Bot開発の効率化を図る。
+*   **Backend**: Go 1.22+（HTTP API + WebSocket + Matching Engine）
+    *   GoroutineとChannelを活用し、高頻度な注文処理を低遅延で処理。
+    *   **API Specification**: OpenAPI (Swagger UI) を生成し、フロントエンド・Bot開発の効率化を図る。
 *   **Database**: MySQL 8.0
     *   ユーザーデータ、資産、注文履歴の永続化。
-*   **Cache / Message Broker**: Redis 7.0
-    *   **Order Book**: メモリ上での高速な板情報管理。
-    *   **Pub/Sub**: WebSocket配信のためのメッセージブローカー。
-    *   **Session Store**: 短期的なセッション情報のキャッシュ。
 *   **Infrastructure**: Docker & Docker Compose
-    *   **App Container**: FastAPIサーバー
+    *   **App Container**: Goアプリケーションサーバー（API / WebSocket / Matching Engine）
     *   **DB Container**: MySQL
-    *   **Redis Container**: Redis
-    *   **Bot Containers**: 複数のPythonスクリプト（Market Maker, Whale等）を独立したコンテナとして起動。Docker内部ネットワーク経由でAPIサーバーに高速接続する。
-*   **Real-time**: WebSocket (FastAPI標準のサポートを利用)
+    *   **Bot Containers**: 複数のBotプロセス（Market Maker, Whale等）を独立コンテナとして起動。Docker内部ネットワーク経由でAPIサーバーに接続する。
+*   **Real-time**: WebSocket（Goサーバー内の配信機構を利用）
 *   **Authentication**: Discord OAuth2 + JWT
     *   ユーザー認証はDiscordアカウントを使用。ログイン成功時にJWT (JSON Web Token) を発行し、以降のAPIリクエストの認証に使用する。
 
@@ -78,8 +73,15 @@
 MMOとして多数の同時接続と注文処理に耐える設計を目指します。
 
 ### 3.1. 注文処理の同時実行性 (Concurrency)
-*   **Redisの活用**: 板情報（Order Book）の管理とマッチング処理は、MySQLではなくメモリ上のデータストア（Redis）で行います。これにより、高速な約定処理とロック競合の回避を実現します。
-*   **非同期永続化**: 約定結果のみを非同期でMySQLに書き込むアーキテクチャを採用し、DB負荷を軽減します。
+*   **Engine Router**: `Engine` が銘柄ごとの `OrderBook` ワーカー（Goroutine）を管理し、注文を該当銘柄の `OrderChannel` にルーティングします。
+*   **Single Writer Principle**: 1銘柄の板（Bids/Asks）を更新できるのは当該銘柄の1つのGoroutineのみとし、Mutexなしで厳密な順序保証を実現します。
+*   **非同期永続化**: 約定結果・注文状態更新・ポジション更新は、DB書き込み専用Goroutine（ワーカープール）へ渡してMySQLへ非同期 `INSERT/UPDATE` します。
+*   **WebSocket直結配信**: 約定と板更新をインメモリ状態から直接配信し、Redis Pub/Subを介しません。
 
-### 3.2. 将来的な拡張 (Future Proofing)
+### 3.2. 障害耐性 (Resilience)
+*   **起動時リカバリ**: サーバー起動時に `orders` テーブルから `status = 'OPEN'` または `'PARTIAL'` の注文を全件ロードし、インメモリ板をウォームアップ再構築します。
+*   **Graceful Shutdown**: 終了シグナル受信後は新規受付を停止し、DB書き込みキューの未処理イベントがゼロになるまで待機してから停止します。
+*   **事前Hold**: 注文をチャネル投入する前に、`currency_balances` / `asset_balances` 上で必要資金・株数を拘束（Hold）し、整合性を担保します。
+
+### 3.3. 将来的な拡張 (Future Proofing)
 *   **DBシャーディング**: ユーザー数や取引量の増加に備え、`orders` や `executions` などのトランザクション系テーブルは、将来的にシャーディング（分割）可能な設計を意識します。
