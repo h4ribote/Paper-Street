@@ -307,8 +307,7 @@ func (ob *OrderBook) match(order *Order) OrderResult {
 			if order.Type == OrderTypeMarket {
 				order.Remaining -= cancelQty
 				selfTradeReduced = true
-				if order.Remaining <= 0 {
-					order.Remaining = 0
+				if order.Remaining == 0 {
 					break
 				}
 			}
