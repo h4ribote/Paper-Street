@@ -68,17 +68,17 @@ func (s *AsyncMemorySink) Shutdown(ctx context.Context) error {
 func (s *AsyncMemorySink) Orders() []*Order {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	copy := make([]*Order, len(s.orders))
-	copy = append(copy[:0], s.orders...)
-	return copy
+	orders := make([]*Order, len(s.orders))
+	copy(orders, s.orders)
+	return orders
 }
 
 func (s *AsyncMemorySink) Executions() []Execution {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	copy := make([]Execution, len(s.executions))
-	copy = append(copy[:0], s.executions...)
-	return copy
+	executions := make([]Execution, len(s.executions))
+	copy(executions, s.executions)
+	return executions
 }
 
 func (s *AsyncMemorySink) run() {

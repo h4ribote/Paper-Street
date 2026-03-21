@@ -21,7 +21,7 @@ func (c *Client) Send(message Message) {
 func (c *Client) Messages() []Message {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	copy := make([]Message, len(c.sent))
-	copy = append(copy[:0], c.sent...)
-	return copy
+	messages := make([]Message, len(c.sent))
+	copy(messages, c.sent)
+	return messages
 }
