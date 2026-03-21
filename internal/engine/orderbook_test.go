@@ -55,14 +55,53 @@ func TestMarketOrderGuard(t *testing.T) {
 func TestSelfTradePrevention(t *testing.T) {
 	eng := NewEngine(NewDiscardSink())
 	ctx := context.Background()
-	_, _ = eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 1, Side: SideSell, Type: OrderTypeLimit, Quantity: 5, Price: 100})
+	sell, _ := eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 1, Side: SideSell, Type: OrderTypeLimit, Quantity: 5, Price: 100})
 
 	buy, err := eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 1, Side: SideBuy, Type: OrderTypeLimit, Quantity: 5, Price: 100})
-	if err == nil {
-		t.Fatalf("expected rejection error")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if buy.Order.Status != OrderStatusRejected {
-		t.Fatalf("expected rejected status, got %s", buy.Order.Status)
+	if buy.Order.Status != OrderStatusOpen {
+		t.Fatalf("expected open status, got %s", buy.Order.Status)
+	}
+	if len(buy.Executions) != 0 {
+		t.Fatalf("expected no executions, got %d", len(buy.Executions))
+	}
+	cancelled, ok := eng.FindOrder(sell.Order.ID)
+	if !ok || cancelled.Status != OrderStatusCancelled {
+		t.Fatalf("expected sell order cancelled, got %+v", cancelled)
+	}
+}
+
+func TestSelfTradePreventionMarketReduction(t *testing.T) {
+	eng := NewEngine(NewDiscardSink())
+	ctx := context.Background()
+	selfSell, _ := eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 1, Side: SideSell, Type: OrderTypeLimit, Quantity: 5, Price: 100})
+	otherSell, _ := eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 2, Side: SideSell, Type: OrderTypeLimit, Quantity: 5, Price: 100})
+
+	buy, err := eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 1, Side: SideBuy, Type: OrderTypeMarket, Quantity: 8})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(buy.Executions) != 1 {
+		t.Fatalf("expected 1 execution, got %d", len(buy.Executions))
+	}
+	if buy.Executions[0].Quantity != 3 {
+		t.Fatalf("expected execution quantity 3, got %d", buy.Executions[0].Quantity)
+	}
+	if buy.Order.Status != OrderStatusPartial {
+		t.Fatalf("expected partial status, got %s", buy.Order.Status)
+	}
+	if buy.Order.Remaining != 0 {
+		t.Fatalf("expected remaining cancelled, got %d", buy.Order.Remaining)
+	}
+	selfOrder, ok := eng.FindOrder(selfSell.Order.ID)
+	if !ok || selfOrder.Status != OrderStatusCancelled {
+		t.Fatalf("expected self sell order cancelled, got %+v", selfOrder)
+	}
+	otherOrder, ok := eng.FindOrder(otherSell.Order.ID)
+	if !ok || otherOrder.Remaining != 2 {
+		t.Fatalf("expected remaining 2 on other sell, got %+v", otherOrder)
 	}
 }
 
