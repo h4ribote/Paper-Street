@@ -300,12 +300,12 @@ func (ob *OrderBook) match(order *Order) OrderResult {
 			break
 		}
 		if maker.UserID == order.UserID {
-			cancelQty := minInt64(order.Remaining, maker.Remaining)
+			selfTradeQty := minInt64(order.Remaining, maker.Remaining)
 			ob.removeMaker(maker)
 			maker.cancel()
 			ob.events.EnqueueOrder(maker)
 			if order.Type == OrderTypeMarket {
-				order.Remaining -= cancelQty
+				order.Remaining -= selfTradeQty
 				selfTradeReduced = true
 				if order.Remaining == 0 {
 					break
