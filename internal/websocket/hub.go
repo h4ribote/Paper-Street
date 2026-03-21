@@ -1,0 +1,44 @@
+package websocket
+
+import "sync"
+
+type Hub struct {
+	mu      sync.RWMutex
+	clients map[string]*Client
+}
+
+type Message struct {
+	Topic string      `json:"topic"`
+	Data  interface{} `json:"data"`
+	TS    int64       `json:"ts"`
+}
+
+func NewHub() *Hub {
+	return &Hub{
+		clients: make(map[string]*Client),
+	}
+}
+
+func (h *Hub) Register(client *Client) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.clients[client.ID] = client
+}
+
+func (h *Hub) Unregister(client *Client) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.clients, client.ID)
+}
+
+func (h *Hub) Broadcast(message Message) {
+	h.mu.RLock()
+	clients := make([]*Client, 0, len(h.clients))
+	for _, client := range h.clients {
+		clients = append(clients, client)
+	}
+	h.mu.RUnlock()
+	for _, client := range clients {
+		client.Send(message)
+	}
+}
