@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"log"
 	"sync"
 )
 
@@ -50,6 +51,7 @@ func (s *AsyncMemorySink) EnqueueOrder(order *Order) {
 	select {
 	case s.orderCh <- order.clone():
 	default:
+		log.Printf("order event dropped")
 	}
 }
 
@@ -57,6 +59,7 @@ func (s *AsyncMemorySink) EnqueueExecution(execution Execution) {
 	select {
 	case s.execCh <- execution:
 	default:
+		log.Printf("execution event dropped")
 	}
 }
 

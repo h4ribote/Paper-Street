@@ -170,7 +170,11 @@ func respondJSON(w http.ResponseWriter, status int, payload interface{}) {
 	var buffer bytes.Buffer
 	if err := json.NewEncoder(&buffer).Encode(payload); err != nil {
 		log.Printf("response encode error: %v", err)
-		http.Error(w, "response encoding failed", http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		if err := json.NewEncoder(w).Encode(errorResponse{Error: "response encoding failed"}); err != nil {
+			log.Printf("response encode fallback error: %v", err)
+		}
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

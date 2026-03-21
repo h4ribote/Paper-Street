@@ -140,16 +140,23 @@ func (ob *OrderBook) Snapshot(ctx context.Context, depth int) (OrderBookSnapshot
 }
 
 func (ob *OrderBook) FindOrder(orderID int64) (*Order, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	response := make(chan *Order, 1)
 	request := orderRequest{
 		action:  requestFind,
 		orderID: orderID,
 		find:    response,
 	}
-	if err := ob.enqueue(context.Background(), request); err != nil {
+	if err := ob.enqueue(ctx, request); err != nil {
 		return nil, false
 	}
-	order := <-response
+	var order *Order
+	select {
+	case order = <-response:
+	case <-ctx.Done():
+		return nil, false
+	}
 	if order == nil {
 		return nil, false
 	}
