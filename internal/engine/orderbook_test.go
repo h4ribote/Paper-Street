@@ -76,18 +76,22 @@ func TestSelfTradePrevention(t *testing.T) {
 func TestSelfTradePreventionMarketReduction(t *testing.T) {
 	eng := NewEngine(NewDiscardSink())
 	ctx := context.Background()
-	selfSell, _ := eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 1, Side: SideSell, Type: OrderTypeLimit, Quantity: 5, Price: 100})
-	otherSell, _ := eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 2, Side: SideSell, Type: OrderTypeLimit, Quantity: 5, Price: 100})
+	selfQty := int64(5)
+	otherQty := int64(5)
+	marketQty := int64(8)
+	expectedExecQty := marketQty - selfQty
+	selfSell, _ := eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 1, Side: SideSell, Type: OrderTypeLimit, Quantity: selfQty, Price: 100})
+	otherSell, _ := eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 2, Side: SideSell, Type: OrderTypeLimit, Quantity: otherQty, Price: 100})
 
-	buy, err := eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 1, Side: SideBuy, Type: OrderTypeMarket, Quantity: 8})
+	buy, err := eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 1, Side: SideBuy, Type: OrderTypeMarket, Quantity: marketQty})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(buy.Executions) != 1 {
 		t.Fatalf("expected 1 execution, got %d", len(buy.Executions))
 	}
-	if buy.Executions[0].Quantity != 3 {
-		t.Fatalf("expected execution quantity 3, got %d", buy.Executions[0].Quantity)
+	if buy.Executions[0].Quantity != expectedExecQty {
+		t.Fatalf("expected execution quantity %d, got %d", expectedExecQty, buy.Executions[0].Quantity)
 	}
 	if buy.Order.Status != OrderStatusPartial {
 		t.Fatalf("expected partial status, got %s", buy.Order.Status)
