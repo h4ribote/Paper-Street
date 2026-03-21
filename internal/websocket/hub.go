@@ -3,9 +3,8 @@ package websocket
 import "sync"
 
 type Hub struct {
-	mu        sync.RWMutex
-	clients   map[string]*Client
-	broadcast chan Message
+	mu      sync.RWMutex
+	clients map[string]*Client
 }
 
 type Message struct {
@@ -16,8 +15,7 @@ type Message struct {
 
 func NewHub() *Hub {
 	return &Hub{
-		clients:   make(map[string]*Client),
-		broadcast: make(chan Message, 256),
+		clients: make(map[string]*Client),
 	}
 }
 

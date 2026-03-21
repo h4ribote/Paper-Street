@@ -361,7 +361,6 @@ func (ob *OrderBook) addToBook(order *Order) {
 	} else {
 		ob.asks.add(order)
 	}
-	ob.events.EnqueueOrder(order)
 }
 
 func (ob *OrderBook) bestOpposing(side Side) *Order {
