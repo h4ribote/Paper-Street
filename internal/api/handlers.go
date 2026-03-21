@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -166,10 +167,16 @@ func parseID(value string) (int64, error) {
 }
 
 func respondJSON(w http.ResponseWriter, status int, payload interface{}) {
+	var buffer bytes.Buffer
+	if err := json.NewEncoder(&buffer).Encode(payload); err != nil {
+		log.Printf("response encode error: %v", err)
+		http.Error(w, "response encoding failed", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		log.Printf("response encode error: %v", err)
+	if _, err := w.Write(buffer.Bytes()); err != nil {
+		log.Printf("response write error: %v", err)
 	}
 }
 

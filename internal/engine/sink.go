@@ -47,11 +47,17 @@ func (s *AsyncMemorySink) EnqueueOrder(order *Order) {
 	if order == nil {
 		return
 	}
-	s.orderCh <- order.clone()
+	select {
+	case s.orderCh <- order.clone():
+	default:
+	}
 }
 
 func (s *AsyncMemorySink) EnqueueExecution(execution Execution) {
-	s.execCh <- execution
+	select {
+	case s.execCh <- execution:
+	default:
+	}
 }
 
 func (s *AsyncMemorySink) Shutdown(ctx context.Context) error {

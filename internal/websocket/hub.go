@@ -35,8 +35,12 @@ func (h *Hub) Unregister(client *Client) {
 
 func (h *Hub) Broadcast(message Message) {
 	h.mu.RLock()
-	defer h.mu.RUnlock()
+	clients := make([]*Client, 0, len(h.clients))
 	for _, client := range h.clients {
+		clients = append(clients, client)
+	}
+	h.mu.RUnlock()
+	for _, client := range clients {
 		client.Send(message)
 	}
 }

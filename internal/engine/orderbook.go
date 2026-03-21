@@ -417,8 +417,8 @@ func (ob *OrderBook) triggerStopOrders() {
 	if len(ob.stopOrders) == 0 {
 		return
 	}
-	triggered := ob.stopOrders[:0]
-	remaining := ob.stopOrders[:0]
+	triggered := make([]*Order, 0)
+	remaining := make([]*Order, 0)
 	for _, stop := range ob.stopOrders {
 		if !stop.isActive() {
 			continue
@@ -451,7 +451,11 @@ func (ob *OrderBook) activateStopOrder(order *Order) {
 	} else {
 		order.Type = OrderTypeLimit
 	}
-	ob.match(order)
+	result := ob.match(order)
+	ob.events.EnqueueOrder(order)
+	for _, exec := range result.Executions {
+		ob.events.EnqueueExecution(exec)
+	}
 }
 
 func (ob *OrderBook) removeStopOrder(orderID int64) {
