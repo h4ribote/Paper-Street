@@ -51,7 +51,7 @@ func (s *AsyncMemorySink) EnqueueOrder(order *Order) {
 	select {
 	case s.orderCh <- order.clone():
 	default:
-		log.Printf("order event dropped")
+		log.Printf("order event dropped: order_id=%d asset_id=%d", order.ID, order.AssetID)
 	}
 }
 
@@ -59,7 +59,7 @@ func (s *AsyncMemorySink) EnqueueExecution(execution Execution) {
 	select {
 	case s.execCh <- execution:
 	default:
-		log.Printf("execution event dropped")
+		log.Printf("execution event dropped: asset_id=%d taker_order_id=%d maker_order_id=%d", execution.AssetID, execution.TakerOrderID, execution.MakerOrderID)
 	}
 }
 
