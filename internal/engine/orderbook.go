@@ -8,6 +8,7 @@ import (
 )
 
 const defaultGuardPercent int64 = 5
+const findOrderTimeout = 2 * time.Second
 
 var ErrOrderRejected = errors.New("order rejected")
 var ErrOrderNotFound = errors.New("order not found")
@@ -140,7 +141,7 @@ func (ob *OrderBook) Snapshot(ctx context.Context, depth int) (OrderBookSnapshot
 }
 
 func (ob *OrderBook) FindOrder(orderID int64) (*Order, bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), findOrderTimeout)
 	defer cancel()
 	response := make(chan *Order, 1)
 	request := orderRequest{
