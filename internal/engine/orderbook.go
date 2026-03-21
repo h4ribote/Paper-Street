@@ -8,7 +8,7 @@ import (
 )
 
 const defaultGuardPercent int64 = 5
-const findOrderTimeout = 2 * time.Second
+const defaultFindOrderTimeout = 2 * time.Second
 
 var ErrOrderRejected = errors.New("order rejected")
 var ErrOrderNotFound = errors.New("order not found")
@@ -141,7 +141,7 @@ func (ob *OrderBook) Snapshot(ctx context.Context, depth int) (OrderBookSnapshot
 }
 
 func (ob *OrderBook) FindOrder(orderID int64) (*Order, bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), findOrderTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultFindOrderTimeout)
 	defer cancel()
 	response := make(chan *Order, 1)
 	request := orderRequest{
@@ -466,7 +466,7 @@ func (ob *OrderBook) activateStopOrder(order *Order) {
 }
 
 func (ob *OrderBook) removeStopOrder(orderID int64) {
-	filtered := ob.stopOrders[:0]
+	filtered := make([]*Order, 0, len(ob.stopOrders))
 	for _, order := range ob.stopOrders {
 		if order.ID != orderID {
 			filtered = append(filtered, order)

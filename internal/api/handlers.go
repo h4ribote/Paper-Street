@@ -172,7 +172,7 @@ func respondJSON(w http.ResponseWriter, status int, payload interface{}) {
 		log.Printf("response encode error: %v", err)
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusInternalServerError)
-		if _, err := w.Write([]byte("response encoding failed")); err != nil {
+		if _, err := w.Write([]byte("JSON encoding failed for response payload")); err != nil {
 			log.Printf("response encode fallback error: %v", err)
 		}
 		return
