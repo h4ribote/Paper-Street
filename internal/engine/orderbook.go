@@ -290,7 +290,7 @@ func (ob *OrderBook) match(order *Order) OrderResult {
 	var executions []Execution
 	var guardPrice int64
 	guardEnabled := order.Type == OrderTypeMarket
-	selfTradeBlocked := false
+	selfTradeReduced := false
 	for order.Remaining > 0 {
 		maker := ob.bestOpposing(order.Side)
 		if maker == nil {
@@ -300,12 +300,18 @@ func (ob *OrderBook) match(order *Order) OrderResult {
 			break
 		}
 		if maker.UserID == order.UserID {
-			if len(executions) == 0 {
-				order.reject()
-				return OrderResult{Order: order.clone(), Err: ErrOrderRejected}
+			selfTradeQty := minInt64(order.Remaining, maker.Remaining)
+			ob.removeMaker(maker)
+			maker.cancel()
+			ob.events.EnqueueOrder(maker)
+			if order.Type == OrderTypeMarket {
+				order.Remaining -= selfTradeQty
+				selfTradeReduced = true
+				if order.Remaining == 0 {
+					break
+				}
 			}
-			selfTradeBlocked = true
-			break
+			continue
 		}
 		if guardEnabled && guardPrice == 0 {
 			guardPrice = ob.guardFrom(maker.Price, order.Side)
@@ -330,9 +336,12 @@ func (ob *OrderBook) match(order *Order) OrderResult {
 	result.Executions = executions
 	ob.triggerStopOrders()
 
-	if selfTradeBlocked {
-		order.Status = OrderStatusPartial
-		order.Remaining = 0
+	if selfTradeReduced && order.Remaining == 0 {
+		if len(executions) == 0 {
+			order.cancel()
+		} else {
+			order.Status = OrderStatusPartial
+		}
 		return OrderResult{Order: order.clone(), Executions: executions}
 	}
 
