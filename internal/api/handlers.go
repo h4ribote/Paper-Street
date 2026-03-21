@@ -163,6 +163,9 @@ func parseID(value string) (int64, error) {
 	if value == "" {
 		return 0, errors.New("id required")
 	}
+	if strings.Contains(value, "/") {
+		return 0, errors.New("invalid id path")
+	}
 	return strconv.ParseInt(value, 10, 64)
 }
 
