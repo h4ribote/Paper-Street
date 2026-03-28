@@ -18,11 +18,11 @@ func (s *Server) withAPIKeyAuth(next http.Handler) http.Handler {
 		}
 		apiKey := strings.TrimSpace(r.Header.Get(apiKeyHeader))
 		if apiKey == "" {
-			respondError(w, http.StatusUnauthorized, "api key required")
+			respondError(w, http.StatusUnauthorized, "API key required")
 			return
 		}
 		if !s.APIKeys.ContainsHex(apiKey) {
-			respondError(w, http.StatusUnauthorized, "invalid api key")
+			respondError(w, http.StatusUnauthorized, "Invalid API key")
 			return
 		}
 		next.ServeHTTP(w, r)
