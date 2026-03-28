@@ -24,7 +24,7 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
 *   `GET /assets/{asset_id}`
     *   指定した銘柄の詳細情報を取得します。
 *   `GET /market/orderbook/{asset_id}`
-    *   指定した銘柄の板情報（Order Book）を取得します。
+    *   指定した銘柄の板情報（Order Book）を取得します。`depth` で板の段数を指定できます（デフォルト20、最大100）。
 *   `GET /market/candles/{asset_id}`
     *   指定した銘柄のローソク足データを取得します。パラメータ: `timeframe`, `limit`, `start_time`, `end_time`。
 *   `GET /market/trades/{asset_id}`
@@ -43,7 +43,7 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
 *   `DELETE /orders/{order_id}`
     *   指定した注文をキャンセルします。
 *   `GET /orders`
-    *   注文一覧を取得します。ステータス（OPEN/FILLED/CANCELLED）でフィルタリング可能です。
+    *   注文一覧を取得します。ステータス（OPEN/FILLED/CANCELLED）でフィルタリング可能です。`limit` と `offset` でページネーションできます。
 *   `GET /orders/{order_id}`
     *   注文の詳細情報を取得します。
 

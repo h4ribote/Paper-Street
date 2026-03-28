@@ -42,6 +42,21 @@ func parseLimit(r *http.Request, fallback int) int {
 	return parsed
 }
 
+func parseOffset(r *http.Request, fallback int) int {
+	if r == nil {
+		return fallback
+	}
+	value := strings.TrimSpace(r.URL.Query().Get("offset"))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 0 {
+		return fallback
+	}
+	return parsed
+}
+
 func parseTimeframe(value string) (time.Duration, bool) {
 	trimmed := strings.TrimSpace(strings.ToLower(value))
 	if trimmed == "" {
