@@ -95,3 +95,14 @@ func parsePathID(path, prefix string) (int64, []string, error) {
 	}
 	return id, segments[1:], nil
 }
+
+func parseID(value string) (int64, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, errors.New("id required")
+	}
+	if strings.Contains(value, "/") {
+		return 0, errors.New("invalid id path")
+	}
+	return strconv.ParseInt(value, 10, 64)
+}

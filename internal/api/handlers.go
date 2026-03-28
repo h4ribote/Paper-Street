@@ -211,17 +211,6 @@ func (o orderRequest) toOrder(defaultUserID int64) (*engine.Order, error) {
 	}, nil
 }
 
-func parseID(value string) (int64, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return 0, errors.New("id required")
-	}
-	if strings.Contains(value, "/") {
-		return 0, errors.New("invalid id path")
-	}
-	return strconv.ParseInt(value, 10, 64)
-}
-
 func respondJSON(w http.ResponseWriter, status int, payload interface{}) {
 	var buffer bytes.Buffer
 	if err := json.NewEncoder(&buffer).Encode(payload); err != nil {

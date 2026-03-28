@@ -756,16 +756,18 @@ func (s *MarketStore) evaluatePortfolioLocked(userID int64) (cash int64, equity 
 			price = s.basePrices[assetID]
 		}
 		absQty := qty
-		sign := int64(1)
 		if absQty < 0 {
 			absQty = -absQty
-			sign = -1
 		}
 		value, ok := safeMultiplyInt64(price, absQty)
 		if !ok {
 			continue
 		}
-		equity += value * sign
+		if qty < 0 {
+			equity -= value
+		} else {
+			equity += value
+		}
 	}
 	return cash, equity
 }
