@@ -17,8 +17,8 @@
     *   **DB Container**: MySQL
     *   **Bot Containers**: 複数のBotプロセス（Market Maker, Whale等）を独立コンテナとして起動。Docker内部ネットワーク経由でAPIサーバーに接続する。
 *   **Real-time**: WebSocket（Goサーバー内の配信機構を利用）
-*   **Authentication**: Discord OAuth2 + JWT
-    *   ユーザー認証はDiscordアカウントを使用。ログイン成功時にJWT (JSON Web Token) を発行し、以降のAPIリクエストの認証に使用する。
+*   **Authentication**: Discord OAuth2 + APIキー
+    *   ユーザー認証はDiscordアカウントを使用。ログイン成功時に10バイトのAPIキーを発行し、20文字の16進数としてAPIリクエストの認証に使用する。
 
 
 ## 2. データベース設計と整合性 (Database Integrity)
