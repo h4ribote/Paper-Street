@@ -4,7 +4,7 @@ services:
   db:
     image: mysql:8.0
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD environment variable is required}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-paperstreet}
     ports:
       - "3306:3306"
