@@ -2,6 +2,9 @@ package api
 
 import (
 	"crypto/rand"
+	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -16,6 +19,32 @@ type authResponse struct {
 
 type statusResponse struct {
 	Status string `json:"status"`
+}
+
+type poolPositionRequest struct {
+	UserID      int64 `json:"user_id"`
+	BaseAmount  int64 `json:"base_amount"`
+	QuoteAmount int64 `json:"quote_amount"`
+	LowerTick   int64 `json:"lower_tick"`
+	UpperTick   int64 `json:"upper_tick"`
+}
+
+type poolSwapRequest struct {
+	UserID       int64  `json:"user_id"`
+	FromCurrency string `json:"from_currency"`
+	ToCurrency   string `json:"to_currency"`
+	Amount       int64  `json:"amount"`
+}
+
+type marginPoolRequest struct {
+	UserID      int64 `json:"user_id"`
+	CashAmount  int64 `json:"cash_amount"`
+	AssetAmount int64 `json:"asset_amount"`
+}
+
+type indexActionRequest struct {
+	UserID   int64 `json:"user_id"`
+	Quantity int64 `json:"quantity"`
 }
 
 func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
@@ -305,7 +334,11 @@ func (s *Server) handlePools(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	respondJSON(w, http.StatusOK, []interface{}{})
+	if s.Store == nil {
+		respondJSON(w, http.StatusOK, []LiquidityPool{})
+		return
+	}
+	respondJSON(w, http.StatusOK, s.Store.Pools())
 }
 
 func (s *Server) handlePoolByID(w http.ResponseWriter, r *http.Request) {
@@ -319,7 +352,16 @@ func (s *Server) handlePoolByID(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
-		respondJSON(w, http.StatusOK, map[string]int64{"pool_id": poolID})
+		if s.Store == nil {
+			respondJSON(w, http.StatusOK, LiquidityPool{})
+			return
+		}
+		pool, ok := s.Store.Pool(poolID)
+		if !ok {
+			respondError(w, http.StatusNotFound, "pool not found")
+			return
+		}
+		respondJSON(w, http.StatusOK, pool)
 		return
 	}
 	switch segments[0] {
@@ -328,13 +370,49 @@ func (s *Server) handlePoolByID(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
-		respondJSON(w, http.StatusOK, map[string]interface{}{"pool_id": poolID, "status": "position_created"})
+		if s.Store == nil {
+			respondError(w, http.StatusInternalServerError, "store unavailable")
+			return
+		}
+		var payload poolPositionRequest
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			respondError(w, http.StatusBadRequest, "invalid json body")
+			return
+		}
+		userID := payload.UserID
+		if userID == 0 {
+			userID = s.userIDFromRequest(r)
+		}
+		position, err := s.Store.CreatePoolPosition(poolID, userID, payload.BaseAmount, payload.QuoteAmount, payload.LowerTick, payload.UpperTick)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		respondJSON(w, http.StatusOK, position)
 	case "swap":
 		if r.Method != http.MethodPost {
 			respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
-		respondJSON(w, http.StatusOK, map[string]interface{}{"pool_id": poolID, "status": "swap_executed"})
+		if s.Store == nil {
+			respondError(w, http.StatusInternalServerError, "store unavailable")
+			return
+		}
+		var payload poolSwapRequest
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			respondError(w, http.StatusBadRequest, "invalid json body")
+			return
+		}
+		userID := payload.UserID
+		if userID == 0 {
+			userID = s.userIDFromRequest(r)
+		}
+		result, err := s.Store.SwapPool(poolID, userID, payload.FromCurrency, payload.ToCurrency, payload.Amount)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		respondJSON(w, http.StatusOK, result)
 	default:
 		respondError(w, http.StatusNotFound, "unknown pool action")
 	}
@@ -345,7 +423,15 @@ func (s *Server) handlePoolPositions(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	respondJSON(w, http.StatusOK, []interface{}{})
+	if s.Store == nil {
+		respondJSON(w, http.StatusOK, []PoolPosition{})
+		return
+	}
+	userID := parseUserID(r)
+	if userID == 0 {
+		userID = s.userIDFromRequest(r)
+	}
+	respondJSON(w, http.StatusOK, s.Store.PoolPositions(userID))
 }
 
 func (s *Server) handlePoolPositionByID(w http.ResponseWriter, r *http.Request) {
@@ -358,7 +444,20 @@ func (s *Server) handlePoolPositionByID(w http.ResponseWriter, r *http.Request) 
 		respondError(w, http.StatusBadRequest, "invalid position id")
 		return
 	}
-	respondJSON(w, http.StatusOK, map[string]interface{}{"position_id": positionID, "status": "closed"})
+	if s.Store == nil {
+		respondError(w, http.StatusInternalServerError, "store unavailable")
+		return
+	}
+	userID := parseUserID(r)
+	if userID == 0 {
+		userID = s.userIDFromRequest(r)
+	}
+	position, err := s.Store.ClosePoolPosition(userID, positionID)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, position)
 }
 
 func (s *Server) handleMarginPools(w http.ResponseWriter, r *http.Request) {
@@ -366,7 +465,11 @@ func (s *Server) handleMarginPools(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	respondJSON(w, http.StatusOK, []interface{}{})
+	if s.Store == nil {
+		respondJSON(w, http.StatusOK, []MarginPool{})
+		return
+	}
+	respondJSON(w, http.StatusOK, s.Store.MarginPools())
 }
 
 func (s *Server) handleMarginPoolByID(w http.ResponseWriter, r *http.Request) {
@@ -380,7 +483,16 @@ func (s *Server) handleMarginPoolByID(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
-		respondJSON(w, http.StatusOK, map[string]int64{"pool_id": poolID})
+		if s.Store == nil {
+			respondJSON(w, http.StatusOK, MarginPool{})
+			return
+		}
+		pool, ok := s.Store.MarginPool(poolID)
+		if !ok {
+			respondError(w, http.StatusNotFound, "margin pool not found")
+			return
+		}
+		respondJSON(w, http.StatusOK, pool)
 		return
 	}
 	switch segments[0] {
@@ -389,13 +501,49 @@ func (s *Server) handleMarginPoolByID(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
-		respondJSON(w, http.StatusOK, map[string]interface{}{"pool_id": poolID, "status": "supplied"})
+		if s.Store == nil {
+			respondError(w, http.StatusInternalServerError, "store unavailable")
+			return
+		}
+		var payload marginPoolRequest
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			respondError(w, http.StatusBadRequest, "invalid json body")
+			return
+		}
+		userID := payload.UserID
+		if userID == 0 {
+			userID = s.userIDFromRequest(r)
+		}
+		result, err := s.Store.SupplyMarginPool(poolID, userID, payload.CashAmount, payload.AssetAmount)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		respondJSON(w, http.StatusOK, result)
 	case "withdraw":
 		if r.Method != http.MethodPost {
 			respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
-		respondJSON(w, http.StatusOK, map[string]interface{}{"pool_id": poolID, "status": "withdrawn"})
+		if s.Store == nil {
+			respondError(w, http.StatusInternalServerError, "store unavailable")
+			return
+		}
+		var payload marginPoolRequest
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			respondError(w, http.StatusBadRequest, "invalid json body")
+			return
+		}
+		userID := payload.UserID
+		if userID == 0 {
+			userID = s.userIDFromRequest(r)
+		}
+		result, err := s.Store.WithdrawMarginPool(poolID, userID, payload.CashAmount, payload.AssetAmount)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		respondJSON(w, http.StatusOK, result)
 	default:
 		respondError(w, http.StatusNotFound, "unknown margin action")
 	}
@@ -486,7 +634,35 @@ func (s *Server) handleIndices(w http.ResponseWriter, r *http.Request) {
 	}
 	switch action {
 	case "create", "redeem":
-		respondJSON(w, http.StatusOK, map[string]interface{}{"asset_id": assetID, "action": action, "status": "ok"})
+		if s.Store == nil {
+			respondError(w, http.StatusInternalServerError, "store unavailable")
+			return
+		}
+		var payload indexActionRequest
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+			respondError(w, http.StatusBadRequest, "invalid json body")
+			return
+		}
+		quantity := payload.Quantity
+		if quantity == 0 {
+			quantity = 1
+		}
+		userID := payload.UserID
+		if userID == 0 {
+			userID = s.userIDFromRequest(r)
+		}
+		var result IndexActionResult
+		var err error
+		if action == "create" {
+			result, err = s.Store.CreateIndex(userID, assetID, quantity)
+		} else {
+			result, err = s.Store.RedeemIndex(userID, assetID, quantity)
+		}
+		if err != nil {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		respondJSON(w, http.StatusOK, result)
 	default:
 		respondError(w, http.StatusNotFound, "unknown index action")
 	}

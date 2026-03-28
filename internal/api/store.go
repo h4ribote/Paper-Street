@@ -158,9 +158,17 @@ type MarketStore struct {
 	lastPrices      map[int64]int64
 	prevPrices      map[int64]int64
 	volumes         map[int64]int64
+	currencies      map[string]struct{}
+	pools           map[int64]LiquidityPool
+	poolPositions   map[int64]PoolPosition
+	marginPools     map[int64]MarginPool
+	marginProviders map[int64]MarginProviderPosition
+	indexes         map[int64]IndexDefinition
 	nextUserID      int64
 	nextExecutionID int64
 	nextNewsID      int64
+	nextPoolPosID   int64
+	nextMarginPosID int64
 	news            []NewsItem
 	macroIndicators []MacroIndicator
 	seasons         []Season
@@ -171,18 +179,24 @@ type MarketStore struct {
 func NewMarketStore() *MarketStore {
 	now := time.Now().UTC()
 	store := &MarketStore{
-		assets:       make(map[int64]models.Asset),
-		basePrices:   make(map[int64]int64),
-		users:        make(map[int64]models.User),
-		orders:       make(map[int64]*engine.Order),
-		balances:     make(map[int64]map[string]int64),
-		positions:    make(map[int64]map[int64]int64),
-		apiKeyToUser: make(map[string]int64),
-		lastPrices:   make(map[int64]int64),
-		prevPrices:   make(map[int64]int64),
-		volumes:      make(map[int64]int64),
-		nextUserID:   userIDSeed,
-		nextNewsID:   0,
+		assets:          make(map[int64]models.Asset),
+		basePrices:      make(map[int64]int64),
+		users:           make(map[int64]models.User),
+		orders:          make(map[int64]*engine.Order),
+		balances:        make(map[int64]map[string]int64),
+		positions:       make(map[int64]map[int64]int64),
+		apiKeyToUser:    make(map[string]int64),
+		lastPrices:      make(map[int64]int64),
+		prevPrices:      make(map[int64]int64),
+		volumes:         make(map[int64]int64),
+		currencies:      map[string]struct{}{defaultCurrency: {}},
+		pools:           make(map[int64]LiquidityPool),
+		poolPositions:   make(map[int64]PoolPosition),
+		marginPools:     make(map[int64]MarginPool),
+		marginProviders: make(map[int64]MarginProviderPosition),
+		indexes:         make(map[int64]IndexDefinition),
+		nextUserID:      userIDSeed,
+		nextNewsID:      0,
 		macroIndicators: []MacroIndicator{
 			{Country: "Neo Venice", Type: "GDP_GROWTH", Value: macroGDPGrowth, PublishedAt: now.Add(-24 * time.Hour).UnixMilli()},
 			{Country: "Arcadia", Type: "CPI", Value: macroCPI, PublishedAt: now.Add(-12 * time.Hour).UnixMilli()},
@@ -200,6 +214,9 @@ func NewMarketStore() *MarketStore {
 		},
 	}
 	store.seedAssets()
+	store.seedPools()
+	store.seedMarginPools()
+	store.seedIndexes()
 	store.seedNews(now)
 	return store
 }
@@ -669,6 +686,11 @@ func (s *MarketStore) ensureUserLocked(userID int64) models.User {
 	}
 	if _, ok := s.balances[userID]; !ok {
 		s.balances[userID] = map[string]int64{defaultCurrency: defaultCashBalance}
+	}
+	for currency := range s.currencies {
+		if _, ok := s.balances[userID][currency]; !ok {
+			s.balances[userID][currency] = defaultCashBalance
+		}
 	}
 	if _, ok := s.positions[userID]; !ok {
 		s.positions[userID] = make(map[int64]int64)
