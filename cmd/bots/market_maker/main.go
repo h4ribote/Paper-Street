@@ -66,8 +66,9 @@ func runOnce(client *bots.APIClient, cfg config, state *orderState) error {
 	}
 
 	quote := bots.QuoteFromSnapshot(snapshot, cfg.SpreadBps, cfg.FallbackPrice)
-	shouldRefresh := state.buyID == 0 || state.sellID == 0 || state.lastBid != quote.BidPrice || state.lastAsk != quote.AskPrice
-	if !shouldRefresh {
+	missingOrders := state.buyID == 0 || state.sellID == 0
+	quoteChanged := state.lastBid != quote.BidPrice || state.lastAsk != quote.AskPrice
+	if !missingOrders && !quoteChanged {
 		return nil
 	}
 	cancelOrder(client, cfg.RequestTimeout, state.buyID)
