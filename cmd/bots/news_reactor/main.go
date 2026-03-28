@@ -32,7 +32,7 @@ func main() {
 		log.Fatalf("config error: %v", err)
 	}
 	client := bots.NewAPIClient(cfg.BaseURL, cfg.APIKey, cfg.RequestTimeout)
-	rand.Seed(time.Now().UnixNano())
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
@@ -57,7 +57,7 @@ func main() {
 			continue
 		}
 		if cfg.Jitter > 0 {
-			time.Sleep(time.Duration(rand.Int63n(cfg.Jitter.Milliseconds()+1)) * time.Millisecond)
+			time.Sleep(time.Duration(rng.Int63n(cfg.Jitter.Milliseconds()+1)) * time.Millisecond)
 		}
 		req := bots.OrderRequest{
 			AssetID:  event.AssetID,

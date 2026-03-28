@@ -94,24 +94,25 @@ func runOnce(client *bots.APIClient, cfg config, state *orderState) error {
 		Quantity: cfg.Quantity,
 		Price:    quote.AskPrice,
 	}
-	ctx, cancel = context.WithTimeout(context.Background(), cfg.RequestTimeout)
-	if order, err := client.SubmitOrder(ctx, buyReq); err != nil {
+	submitOrder := func(req bots.OrderRequest) (*engine.Order, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+		defer cancel()
+		return client.SubmitOrder(ctx, req)
+	}
+	if order, err := submitOrder(buyReq); err != nil {
 		log.Printf("submit buy order failed: %v", err)
 		state.buyID = 0
 	} else {
 		state.buyID = order.ID
 		log.Printf("buy order placed id=%d price=%d qty=%d", order.ID, order.Price, order.Quantity)
 	}
-	cancel()
-	ctx, cancel = context.WithTimeout(context.Background(), cfg.RequestTimeout)
-	if order, err := client.SubmitOrder(ctx, sellReq); err != nil {
+	if order, err := submitOrder(sellReq); err != nil {
 		log.Printf("submit sell order failed: %v", err)
 		state.sellID = 0
 	} else {
 		state.sellID = order.ID
 		log.Printf("sell order placed id=%d price=%d qty=%d", order.ID, order.Price, order.Quantity)
 	}
-	cancel()
 	return nil
 }
 
