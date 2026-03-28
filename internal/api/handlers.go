@@ -143,7 +143,8 @@ func (s *Server) handleOrderBook(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
-	s.Engine.OrderBook(id)
+	// Ensure the order book exists before snapshotting.
+	_ = s.Engine.OrderBook(id)
 	snapshot, err := s.Engine.Snapshot(ctx, id, depth)
 	if err != nil {
 		respondError(w, http.StatusNotFound, err.Error())
