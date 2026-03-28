@@ -16,6 +16,7 @@ import (
 const (
 	defaultCurrency    = "USD"
 	defaultCashBalance = int64(1_000_000_000)
+	defaultAltBalance  = int64(100_000_000) // starter balance for non-default currencies
 	defaultAssetPrice  = int64(10_000)
 	userIDSeed         = int64(9_999)
 	macroGDPGrowth     = int64(312) // 3.12%
@@ -27,7 +28,7 @@ func stringsEqualFold(a, b string) bool {
 	return strings.TrimSpace(strings.ToUpper(a)) == strings.TrimSpace(strings.ToUpper(b))
 }
 
-func stringsOrDefault(value, fallback string) string {
+func stringOrDefault(value, fallback string) string {
 	if strings.TrimSpace(value) == "" {
 		return fallback
 	}
@@ -158,9 +159,17 @@ type MarketStore struct {
 	lastPrices      map[int64]int64
 	prevPrices      map[int64]int64
 	volumes         map[int64]int64
+	currencies      map[string]struct{}
+	pools           map[int64]LiquidityPool
+	poolPositions   map[int64]PoolPosition
+	marginPools     map[int64]MarginPool
+	marginProviders map[marginProviderKey]MarginProviderPosition
+	indexes         map[int64]IndexDefinition
 	nextUserID      int64
 	nextExecutionID int64
 	nextNewsID      int64
+	nextPoolPosID   int64
+	nextMarginPosID int64
 	news            []NewsItem
 	macroIndicators []MacroIndicator
 	seasons         []Season
@@ -171,18 +180,24 @@ type MarketStore struct {
 func NewMarketStore() *MarketStore {
 	now := time.Now().UTC()
 	store := &MarketStore{
-		assets:       make(map[int64]models.Asset),
-		basePrices:   make(map[int64]int64),
-		users:        make(map[int64]models.User),
-		orders:       make(map[int64]*engine.Order),
-		balances:     make(map[int64]map[string]int64),
-		positions:    make(map[int64]map[int64]int64),
-		apiKeyToUser: make(map[string]int64),
-		lastPrices:   make(map[int64]int64),
-		prevPrices:   make(map[int64]int64),
-		volumes:      make(map[int64]int64),
-		nextUserID:   userIDSeed,
-		nextNewsID:   0,
+		assets:          make(map[int64]models.Asset),
+		basePrices:      make(map[int64]int64),
+		users:           make(map[int64]models.User),
+		orders:          make(map[int64]*engine.Order),
+		balances:        make(map[int64]map[string]int64),
+		positions:       make(map[int64]map[int64]int64),
+		apiKeyToUser:    make(map[string]int64),
+		lastPrices:      make(map[int64]int64),
+		prevPrices:      make(map[int64]int64),
+		volumes:         make(map[int64]int64),
+		currencies:      map[string]struct{}{defaultCurrency: {}},
+		pools:           make(map[int64]LiquidityPool),
+		poolPositions:   make(map[int64]PoolPosition),
+		marginPools:     make(map[int64]MarginPool),
+		marginProviders: make(map[marginProviderKey]MarginProviderPosition),
+		indexes:         make(map[int64]IndexDefinition),
+		nextUserID:      userIDSeed,
+		nextNewsID:      0,
 		macroIndicators: []MacroIndicator{
 			{Country: "Neo Venice", Type: "GDP_GROWTH", Value: macroGDPGrowth, PublishedAt: now.Add(-24 * time.Hour).UnixMilli()},
 			{Country: "Arcadia", Type: "CPI", Value: macroCPI, PublishedAt: now.Add(-12 * time.Hour).UnixMilli()},
@@ -200,6 +215,9 @@ func NewMarketStore() *MarketStore {
 		},
 	}
 	store.seedAssets()
+	store.seedPools()
+	store.seedMarginPools()
+	store.seedIndexes()
 	store.seedNews(now)
 	return store
 }
@@ -276,7 +294,7 @@ func (s *MarketStore) AddUser(username string) models.User {
 	s.nextUserID++
 	user := models.User{
 		ID:       s.nextUserID,
-		Username: stringsOrDefault(username, fmt.Sprintf("user-%d", s.nextUserID)),
+		Username: stringOrDefault(username, fmt.Sprintf("user-%d", s.nextUserID)),
 		Role:     "player",
 	}
 	s.users[user.ID] = user
@@ -669,6 +687,15 @@ func (s *MarketStore) ensureUserLocked(userID int64) models.User {
 	}
 	if _, ok := s.balances[userID]; !ok {
 		s.balances[userID] = map[string]int64{defaultCurrency: defaultCashBalance}
+	}
+	for currency := range s.currencies {
+		if _, ok := s.balances[userID][currency]; !ok {
+			if currency == defaultCurrency {
+				s.balances[userID][currency] = defaultCashBalance
+			} else {
+				s.balances[userID][currency] = defaultAltBalance
+			}
+		}
 	}
 	if _, ok := s.positions[userID]; !ok {
 		s.positions[userID] = make(map[int64]int64)

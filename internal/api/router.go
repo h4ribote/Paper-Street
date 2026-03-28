@@ -8,7 +8,8 @@ import (
 )
 
 func NewRouter(e *engine.Engine, apiKeys *auth.APIKeyCache, store *MarketStore) http.Handler {
-	srv := &Server{Engine: e, APIKeys: apiKeys, Store: store}
+	hub := newWSHub(store, e)
+	srv := &Server{Engine: e, APIKeys: apiKeys, Store: store, WSHub: hub}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", srv.handleHealth)
 	mux.HandleFunc("/auth/login", srv.handleAuthLogin)
@@ -43,5 +44,6 @@ func NewRouter(e *engine.Engine, apiKeys *auth.APIKeyCache, store *MarketStore) 
 	mux.HandleFunc("/world/events", srv.handleWorldEvents)
 	mux.HandleFunc("/leaderboard", srv.handleLeaderboard)
 	mux.HandleFunc("/indices/", srv.handleIndices)
+	mux.HandleFunc("/ws", srv.handleWebSocket)
 	return srv.withAPIKeyAuth(mux)
 }

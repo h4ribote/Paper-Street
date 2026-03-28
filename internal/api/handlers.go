@@ -20,6 +20,7 @@ type Server struct {
 	Engine  *engine.Engine
 	APIKeys *auth.APIKeyCache
 	Store   *MarketStore
+	WSHub   *wsHub
 }
 
 type orderRequest struct {
