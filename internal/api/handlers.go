@@ -37,6 +37,11 @@ type errorResponse struct {
 	Error string `json:"error"`
 }
 
+const (
+	defaultOrderBookDepth = 20
+	maxOrderBookDepth     = 100
+)
+
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -66,7 +71,19 @@ func (s *Server) handleOrders(w http.ResponseWriter, r *http.Request) {
 			respondJSON(w, http.StatusOK, []engine.Order{})
 			return
 		}
+		limit := parseLimit(r, 0)
+		offset := parseOffset(r, 0)
 		orders := s.Store.Orders(OrderFilter{UserID: userID, Status: status, AssetID: assetID})
+		if offset > 0 {
+			if offset >= len(orders) {
+				respondJSON(w, http.StatusOK, []engine.Order{})
+				return
+			}
+			orders = orders[offset:]
+		}
+		if limit > 0 && len(orders) > limit {
+			orders = orders[:limit]
+		}
 		respondJSON(w, http.StatusOK, orders)
 	default:
 		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -136,11 +153,14 @@ func (s *Server) handleOrderBook(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid asset id")
 		return
 	}
-	depth := 20
+	depth := defaultOrderBookDepth
 	if value := r.URL.Query().Get("depth"); value != "" {
 		if parsed, err := strconv.Atoi(value); err == nil && parsed > 0 {
 			depth = parsed
 		}
+	}
+	if depth > maxOrderBookDepth {
+		depth = maxOrderBookDepth
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()

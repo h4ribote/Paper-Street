@@ -2,10 +2,12 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/h4ribote/Paper-Street/internal/auth"
 	"github.com/h4ribote/Paper-Street/internal/engine"
@@ -77,6 +79,92 @@ func TestTradeFlowUpdatesMarketData(t *testing.T) {
 	}
 }
 
+func TestHandleOrdersPagination(t *testing.T) {
+	store := NewMarketStore()
+	apiKeys := auth.NewAPIKeyCache()
+	if err := apiKeys.AddHex(testAPIKeyUser1); err != nil {
+		t.Fatalf("failed to add api key: %v", err)
+	}
+	store.RegisterAPIKey(testAPIKeyUser1, 1)
+	store.EnsureUser(1)
+
+	eng := engine.NewEngine(store)
+	handler := NewRouter(eng, apiKeys, store)
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	for i := 0; i < 3; i++ {
+		submitEngineOrder(t, eng, &engine.Order{
+			AssetID:  101,
+			UserID:   1,
+			Side:     engine.SideBuy,
+			Type:     engine.OrderTypeLimit,
+			Quantity: 1,
+			Price:    int64(100 + i),
+		})
+	}
+
+	var all []engine.Order
+	getJSON(t, server.URL+"/orders", testAPIKeyUser1, &all)
+	if len(all) < 3 {
+		t.Fatalf("expected at least 3 orders, got %d", len(all))
+	}
+
+	var page []engine.Order
+	getJSON(t, server.URL+"/orders?limit=1&offset=1", testAPIKeyUser1, &page)
+	if len(page) != 1 {
+		t.Fatalf("expected 1 paged order, got %d", len(page))
+	}
+	if page[0].ID != all[1].ID {
+		t.Fatalf("expected order id %d at offset 1, got %d", all[1].ID, page[0].ID)
+	}
+}
+
+func TestHandleOrderBookDepthLimit(t *testing.T) {
+	store := NewMarketStore()
+	apiKeys := auth.NewAPIKeyCache()
+	if err := apiKeys.AddHex(testAPIKeyUser1); err != nil {
+		t.Fatalf("failed to add api key: %v", err)
+	}
+	store.RegisterAPIKey(testAPIKeyUser1, 1)
+	store.EnsureUser(1)
+	store.EnsureUser(2)
+
+	eng := engine.NewEngine(store)
+	handler := NewRouter(eng, apiKeys, store)
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	levelCount := maxOrderBookDepth + 5
+	for i := 0; i < levelCount; i++ {
+		submitEngineOrder(t, eng, &engine.Order{
+			AssetID:  101,
+			UserID:   1,
+			Side:     engine.SideBuy,
+			Type:     engine.OrderTypeLimit,
+			Quantity: 1,
+			Price:    int64(1000 + i),
+		})
+		submitEngineOrder(t, eng, &engine.Order{
+			AssetID:  101,
+			UserID:   2,
+			Side:     engine.SideSell,
+			Type:     engine.OrderTypeLimit,
+			Quantity: 1,
+			Price:    int64(2000 + i),
+		})
+	}
+
+	var snapshot engine.OrderBookSnapshot
+	getJSON(t, server.URL+"/market/orderbook/101?depth=9999", testAPIKeyUser1, &snapshot)
+	if len(snapshot.Bids) != maxOrderBookDepth {
+		t.Fatalf("expected %d bid levels, got %d", maxOrderBookDepth, len(snapshot.Bids))
+	}
+	if len(snapshot.Asks) != maxOrderBookDepth {
+		t.Fatalf("expected %d ask levels, got %d", maxOrderBookDepth, len(snapshot.Asks))
+	}
+}
+
 func submitOrder(t *testing.T, baseURL, apiKey string, order orderRequest) {
 	t.Helper()
 	payload, err := json.Marshal(order)
@@ -96,6 +184,15 @@ func submitOrder(t *testing.T, baseURL, apiKey string, order orderRequest) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("unexpected order status: %d", resp.StatusCode)
+	}
+}
+
+func submitEngineOrder(t *testing.T, eng *engine.Engine, order *engine.Order) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, err := eng.SubmitOrder(ctx, order); err != nil {
+		t.Fatalf("failed to submit order: %v", err)
 	}
 }
 
