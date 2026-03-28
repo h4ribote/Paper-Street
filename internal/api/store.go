@@ -16,7 +16,27 @@ const (
 	defaultCurrency    = "USD"
 	defaultCashBalance = int64(1_000_000_000)
 	defaultAssetPrice  = int64(10_000)
+	defaultUserStartID = int64(9_999)
 )
+
+func stringsEqualFold(a, b string) bool {
+	return strings.TrimSpace(strings.ToUpper(a)) == strings.TrimSpace(strings.ToUpper(b))
+}
+
+func stringsOrDefault(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return strings.TrimSpace(value)
+}
+
+func cloneOrder(order *engine.Order) *engine.Order {
+	if order == nil {
+		return nil
+	}
+	copy := *order
+	return &copy
+}
 
 type NewsItem struct {
 	ID          int64  `json:"id"`
@@ -119,6 +139,8 @@ type MarketStore struct {
 	positions       map[int64]map[int64]int64
 	apiKeyToUser    map[string]int64
 	lastPrices      map[int64]int64
+	prevPrices      map[int64]int64
+	volumes         map[int64]int64
 	nextUserID      int64
 	nextExecutionID int64
 	nextNewsID      int64
@@ -140,7 +162,9 @@ func NewMarketStore() *MarketStore {
 		positions:    make(map[int64]map[int64]int64),
 		apiKeyToUser: make(map[string]int64),
 		lastPrices:   make(map[int64]int64),
-		nextUserID:   9999,
+		prevPrices:   make(map[int64]int64),
+		volumes:      make(map[int64]int64),
+		nextUserID:   defaultUserStartID,
 		nextNewsID:   0,
 		macroIndicators: []MacroIndicator{
 			{Country: "Neo Venice", Type: "GDP_GROWTH", Value: 312, PublishedAt: now.Add(-24 * time.Hour).UnixMilli()},
@@ -182,7 +206,11 @@ func (s *MarketStore) EnqueueExecution(execution engine.Execution) {
 		execution.ID = s.nextExecutionID
 	}
 	s.executions = append(s.executions, execution)
+	if last := s.lastPrices[execution.AssetID]; last != 0 {
+		s.prevPrices[execution.AssetID] = last
+	}
 	s.lastPrices[execution.AssetID] = execution.Price
+	s.volumes[execution.AssetID] += execution.Quantity
 	s.applyExecutionLocked(execution)
 }
 
@@ -679,20 +707,8 @@ func (s *MarketStore) applyExecutionLocked(exec engine.Execution) {
 }
 
 func (s *MarketStore) lastPriceChange(assetID int64) int64 {
-	var lastPrice int64
-	var prevPrice int64
-	for i := len(s.executions) - 1; i >= 0; i-- {
-		exec := s.executions[i]
-		if exec.AssetID != assetID {
-			continue
-		}
-		if lastPrice == 0 {
-			lastPrice = exec.Price
-			continue
-		}
-		prevPrice = exec.Price
-		break
-	}
+	lastPrice := s.lastPrices[assetID]
+	prevPrice := s.prevPrices[assetID]
 	if prevPrice == 0 {
 		return 0
 	}
@@ -700,13 +716,7 @@ func (s *MarketStore) lastPriceChange(assetID int64) int64 {
 }
 
 func (s *MarketStore) volumeForAsset(assetID int64) int64 {
-	var volume int64
-	for _, exec := range s.executions {
-		if exec.AssetID == assetID {
-			volume += exec.Quantity
-		}
-	}
-	return volume
+	return s.volumes[assetID]
 }
 
 func (s *MarketStore) evaluatePortfolioLocked(userID int64) (cash int64, equity int64) {
@@ -722,23 +732,4 @@ func (s *MarketStore) evaluatePortfolioLocked(userID int64) (cash int64, equity 
 		equity += price * qty
 	}
 	return cash, equity
-}
-
-func stringsEqualFold(a, b string) bool {
-	return strings.TrimSpace(strings.ToUpper(a)) == strings.TrimSpace(strings.ToUpper(b))
-}
-
-func stringsOrDefault(value, fallback string) string {
-	if strings.TrimSpace(value) == "" {
-		return fallback
-	}
-	return strings.TrimSpace(value)
-}
-
-func cloneOrder(order *engine.Order) *engine.Order {
-	if order == nil {
-		return nil
-	}
-	copy := *order
-	return &copy
 }

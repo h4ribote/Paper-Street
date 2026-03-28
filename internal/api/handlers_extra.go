@@ -536,8 +536,7 @@ func (s *Server) userIDFromRequest(r *http.Request) int64 {
 	}
 	user, ok := s.Store.UserForAPIKey(apiKey)
 	if !ok {
-		user = s.Store.AddUser("")
-		s.Store.RegisterAPIKey(apiKey, user.ID)
+		return 0
 	}
 	return user.ID
 }
