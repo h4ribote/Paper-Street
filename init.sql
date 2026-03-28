@@ -5,6 +5,8 @@
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
+-- 通貨・価格は固定小数点の整数で保存します (1.000000 = 1000000)
+
 -- --------------------------------------------------------
 -- 1. Game Meta & World Setting (マスタデータ)
 -- --------------------------------------------------------
@@ -99,12 +101,12 @@ CREATE TABLE IF NOT EXISTS financial_reports (
     fiscal_year INT NOT NULL,
     fiscal_quarter INT NOT NULL COMMENT '1, 2, 3, 4',
     
-    revenue DECIMAL(21, 0) DEFAULT 0 COMMENT 'Scaled currency',
-    net_income DECIMAL(21, 0) DEFAULT 0 COMMENT 'Scaled currency',
-    eps DECIMAL(21, 0) DEFAULT 0 COMMENT 'Earnings Per Share (Scaled)',
+    revenue BIGINT DEFAULT 0 COMMENT 'Scaled currency (1.000000 = 1000000)',
+    net_income BIGINT DEFAULT 0 COMMENT 'Scaled currency (1.000000 = 1000000)',
+    eps BIGINT DEFAULT 0 COMMENT 'Earnings Per Share (1.000000 = 1000000)',
     
     -- Economic Metrics
-    capex DECIMAL(21, 0) DEFAULT 0 COMMENT 'Capital Expenditure this quarter',
+    capex BIGINT DEFAULT 0 COMMENT 'Capital Expenditure this quarter (1.000000 = 1000000)',
     utilization_rate BIGINT DEFAULT 0 COMMENT 'Scaled: 10000 = 100.00%',
     inventory_level BIGINT DEFAULT 0 COMMENT 'Inventory at quarter end',
 
@@ -122,7 +124,7 @@ CREATE TABLE IF NOT EXISTS assets (
     company_id INT NULL,
     resource_id INT NULL,
     type ENUM('STOCK', 'BOND', 'INDEX', 'COMMODITY') NOT NULL,
-    base_price DECIMAL(21, 0) NOT NULL COMMENT 'Integer scaled price',
+    base_price BIGINT NOT NULL COMMENT 'Integer scaled price (1.000000 = 1000000)',
     lot_size INT DEFAULT 1,
     is_tradable BOOLEAN DEFAULT TRUE,
     created_at BIGINT DEFAULT 0,
@@ -134,7 +136,7 @@ CREATE TABLE IF NOT EXISTS assets (
 CREATE TABLE IF NOT EXISTS perpetual_bonds (
     asset_id INT PRIMARY KEY,
     issuer_country_id INT NOT NULL COMMENT '発行国',
-    base_coupon DECIMAL(21, 0) NOT NULL COMMENT '1単位あたりの固定利息額 (例: 5 ARC)',
+    base_coupon BIGINT NOT NULL COMMENT '1単位あたりの固定利息額 (1.000000 = 1000000)',
     payment_frequency ENUM('DAILY', 'WEEKLY') DEFAULT 'WEEKLY' COMMENT '利払い頻度',
     
     FOREIGN KEY (asset_id) REFERENCES assets(asset_id),
@@ -159,7 +161,7 @@ CREATE TABLE IF NOT EXISTS currency_balances (
     balance_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT NOT NULL,
     currency_id INT NOT NULL,
-    amount DECIMAL(21, 0) DEFAULT 0,
+    amount BIGINT DEFAULT 0,
     updated_at BIGINT DEFAULT 0,
     FOREIGN KEY (user_id) REFERENCES users(user_id),
     FOREIGN KEY (currency_id) REFERENCES currencies(currency_id),
@@ -172,8 +174,8 @@ CREATE TABLE IF NOT EXISTS transaction_logs (
     log_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT NOT NULL,
     currency_id INT NOT NULL,
-    amount DECIMAL(21, 0) NOT NULL COMMENT 'Signed integer: +Deposit, -Withdrawal',
-    balance_after DECIMAL(21, 0) NOT NULL COMMENT 'Snapshot of balance after tx',
+    amount BIGINT NOT NULL COMMENT 'Signed integer: +Deposit, -Withdrawal',
+    balance_after BIGINT NOT NULL COMMENT 'Snapshot of balance after tx',
     
     type ENUM('DEPOSIT', 'WITHDRAW', 'TRADE_BUY', 'TRADE_SELL', 'FEE', 'DIVIDEND', 'INTEREST', 'TRANSFER', 'INSURANCE_PAYOUT') NOT NULL,
     reference_id VARCHAR(50) COMMENT 'Order ID or External Tx ID',
@@ -191,8 +193,8 @@ CREATE TABLE IF NOT EXISTS asset_balances (
     balance_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT NOT NULL,
     asset_id INT NOT NULL,
-    quantity DECIMAL(21, 0) DEFAULT 0,
-    average_price DECIMAL(21, 0) DEFAULT 0,
+    quantity BIGINT DEFAULT 0,
+    average_price BIGINT DEFAULT 0,
     average_acquired_at BIGINT DEFAULT 0 COMMENT 'Weighted average timestamp for dividend boost',
     updated_at BIGINT DEFAULT 0,
     FOREIGN KEY (user_id) REFERENCES users(user_id),
@@ -207,12 +209,12 @@ CREATE TABLE IF NOT EXISTS positions (
     season_id INT NOT NULL,
     asset_id INT NOT NULL,
     side ENUM('LONG', 'SHORT') NOT NULL,
-    quantity DECIMAL(21, 0) NOT NULL,
-    entry_price DECIMAL(21, 0) NOT NULL,
-    current_price DECIMAL(21, 0) NOT NULL COMMENT 'Last marked price',
+    quantity BIGINT NOT NULL,
+    entry_price BIGINT NOT NULL,
+    current_price BIGINT NOT NULL COMMENT 'Last marked price',
     leverage BIGINT DEFAULT 100 COMMENT '100 = 1.00x',
-    margin_used DECIMAL(21, 0) DEFAULT 0,
-    unrealized_pl DECIMAL(21, 0) DEFAULT 0,
+    margin_used BIGINT DEFAULT 0,
+    unrealized_pl BIGINT DEFAULT 0,
     created_at BIGINT DEFAULT 0,
     updated_at BIGINT DEFAULT 0,
     FOREIGN KEY (user_id) REFERENCES users(user_id),
@@ -233,11 +235,11 @@ CREATE TABLE IF NOT EXISTS orders (
     type ENUM('MARKET', 'LIMIT', 'STOP', 'STOP_LIMIT') NOT NULL,
     time_in_force ENUM('GTC', 'IOC', 'FOK') DEFAULT 'GTC',
     
-    quantity DECIMAL(21, 0) NOT NULL,
-    price DECIMAL(21, 0), -- Limit price (scaled)
+    quantity BIGINT NOT NULL,
+    price BIGINT, -- Limit price (scaled)
     
-    filled_quantity DECIMAL(21, 0) DEFAULT 0,
-    average_fill_price DECIMAL(21, 0) DEFAULT 0,
+    filled_quantity BIGINT DEFAULT 0,
+    average_fill_price BIGINT DEFAULT 0,
     
     status ENUM('OPEN', 'PARTIAL', 'FILLED', 'CANCELLED', 'REJECTED') DEFAULT 'OPEN',
     
@@ -255,8 +257,8 @@ CREATE TABLE IF NOT EXISTS executions (
     buy_order_id BIGINT NOT NULL,
     sell_order_id BIGINT NOT NULL,
     asset_id INT NOT NULL,
-    price DECIMAL(21, 0) NOT NULL,
-    quantity DECIMAL(21, 0) NOT NULL,
+    price BIGINT NOT NULL,
+    quantity BIGINT NOT NULL,
     executed_at BIGINT DEFAULT 0,
     is_taker_buyer BOOLEAN,
     
@@ -270,11 +272,11 @@ CREATE TABLE IF NOT EXISTS market_candles (
     asset_id INT NOT NULL,
     timeframe ENUM('1M', '5M', '15M', '1H', '4H', '1D') NOT NULL,
     open_time BIGINT NOT NULL,
-    open DECIMAL(21, 0) NOT NULL,
-    high DECIMAL(21, 0) NOT NULL,
-    low DECIMAL(21, 0) NOT NULL,
-    close DECIMAL(21, 0) NOT NULL,
-    volume DECIMAL(21, 0) DEFAULT 0,
+    open BIGINT NOT NULL,
+    high BIGINT NOT NULL,
+    low BIGINT NOT NULL,
+    close BIGINT NOT NULL,
+    volume BIGINT DEFAULT 0,
     
     UNIQUE(asset_id, timeframe, open_time),
     FOREIGN KEY (asset_id) REFERENCES assets(asset_id)
@@ -310,11 +312,11 @@ CREATE TABLE IF NOT EXISTS liquidity_pools (
     fee_tier_bp INT NOT NULL DEFAULT 20 COMMENT 'Fee Tier in basis points (e.g., 20 = 0.20%, 4 = 0.04%)',
     current_tick INT NOT NULL DEFAULT 0,
     tick_spacing INT NOT NULL DEFAULT 1,
-    liquidity DECIMAL(21, 0) DEFAULT 0,
+    liquidity BIGINT DEFAULT 0,
 
     -- Fee tracking (Global)
-    fee_growth_global_0 DECIMAL(21, 0) DEFAULT 0,
-    fee_growth_global_1 DECIMAL(21, 0) DEFAULT 0,
+    fee_growth_global_0 BIGINT DEFAULT 0,
+    fee_growth_global_1 BIGINT DEFAULT 0,
 
     created_at BIGINT DEFAULT 0,
 
@@ -331,13 +333,13 @@ CREATE TABLE IF NOT EXISTS liquidity_positions (
     tick_lower INT NOT NULL,
     tick_upper INT NOT NULL,
 
-    liquidity DECIMAL(21, 0) DEFAULT 0,
+    liquidity BIGINT DEFAULT 0,
 
     -- Fee tracking (Inside)
-    fee_growth_inside_0_last DECIMAL(21, 0) DEFAULT 0,
-    fee_growth_inside_1_last DECIMAL(21, 0) DEFAULT 0,
-    tokens_owed_0 DECIMAL(21, 0) DEFAULT 0,
-    tokens_owed_1 DECIMAL(21, 0) DEFAULT 0,
+    fee_growth_inside_0_last BIGINT DEFAULT 0,
+    fee_growth_inside_1_last BIGINT DEFAULT 0,
+    tokens_owed_0 BIGINT DEFAULT 0,
+    tokens_owed_1 BIGINT DEFAULT 0,
 
     -- Limit Order Specifics
     is_limit_order BOOLEAN DEFAULT FALSE,
@@ -362,20 +364,20 @@ CREATE TABLE IF NOT EXISTS margin_pools (
     currency_id INT NOT NULL COMMENT 'The quote currency (e.g. ARC)',
     
     -- Cash Vault (Currency Inventory)
-    total_cash DECIMAL(21, 0) DEFAULT 0 COMMENT 'Total cash liquidity available',
-    borrowed_cash DECIMAL(21, 0) DEFAULT 0 COMMENT 'Cash borrowed by long positions',
+    total_cash BIGINT DEFAULT 0 COMMENT 'Total cash liquidity available',
+    borrowed_cash BIGINT DEFAULT 0 COMMENT 'Cash borrowed by long positions',
     
     -- Asset Vault (Asset Inventory)
-    total_assets DECIMAL(21, 0) DEFAULT 0 COMMENT 'Total asset liquidity available',
-    borrowed_assets DECIMAL(21, 0) DEFAULT 0 COMMENT 'Assets borrowed by short positions',
+    total_assets BIGINT DEFAULT 0 COMMENT 'Total asset liquidity available',
+    borrowed_assets BIGINT DEFAULT 0 COMMENT 'Assets borrowed by short positions',
     
     -- Interest Rates (Snapshot/Current)
-    borrow_rate DECIMAL(21, 0) DEFAULT 0 COMMENT 'Long interest rate (Cost to borrow cash)',
-    short_fee DECIMAL(21, 0) DEFAULT 0 COMMENT 'Short fee rate (Cost to borrow asset)',
+    borrow_rate BIGINT DEFAULT 0 COMMENT 'Long interest rate (Cost to borrow cash)',
+    short_fee BIGINT DEFAULT 0 COMMENT 'Short fee rate (Cost to borrow asset)',
     
     -- Share Tokens (Lending System)
-    total_cash_shares DECIMAL(21, 0) DEFAULT 0 COMMENT 'Total shares issued to cash lenders',
-    total_asset_shares DECIMAL(21, 0) DEFAULT 0 COMMENT 'Total shares issued to asset lenders',
+    total_cash_shares BIGINT DEFAULT 0 COMMENT 'Total shares issued to cash lenders',
+    total_asset_shares BIGINT DEFAULT 0 COMMENT 'Total shares issued to asset lenders',
 
     updated_at BIGINT DEFAULT 0,
     
@@ -390,8 +392,8 @@ CREATE TABLE IF NOT EXISTS margin_pool_providers (
     pool_id INT NOT NULL,
     user_id BIGINT NOT NULL,
 
-    cash_shares DECIMAL(21, 0) DEFAULT 0,
-    asset_shares DECIMAL(21, 0) DEFAULT 0,
+    cash_shares BIGINT DEFAULT 0,
+    asset_shares BIGINT DEFAULT 0,
 
     updated_at BIGINT DEFAULT 0,
 
@@ -424,7 +426,7 @@ CREATE TABLE IF NOT EXISTS production_recipes (
     recipe_id INT AUTO_INCREMENT PRIMARY KEY,
     company_id INT NOT NULL,
     output_asset_id INT NOT NULL, -- 生産されるコモディティ
-    output_quantity DECIMAL(21, 0) NOT NULL DEFAULT 1,
+    output_quantity BIGINT NOT NULL DEFAULT 1,
 
     FOREIGN KEY (company_id) REFERENCES companies(company_id),
     FOREIGN KEY (output_asset_id) REFERENCES assets(asset_id)
@@ -435,7 +437,7 @@ CREATE TABLE IF NOT EXISTS production_inputs (
     input_id INT AUTO_INCREMENT PRIMARY KEY,
     recipe_id INT NOT NULL,
     input_asset_id INT NOT NULL, -- 原材料となるコモディティ
-    input_quantity DECIMAL(21, 0) NOT NULL, -- output 1単位を作るのに必要な量
+    input_quantity BIGINT NOT NULL, -- output 1単位を作るのに必要な量
 
     FOREIGN KEY (recipe_id) REFERENCES production_recipes(recipe_id),
     FOREIGN KEY (input_asset_id) REFERENCES assets(asset_id)
@@ -457,10 +459,10 @@ CREATE TABLE IF NOT EXISTS contracts (
     description TEXT,
     
     target_asset_id INT NOT NULL,
-    total_required_quantity DECIMAL(21, 0) NOT NULL,
-    current_delivered_quantity DECIMAL(21, 0) DEFAULT 0,
+    total_required_quantity BIGINT NOT NULL,
+    current_delivered_quantity BIGINT DEFAULT 0,
     
-    unit_price DECIMAL(21, 0) NOT NULL COMMENT 'Fixed buying price per unit',
+    unit_price BIGINT NOT NULL COMMENT 'Fixed buying price per unit',
     xp_reward_per_unit INT NOT NULL DEFAULT 0,
     min_rank_required ENUM('Shrimp', 'Fish', 'Shark', 'Whale', 'Leviathan') DEFAULT 'Shark',
     
@@ -480,8 +482,8 @@ CREATE TABLE IF NOT EXISTS contract_deliveries (
     contract_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
     
-    quantity DECIMAL(21, 0) NOT NULL,
-    payout_amount DECIMAL(21, 0) NOT NULL,
+    quantity BIGINT NOT NULL,
+    payout_amount BIGINT NOT NULL,
     xp_gained INT NOT NULL,
     
     delivered_at BIGINT DEFAULT 0,
