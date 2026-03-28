@@ -21,9 +21,10 @@ func main() {
 		port = "8000"
 	}
 
-	engine := engine.NewEngine(nil)
+	store := api.NewMarketStore()
+	engine := engine.NewEngine(store)
 	apiKeys := loadAPIKeys()
-	handler := api.NewRouter(engine, apiKeys)
+	handler := api.NewRouter(engine, apiKeys, store)
 	server := &http.Server{
 		Addr:         ":" + port,
 		Handler:      handler,

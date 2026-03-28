@@ -19,6 +19,7 @@ import (
 type Server struct {
 	Engine  *engine.Engine
 	APIKeys *auth.APIKeyCache
+	Store   *MarketStore
 }
 
 type orderRequest struct {
@@ -44,7 +45,28 @@ func (s *Server) handleOrders(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		s.handleCreateOrder(w, r)
 	case http.MethodGet:
-		respondJSON(w, http.StatusOK, []engine.Order{})
+		statusFilter := strings.TrimSpace(r.URL.Query().Get("status"))
+		userID := parseUserID(r)
+		if userID == 0 {
+			userID = s.userIDFromRequest(r)
+		}
+		assetID := parseQueryInt64(r, "asset_id")
+		var status engine.OrderStatus
+		if statusFilter != "" {
+			status = engine.OrderStatus(strings.ToUpper(statusFilter))
+			switch status {
+			case engine.OrderStatusOpen, engine.OrderStatusPartial, engine.OrderStatusFilled, engine.OrderStatusCancelled, engine.OrderStatusRejected:
+			default:
+				respondError(w, http.StatusBadRequest, "invalid status filter")
+				return
+			}
+		}
+		if s.Store == nil {
+			respondJSON(w, http.StatusOK, []engine.Order{})
+			return
+		}
+		orders := s.Store.Orders(OrderFilter{UserID: userID, Status: status, AssetID: assetID})
+		respondJSON(w, http.StatusOK, orders)
 	default:
 		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
@@ -59,6 +81,9 @@ func (s *Server) handleOrderByID(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		order, ok := s.Engine.FindOrder(id)
+		if !ok && s.Store != nil {
+			order, ok = s.Store.Order(id)
+		}
 		if !ok {
 			respondError(w, http.StatusNotFound, "order not found")
 			return
@@ -84,7 +109,7 @@ func (s *Server) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid json body")
 		return
 	}
-	order, err := payload.toOrder()
+	order, err := payload.toOrder(s.userIDFromRequest(r))
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -113,7 +138,8 @@ func (s *Server) handleOrderBook(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
-	snapshot, err := s.Engine.Snapshot(ctx, id, depth)
+	book := s.Engine.OrderBook(id)
+	snapshot, err := book.Snapshot(ctx, depth)
 	if err != nil {
 		respondError(w, http.StatusNotFound, err.Error())
 		return
@@ -122,10 +148,22 @@ func (s *Server) handleOrderBook(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAssets(w http.ResponseWriter, r *http.Request) {
-	respondJSON(w, http.StatusOK, []models.Asset{})
+	if r.Method != http.MethodGet {
+		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if s.Store == nil {
+		respondJSON(w, http.StatusOK, []models.Asset{})
+		return
+	}
+	filter := AssetFilter{
+		Type:   r.URL.Query().Get("type"),
+		Sector: r.URL.Query().Get("sector"),
+	}
+	respondJSON(w, http.StatusOK, s.Store.Assets(filter))
 }
 
-func (o orderRequest) toOrder() (*engine.Order, error) {
+func (o orderRequest) toOrder(defaultUserID int64) (*engine.Order, error) {
 	side := strings.ToUpper(o.Side)
 	orderSide := engine.Side(side)
 	if orderSide != engine.SideBuy && orderSide != engine.SideSell {
@@ -143,6 +181,13 @@ func (o orderRequest) toOrder() (*engine.Order, error) {
 	if o.Quantity <= 0 {
 		return nil, errors.New("quantity must be positive")
 	}
+	userID := o.UserID
+	if userID == 0 {
+		userID = defaultUserID
+	}
+	if userID == 0 {
+		return nil, errors.New("user_id required")
+	}
 	if (orderType == engine.OrderTypeLimit || orderType == engine.OrderTypeStopLimit) && o.Price <= 0 {
 		return nil, errors.New("price required for limit orders")
 	}
@@ -151,7 +196,7 @@ func (o orderRequest) toOrder() (*engine.Order, error) {
 	}
 	return &engine.Order{
 		AssetID:   o.AssetID,
-		UserID:    o.UserID,
+		UserID:    userID,
 		Side:      orderSide,
 		Type:      orderType,
 		Quantity:  o.Quantity,
