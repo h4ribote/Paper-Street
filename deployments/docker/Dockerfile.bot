@@ -1,0 +1,14 @@
+FROM golang:1.22-alpine AS builder
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/market_maker ./cmd/bots/market_maker
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/news_reactor ./cmd/bots/news_reactor
+
+FROM alpine:3.19
+RUN apk add --no-cache ca-certificates
+WORKDIR /app
+COPY --from=builder /out/market_maker ./market_maker
+COPY --from=builder /out/news_reactor ./news_reactor
+CMD ["./market_maker"]

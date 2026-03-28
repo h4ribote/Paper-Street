@@ -1,0 +1,52 @@
+version: "3.8"
+
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-paperstreet}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-paperstreet}
+    ports:
+      - "3306:3306"
+    volumes:
+      - ../init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  server:
+    build:
+      context: ..
+      dockerfile: deployments/docker/Dockerfile.server
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: "8000"
+      API_KEYS: ${API_KEYS:-00010203040506070809}
+    depends_on:
+      - db
+
+  market_maker:
+    build:
+      context: ..
+      dockerfile: deployments/docker/Dockerfile.bot
+    command: ["./market_maker"]
+    environment:
+      API_BASE_URL: http://server:8000
+      API_KEY: ${API_KEYS:-00010203040506070809}
+    depends_on:
+      - server
+    profiles:
+      - bots
+
+  news_reactor:
+    build:
+      context: ..
+      dockerfile: deployments/docker/Dockerfile.bot
+    command: ["./news_reactor"]
+    environment:
+      API_BASE_URL: http://server:8000
+      API_KEY: ${API_KEYS:-00010203040506070809}
+    depends_on:
+      - server
+    profiles:
+      - bots
+    stdin_open: true
+    tty: true

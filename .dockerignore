@@ -1,0 +1,9 @@
+.git
+.github
+**/node_modules
+**/dist
+**/build
+**/tmp
+**/*.log
+**/*.out
+**/*.test
