@@ -8,7 +8,6 @@ import (
 	"log"
 	"math/rand"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -94,39 +93,39 @@ func loadConfig() (config, error) {
 	if apiKey == "" {
 		return config{}, errors.New("API_KEY is required")
 	}
-	userID, err := envInt64("USER_ID", 1)
+	userID, err := bots.EnvInt64("USER_ID", 1)
 	if err != nil {
 		return config{}, err
 	}
 	if userID <= 0 {
 		return config{}, errors.New("USER_ID must be positive")
 	}
-	defaultAssetID, err := envInt64("DEFAULT_ASSET_ID", 1)
+	defaultAssetID, err := bots.EnvInt64("DEFAULT_ASSET_ID", 1)
 	if err != nil {
 		return config{}, err
 	}
-	baseQuantity, err := envInt64("BASE_QUANTITY", 10)
+	baseQuantity, err := bots.EnvInt64("BASE_QUANTITY", 10)
 	if err != nil {
 		return config{}, err
 	}
 	if baseQuantity <= 0 {
 		return config{}, errors.New("BASE_QUANTITY must be positive")
 	}
-	minConfidence, err := envFloat64("MIN_CONFIDENCE", 0.1)
+	minConfidence, err := bots.EnvFloat64("MIN_CONFIDENCE", 0.1)
 	if err != nil {
 		return config{}, err
 	}
 	if minConfidence < 0 || minConfidence > 1 {
 		return config{}, errors.New("MIN_CONFIDENCE must be between 0 and 1")
 	}
-	jitter, err := envDuration("JITTER", 0)
+	jitter, err := bots.EnvDuration("JITTER", 0)
 	if err != nil {
 		return config{}, err
 	}
 	if jitter < 0 {
 		return config{}, errors.New("JITTER must be non-negative")
 	}
-	requestTimeout, err := envDuration("REQUEST_TIMEOUT", 2*time.Second)
+	requestTimeout, err := bots.EnvDuration("REQUEST_TIMEOUT", 2*time.Second)
 	if err != nil {
 		return config{}, err
 	}
@@ -143,40 +142,4 @@ func loadConfig() (config, error) {
 		Jitter:         jitter,
 		RequestTimeout: requestTimeout,
 	}, nil
-}
-
-func envInt64(key string, fallback int64) (int64, error) {
-	raw := strings.TrimSpace(os.Getenv(key))
-	if raw == "" {
-		return fallback, nil
-	}
-	parsed, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil {
-		return 0, err
-	}
-	return parsed, nil
-}
-
-func envFloat64(key string, fallback float64) (float64, error) {
-	raw := strings.TrimSpace(os.Getenv(key))
-	if raw == "" {
-		return fallback, nil
-	}
-	parsed, err := strconv.ParseFloat(raw, 64)
-	if err != nil {
-		return 0, err
-	}
-	return parsed, nil
-}
-
-func envDuration(key string, fallback time.Duration) (time.Duration, error) {
-	raw := strings.TrimSpace(os.Getenv(key))
-	if raw == "" {
-		return fallback, nil
-	}
-	parsed, err := time.ParseDuration(raw)
-	if err != nil {
-		return 0, err
-	}
-	return parsed, nil
 }

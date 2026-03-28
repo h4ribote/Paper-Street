@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -133,56 +132,56 @@ func loadConfig() (config, error) {
 	if apiKey == "" {
 		return config{}, errors.New("API_KEY is required")
 	}
-	assetID, err := envInt64("ASSET_ID", 1)
+	assetID, err := bots.EnvInt64("ASSET_ID", 1)
 	if err != nil {
 		return config{}, err
 	}
 	if assetID <= 0 {
 		return config{}, errors.New("ASSET_ID must be positive")
 	}
-	userID, err := envInt64("USER_ID", 1)
+	userID, err := bots.EnvInt64("USER_ID", 1)
 	if err != nil {
 		return config{}, err
 	}
 	if userID <= 0 {
 		return config{}, errors.New("USER_ID must be positive")
 	}
-	quantity, err := envInt64("ORDER_QUANTITY", 10)
+	quantity, err := bots.EnvInt64("ORDER_QUANTITY", 10)
 	if err != nil {
 		return config{}, err
 	}
 	if quantity <= 0 {
 		return config{}, errors.New("ORDER_QUANTITY must be positive")
 	}
-	spreadBps, err := envInt64("SPREAD_BPS", 50)
+	spreadBps, err := bots.EnvInt64("SPREAD_BPS", 50)
 	if err != nil {
 		return config{}, err
 	}
 	if spreadBps <= 0 {
 		return config{}, errors.New("SPREAD_BPS must be positive")
 	}
-	depth, err := envInt("ORDERBOOK_DEPTH", 1)
+	depth, err := bots.EnvInt("ORDERBOOK_DEPTH", 1)
 	if err != nil {
 		return config{}, err
 	}
 	if depth <= 0 {
 		return config{}, errors.New("ORDERBOOK_DEPTH must be positive")
 	}
-	fallbackPrice, err := envInt64("FALLBACK_PRICE", 10000)
+	fallbackPrice, err := bots.EnvInt64("FALLBACK_PRICE", 10000)
 	if err != nil {
 		return config{}, err
 	}
 	if fallbackPrice <= 0 {
 		return config{}, errors.New("FALLBACK_PRICE must be positive")
 	}
-	refreshInterval, err := envDuration("REFRESH_INTERVAL", 2*time.Second)
+	refreshInterval, err := bots.EnvDuration("REFRESH_INTERVAL", 2*time.Second)
 	if err != nil {
 		return config{}, err
 	}
 	if refreshInterval <= 0 {
 		return config{}, errors.New("REFRESH_INTERVAL must be positive")
 	}
-	requestTimeout, err := envDuration("REQUEST_TIMEOUT", 2*time.Second)
+	requestTimeout, err := bots.EnvDuration("REQUEST_TIMEOUT", 2*time.Second)
 	if err != nil {
 		return config{}, err
 	}
@@ -201,40 +200,4 @@ func loadConfig() (config, error) {
 		RefreshInterval: refreshInterval,
 		RequestTimeout:  requestTimeout,
 	}, nil
-}
-
-func envInt64(key string, fallback int64) (int64, error) {
-	raw := strings.TrimSpace(os.Getenv(key))
-	if raw == "" {
-		return fallback, nil
-	}
-	parsed, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil {
-		return 0, err
-	}
-	return parsed, nil
-}
-
-func envInt(key string, fallback int) (int, error) {
-	raw := strings.TrimSpace(os.Getenv(key))
-	if raw == "" {
-		return fallback, nil
-	}
-	parsed, err := strconv.Atoi(raw)
-	if err != nil {
-		return 0, err
-	}
-	return parsed, nil
-}
-
-func envDuration(key string, fallback time.Duration) (time.Duration, error) {
-	raw := strings.TrimSpace(os.Getenv(key))
-	if raw == "" {
-		return fallback, nil
-	}
-	parsed, err := time.ParseDuration(raw)
-	if err != nil {
-		return 0, err
-	}
-	return parsed, nil
 }
