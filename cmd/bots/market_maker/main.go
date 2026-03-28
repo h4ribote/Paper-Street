@@ -55,16 +55,6 @@ func runOnce(client *bots.APIClient, cfg config, state *orderState) error {
 	if client == nil || state == nil {
 		return errors.New("missing client or state")
 	}
-	cancelOrder := func(orderID int64) {
-		if orderID == 0 {
-			return
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), cfg.RequestTimeout)
-		defer cancel()
-		if err := client.CancelOrder(ctx, orderID); err != nil {
-			log.Printf("cancel order %d failed: %v", orderID, err)
-		}
-	}
 	var snapshot engine.OrderBookSnapshot
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.RequestTimeout)
 	orderbook, err := client.OrderBook(ctx, cfg.AssetID, cfg.Depth)
@@ -80,8 +70,8 @@ func runOnce(client *bots.APIClient, cfg config, state *orderState) error {
 	if !shouldRefresh {
 		return nil
 	}
-	cancelOrder(state.buyID)
-	cancelOrder(state.sellID)
+	cancelOrder(client, cfg.RequestTimeout, state.buyID)
+	cancelOrder(client, cfg.RequestTimeout, state.sellID)
 
 	buyReq := bots.OrderRequest{
 		AssetID:  cfg.AssetID,
@@ -121,6 +111,17 @@ func runOnce(client *bots.APIClient, cfg config, state *orderState) error {
 	state.lastBid = quote.BidPrice
 	state.lastAsk = quote.AskPrice
 	return nil
+}
+
+func cancelOrder(client *bots.APIClient, timeout time.Duration, orderID int64) {
+	if orderID == 0 || client == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	if err := client.CancelOrder(ctx, orderID); err != nil {
+		log.Printf("cancel order %d failed: %v", orderID, err)
+	}
 }
 
 func loadConfig() (config, error) {

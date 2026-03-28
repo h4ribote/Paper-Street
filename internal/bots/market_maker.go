@@ -1,6 +1,10 @@
 package bots
 
-import "github.com/h4ribote/Paper-Street/internal/engine"
+import (
+	"math"
+
+	"github.com/h4ribote/Paper-Street/internal/engine"
+)
 
 type Quote struct {
 	BidPrice int64
@@ -41,7 +45,7 @@ func QuoteFromMid(mid int64, spreadBps int64) Quote {
 	if spreadBps <= 0 {
 		spreadBps = 1
 	}
-	spread := mid * spreadBps / basisPointsDivisor
+	spread := int64(math.Round(float64(mid) * float64(spreadBps) / float64(basisPointsDivisor)))
 	if spread < 1 {
 		spread = 1
 	}

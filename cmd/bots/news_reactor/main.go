@@ -61,7 +61,10 @@ func main() {
 			continue
 		}
 		if cfg.Jitter > 0 {
-			time.Sleep(time.Duration(rng.Int63n(cfg.Jitter.Milliseconds()+1)) * time.Millisecond)
+			jitterNs := cfg.Jitter.Nanoseconds()
+			if jitterNs > 0 {
+				time.Sleep(time.Duration(rng.Int63n(jitterNs + 1)))
+			}
 		}
 		req := bots.OrderRequest{
 			AssetID:  event.AssetID,
