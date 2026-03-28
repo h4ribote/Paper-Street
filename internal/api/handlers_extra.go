@@ -309,18 +309,12 @@ func (s *Server) handlePools(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePoolByID(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/pools/")
-	segments := strings.Split(strings.Trim(path, "/"), "/")
-	if len(segments) == 0 || segments[0] == "" {
-		respondError(w, http.StatusBadRequest, "pool id required")
-		return
-	}
-	poolID, err := parseID(segments[0])
+	poolID, segments, err := parsePathID(r.URL.Path, "/pools/")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid pool id")
 		return
 	}
-	if len(segments) == 1 {
+	if len(segments) == 0 {
 		if r.Method != http.MethodGet {
 			respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
@@ -328,7 +322,7 @@ func (s *Server) handlePoolByID(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, map[string]int64{"pool_id": poolID})
 		return
 	}
-	switch segments[1] {
+	switch segments[0] {
 	case "positions":
 		if r.Method != http.MethodPost {
 			respondError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -376,18 +370,12 @@ func (s *Server) handleMarginPools(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMarginPoolByID(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/margin/pools/")
-	segments := strings.Split(strings.Trim(path, "/"), "/")
-	if len(segments) == 0 || segments[0] == "" {
-		respondError(w, http.StatusBadRequest, "pool id required")
-		return
-	}
-	poolID, err := parseID(segments[0])
+	poolID, segments, err := parsePathID(r.URL.Path, "/margin/pools/")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid pool id")
 		return
 	}
-	if len(segments) == 1 {
+	if len(segments) == 0 {
 		if r.Method != http.MethodGet {
 			respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
@@ -395,7 +383,7 @@ func (s *Server) handleMarginPoolByID(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, map[string]int64{"pool_id": poolID})
 		return
 	}
-	switch segments[1] {
+	switch segments[0] {
 	case "supply":
 		if r.Method != http.MethodPost {
 			respondError(w, http.StatusMethodNotAllowed, "method not allowed")

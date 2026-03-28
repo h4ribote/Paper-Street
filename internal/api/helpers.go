@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -76,4 +77,21 @@ func parseUnixMillis(value string) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return time.UnixMilli(parsed).UTC(), true
+}
+
+func parsePathID(path, prefix string) (int64, []string, error) {
+	trimmed := strings.TrimSpace(strings.TrimPrefix(path, prefix))
+	trimmed = strings.Trim(trimmed, "/")
+	if trimmed == "" {
+		return 0, nil, errors.New("id required")
+	}
+	segments := strings.Split(trimmed, "/")
+	if len(segments) == 0 || segments[0] == "" {
+		return 0, nil, errors.New("id required")
+	}
+	id, err := parseID(segments[0])
+	if err != nil {
+		return 0, nil, err
+	}
+	return id, segments[1:], nil
 }

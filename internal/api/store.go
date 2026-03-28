@@ -18,6 +18,9 @@ const (
 	defaultCashBalance = int64(1_000_000_000)
 	defaultAssetPrice  = int64(10_000)
 	userIDSeed         = int64(9_999)
+	macroGDPGrowth     = int64(312) // 3.12%
+	macroCPI           = int64(215) // 2.15%
+	macroInterestRate  = int64(175) // 1.75%
 )
 
 func stringsEqualFold(a, b string) bool {
@@ -181,9 +184,9 @@ func NewMarketStore() *MarketStore {
 		nextUserID:   userIDSeed,
 		nextNewsID:   0,
 		macroIndicators: []MacroIndicator{
-			{Country: "Neo Venice", Type: "GDP_GROWTH", Value: 312, PublishedAt: now.Add(-24 * time.Hour).UnixMilli()},
-			{Country: "Arcadia", Type: "CPI", Value: 215, PublishedAt: now.Add(-12 * time.Hour).UnixMilli()},
-			{Country: "Atlas Republic", Type: "INTEREST_RATE", Value: 175, PublishedAt: now.Add(-6 * time.Hour).UnixMilli()},
+			{Country: "Neo Venice", Type: "GDP_GROWTH", Value: macroGDPGrowth, PublishedAt: now.Add(-24 * time.Hour).UnixMilli()},
+			{Country: "Arcadia", Type: "CPI", Value: macroCPI, PublishedAt: now.Add(-12 * time.Hour).UnixMilli()},
+			{Country: "Atlas Republic", Type: "INTEREST_RATE", Value: macroInterestRate, PublishedAt: now.Add(-6 * time.Hour).UnixMilli()},
 		},
 		seasons: []Season{
 			{Name: "Season 1: The Great Resurgence", Theme: "RECOVERY", StartAt: now.Add(-7 * 24 * time.Hour).UnixMilli(), EndAt: now.Add(53 * 24 * time.Hour).UnixMilli()},
@@ -752,7 +755,17 @@ func (s *MarketStore) evaluatePortfolioLocked(userID int64) (cash int64, equity 
 		if price == 0 {
 			price = s.basePrices[assetID]
 		}
-		equity += price * qty
+		absQty := qty
+		sign := int64(1)
+		if absQty < 0 {
+			absQty = -absQty
+			sign = -1
+		}
+		value, ok := safeMultiplyInt64(price, absQty)
+		if !ok {
+			continue
+		}
+		equity += value * sign
 	}
 	return cash, equity
 }
