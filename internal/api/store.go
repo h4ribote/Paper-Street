@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -16,7 +17,7 @@ const (
 	defaultCurrency    = "USD"
 	defaultCashBalance = int64(1_000_000_000)
 	defaultAssetPrice  = int64(10_000)
-	initialUserID      = int64(9_999)
+	userIDSeed         = int64(9_999)
 )
 
 func stringsEqualFold(a, b string) bool {
@@ -36,6 +37,19 @@ func cloneOrder(order *engine.Order) *engine.Order {
 	}
 	copy := *order
 	return &copy
+}
+
+func safeMultiplyInt64(a, b int64) (int64, bool) {
+	if a < 0 || b < 0 {
+		return 0, false
+	}
+	if a == 0 || b == 0 {
+		return 0, true
+	}
+	if a > math.MaxInt64/b {
+		return 0, false
+	}
+	return a * b, true
 }
 
 type NewsItem struct {
@@ -164,7 +178,7 @@ func NewMarketStore() *MarketStore {
 		lastPrices:   make(map[int64]int64),
 		prevPrices:   make(map[int64]int64),
 		volumes:      make(map[int64]int64),
-		nextUserID:   initialUserID,
+		nextUserID:   userIDSeed,
 		nextNewsID:   0,
 		macroIndicators: []MacroIndicator{
 			{Country: "Neo Venice", Type: "GDP_GROWTH", Value: 312, PublishedAt: now.Add(-24 * time.Hour).UnixMilli()},
@@ -205,13 +219,15 @@ func (s *MarketStore) EnqueueExecution(execution engine.Execution) {
 		s.nextExecutionID++
 		execution.ID = s.nextExecutionID
 	}
+	if !s.applyExecutionLocked(execution) {
+		return
+	}
 	s.executions = append(s.executions, execution)
 	if last := s.lastPrices[execution.AssetID]; last != 0 {
 		s.prevPrices[execution.AssetID] = last
 	}
 	s.lastPrices[execution.AssetID] = execution.Price
 	s.volumes[execution.AssetID] += execution.Quantity
-	s.applyExecutionLocked(execution)
 }
 
 func (s *MarketStore) Shutdown(ctx context.Context) error {
@@ -679,11 +695,11 @@ func (s *MarketStore) ensureAssetLocked(assetID int64) models.Asset {
 	return asset
 }
 
-func (s *MarketStore) applyExecutionLocked(exec engine.Execution) {
+func (s *MarketStore) applyExecutionLocked(exec engine.Execution) bool {
 	taker := s.orders[exec.TakerOrderID]
 	maker := s.orders[exec.MakerOrderID]
 	if taker == nil || maker == nil {
-		return
+		return false
 	}
 	var buyerID, sellerID int64
 	if taker.Side == engine.SideBuy {
@@ -694,19 +710,23 @@ func (s *MarketStore) applyExecutionLocked(exec engine.Execution) {
 		sellerID = taker.UserID
 	}
 	if buyerID == 0 || sellerID == 0 {
-		return
+		return false
 	}
 	s.ensureUserLocked(buyerID)
 	s.ensureUserLocked(sellerID)
 	s.ensureAssetLocked(exec.AssetID)
-	cashDelta := exec.Price * exec.Quantity
+	cashDelta, ok := safeMultiplyInt64(exec.Price, exec.Quantity)
+	if !ok {
+		return false
+	}
 	if s.balances[buyerID][defaultCurrency] < cashDelta {
-		return
+		return false
 	}
 	s.balances[buyerID][defaultCurrency] -= cashDelta
 	s.balances[sellerID][defaultCurrency] += cashDelta
 	s.positions[buyerID][exec.AssetID] += exec.Quantity
 	s.positions[sellerID][exec.AssetID] -= exec.Quantity
+	return true
 }
 
 func (s *MarketStore) lastPriceChange(assetID int64) int64 {

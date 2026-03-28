@@ -50,10 +50,8 @@ func (s *Server) handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 	user, ok := s.Store.UserForAPIKey(oldKey)
 	if !ok {
-		userID := parseUserID(r)
-		if userID != 0 {
-			user, _ = s.Store.User(userID)
-		}
+		respondError(w, http.StatusUnauthorized, "API key not associated with user")
+		return
 	}
 	newKey, err := generateAPIKeyHex()
 	if err != nil {

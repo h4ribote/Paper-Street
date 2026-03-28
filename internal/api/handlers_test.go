@@ -12,15 +12,22 @@ import (
 	"github.com/h4ribote/Paper-Street/internal/models"
 )
 
-const testAPIKey = "00010203040506070809"
+const (
+	testAPIKeyUser1 = "00010203040506070809"
+	testAPIKeyUser2 = "11111111111111111111"
+)
 
 func TestTradeFlowUpdatesMarketData(t *testing.T) {
 	store := NewMarketStore()
 	apiKeys := auth.NewAPIKeyCache()
-	if err := apiKeys.AddHex(testAPIKey); err != nil {
+	if err := apiKeys.AddHex(testAPIKeyUser1); err != nil {
 		t.Fatalf("failed to add api key: %v", err)
 	}
-	store.RegisterAPIKey(testAPIKey, 1)
+	if err := apiKeys.AddHex(testAPIKeyUser2); err != nil {
+		t.Fatalf("failed to add api key: %v", err)
+	}
+	store.RegisterAPIKey(testAPIKeyUser1, 1)
+	store.RegisterAPIKey(testAPIKeyUser2, 2)
 	store.EnsureUser(1)
 	store.EnsureUser(2)
 
@@ -29,7 +36,7 @@ func TestTradeFlowUpdatesMarketData(t *testing.T) {
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
-	submitOrder(t, server.URL, orderRequest{
+	submitOrder(t, server.URL, testAPIKeyUser2, orderRequest{
 		AssetID:  101,
 		UserID:   2,
 		Side:     "SELL",
@@ -37,7 +44,7 @@ func TestTradeFlowUpdatesMarketData(t *testing.T) {
 		Quantity: 10,
 		Price:    100,
 	})
-	submitOrder(t, server.URL, orderRequest{
+	submitOrder(t, server.URL, testAPIKeyUser1, orderRequest{
 		AssetID:  101,
 		UserID:   1,
 		Side:     "BUY",
@@ -47,7 +54,7 @@ func TestTradeFlowUpdatesMarketData(t *testing.T) {
 	})
 
 	var trades []engine.Execution
-	getJSON(t, server.URL+"/market/trades/101?limit=1", &trades)
+	getJSON(t, server.URL+"/market/trades/101?limit=1", testAPIKeyUser1, &trades)
 	if len(trades) != 1 {
 		t.Fatalf("expected 1 trade, got %d", len(trades))
 	}
@@ -56,7 +63,7 @@ func TestTradeFlowUpdatesMarketData(t *testing.T) {
 	}
 
 	var balances []models.Balance
-	getJSON(t, server.URL+"/portfolio/balances?user_id=1", &balances)
+	getJSON(t, server.URL+"/portfolio/balances?user_id=1", testAPIKeyUser1, &balances)
 	usd := balanceAmount(balances, defaultCurrency)
 	expectedCash := defaultCashBalance - 100*10
 	if usd != expectedCash {
@@ -64,13 +71,13 @@ func TestTradeFlowUpdatesMarketData(t *testing.T) {
 	}
 
 	var assets []PortfolioAsset
-	getJSON(t, server.URL+"/portfolio/assets?user_id=1", &assets)
+	getJSON(t, server.URL+"/portfolio/assets?user_id=1", testAPIKeyUser1, &assets)
 	if len(assets) == 0 || assets[0].Quantity != 10 {
 		t.Fatalf("expected asset quantity 10, got %+v", assets)
 	}
 }
 
-func submitOrder(t *testing.T, baseURL string, order orderRequest) {
+func submitOrder(t *testing.T, baseURL, apiKey string, order orderRequest) {
 	t.Helper()
 	payload, err := json.Marshal(order)
 	if err != nil {
@@ -81,7 +88,7 @@ func submitOrder(t *testing.T, baseURL string, order orderRequest) {
 		t.Fatalf("failed to create request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(apiKeyHeader, testAPIKey)
+	req.Header.Set(apiKeyHeader, apiKey)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("failed to submit order: %v", err)
@@ -92,13 +99,13 @@ func submitOrder(t *testing.T, baseURL string, order orderRequest) {
 	}
 }
 
-func getJSON(t *testing.T, url string, target interface{}) {
+func getJSON(t *testing.T, url, apiKey string, target interface{}) {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
-	req.Header.Set(apiKeyHeader, testAPIKey)
+	req.Header.Set(apiKeyHeader, apiKey)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)

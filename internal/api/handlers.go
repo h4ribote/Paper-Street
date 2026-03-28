@@ -109,7 +109,12 @@ func (s *Server) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid json body")
 		return
 	}
-	order, err := payload.toOrder(s.userIDFromRequest(r))
+	defaultUserID := s.userIDFromRequest(r)
+	if defaultUserID != 0 && payload.UserID != 0 && payload.UserID != defaultUserID {
+		respondError(w, http.StatusUnauthorized, "user_id does not match authenticated user")
+		return
+	}
+	order, err := payload.toOrder(defaultUserID)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -139,6 +144,10 @@ func (s *Server) handleOrderBook(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 	book := s.Engine.OrderBook(id)
+	if book == nil {
+		respondError(w, http.StatusNotFound, "orderbook not found")
+		return
+	}
 	snapshot, err := book.Snapshot(ctx, depth)
 	if err != nil {
 		respondError(w, http.StatusNotFound, err.Error())
