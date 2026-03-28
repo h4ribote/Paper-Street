@@ -94,7 +94,10 @@ func loadConfig() (config, error) {
 	}
 	apiKey := strings.TrimSpace(os.Getenv("API_KEY"))
 	if apiKey == "" {
-		return config{}, errors.New("API_KEY is required")
+		apiKey = bots.FirstAPIKey(os.Getenv("API_KEYS"))
+	}
+	if apiKey == "" {
+		return config{}, errors.New("API_KEY or API_KEYS is required")
 	}
 	userID, err := bots.EnvInt64("USER_ID", 1)
 	if err != nil {

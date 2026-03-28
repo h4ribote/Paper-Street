@@ -1,0 +1,56 @@
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD environment variable is required}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-paperstreet}
+    ports:
+      - "3306:3306"
+    volumes:
+      - ${INIT_SQL_PATH:?INIT_SQL_PATH environment variable is required}:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: ..
+      dockerfile: deployments/docker/Dockerfile.server
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: "8000"
+      API_KEYS: ${API_KEYS:?API_KEYS environment variable is required}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  market_maker:
+    build:
+      context: ..
+      dockerfile: deployments/docker/Dockerfile.bot
+    command: ["./market_maker"]
+    environment:
+      API_BASE_URL: http://server:8000
+      API_KEYS: ${API_KEYS:?API_KEYS environment variable is required}
+    depends_on:
+      - server
+    profiles:
+      - bots
+
+  news_reactor:
+    build:
+      context: ..
+      dockerfile: deployments/docker/Dockerfile.bot
+    command: ["./news_reactor"]
+    environment:
+      API_BASE_URL: http://server:8000
+      API_KEYS: ${API_KEYS:?API_KEYS environment variable is required}
+    depends_on:
+      - server
+    profiles:
+      - bots
+    stdin_open: true
+    tty: true

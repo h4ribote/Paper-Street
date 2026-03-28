@@ -54,3 +54,13 @@ func EnvDuration(key string, fallback time.Duration) (time.Duration, error) {
 	}
 	return parsed, nil
 }
+
+func FirstAPIKey(raw string) string {
+	for _, value := range strings.Split(raw, ",") {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
