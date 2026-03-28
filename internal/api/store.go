@@ -653,7 +653,8 @@ func (s *MarketStore) seedNews(now time.Time) {
 	for _, item := range headlines {
 		s.nextNewsID++
 		item.ID = s.nextNewsID
-		item.PublishedAt = now.Add(-time.Duration(s.nextNewsID) * time.Hour).UnixMilli()
+		offset := time.Duration(s.nextNewsID * int64(time.Hour))
+		item.PublishedAt = now.Add(-offset).UnixMilli()
 		s.news = append(s.news, item)
 	}
 }

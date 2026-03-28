@@ -143,12 +143,8 @@ func (s *Server) handleOrderBook(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
-	book := s.Engine.OrderBook(id)
-	if book == nil {
-		respondError(w, http.StatusNotFound, "orderbook not found")
-		return
-	}
-	snapshot, err := book.Snapshot(ctx, depth)
+	s.Engine.OrderBook(id)
+	snapshot, err := s.Engine.Snapshot(ctx, id, depth)
 	if err != nil {
 		respondError(w, http.StatusNotFound, err.Error())
 		return
