@@ -125,16 +125,6 @@ func cancelOrder(client *bots.APIClient, timeout time.Duration, orderID int64) {
 	}
 }
 
-func firstAPIKey(raw string) string {
-	for _, value := range strings.Split(raw, ",") {
-		value = strings.TrimSpace(value)
-		if value != "" {
-			return value
-		}
-	}
-	return ""
-}
-
 func loadConfig() (config, error) {
 	baseURL := strings.TrimSpace(os.Getenv("API_BASE_URL"))
 	if baseURL == "" {
@@ -142,7 +132,7 @@ func loadConfig() (config, error) {
 	}
 	apiKey := strings.TrimSpace(os.Getenv("API_KEY"))
 	if apiKey == "" {
-		apiKey = firstAPIKey(os.Getenv("API_KEYS"))
+		apiKey = bots.FirstAPIKey(os.Getenv("API_KEYS"))
 	}
 	if apiKey == "" {
 		return config{}, errors.New("API_KEY or API_KEYS is required")
