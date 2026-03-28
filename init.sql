@@ -103,10 +103,10 @@ CREATE TABLE IF NOT EXISTS financial_reports (
     
     revenue BIGINT DEFAULT 0 COMMENT 'Scaled currency (1.000000 = 1000000)',
     net_income BIGINT DEFAULT 0 COMMENT 'Scaled currency (1.000000 = 1000000)',
-    eps BIGINT DEFAULT 0 COMMENT 'Earnings Per Share (Scaled)',
+    eps BIGINT DEFAULT 0 COMMENT 'Earnings Per Share (1.000000 = 1000000)',
     
     -- Economic Metrics
-    capex BIGINT DEFAULT 0 COMMENT 'Capital Expenditure this quarter',
+    capex BIGINT DEFAULT 0 COMMENT 'Capital Expenditure this quarter (1.000000 = 1000000)',
     utilization_rate BIGINT DEFAULT 0 COMMENT 'Scaled: 10000 = 100.00%',
     inventory_level BIGINT DEFAULT 0 COMMENT 'Inventory at quarter end',
 
@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS assets (
     company_id INT NULL,
     resource_id INT NULL,
     type ENUM('STOCK', 'BOND', 'INDEX', 'COMMODITY') NOT NULL,
-    base_price BIGINT NOT NULL COMMENT 'Integer scaled price',
+    base_price BIGINT NOT NULL COMMENT 'Integer scaled price (1.000000 = 1000000)',
     lot_size INT DEFAULT 1,
     is_tradable BOOLEAN DEFAULT TRUE,
     created_at BIGINT DEFAULT 0,
@@ -136,7 +136,7 @@ CREATE TABLE IF NOT EXISTS assets (
 CREATE TABLE IF NOT EXISTS perpetual_bonds (
     asset_id INT PRIMARY KEY,
     issuer_country_id INT NOT NULL COMMENT '発行国',
-    base_coupon BIGINT NOT NULL COMMENT '1単位あたりの固定利息額 (例: 5 ARC)',
+    base_coupon BIGINT NOT NULL COMMENT '1単位あたりの固定利息額 (1.000000 = 1000000)',
     payment_frequency ENUM('DAILY', 'WEEKLY') DEFAULT 'WEEKLY' COMMENT '利払い頻度',
     
     FOREIGN KEY (asset_id) REFERENCES assets(asset_id),
