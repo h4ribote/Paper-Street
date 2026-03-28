@@ -11,12 +11,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/h4ribote/Paper-Street/internal/auth"
 	"github.com/h4ribote/Paper-Street/internal/engine"
 	"github.com/h4ribote/Paper-Street/internal/models"
 )
 
 type Server struct {
-	Engine *engine.Engine
+	Engine  *engine.Engine
+	APIKeys *auth.APIKeyCache
 }
 
 type orderRequest struct {

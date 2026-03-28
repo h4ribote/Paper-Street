@@ -5,8 +5,9 @@ Paper Street のリアルタイムデータ配信のためのWebSocket API仕様
 ## 1. 接続情報 (Connection)
 *   **Endpoint**: `ws://api.paperstreet.com/ws` (または `wss://` for SSL)
 *   **Authentication**:
-    *   クエリパラメータ `token` にJWTトークンを含めて接続します。
-    *   例: `ws://api.paperstreet.com/ws?token=eyJhbGciOi...`
+    *   クエリパラメータ `api_key` に20文字の16進数APIキーを含めて接続します。
+    *   APIキーは10バイトのバイナリを16進数表記したものです。
+    *   例: `ws://api.paperstreet.com/ws?api_key=00010203040506070809`
     *   認証に失敗した場合、接続は即座に切断されます (Close Code: 4001)。
 
 ## 2. メッセージフォーマット (Message Format)
