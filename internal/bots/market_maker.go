@@ -7,6 +7,8 @@ type Quote struct {
 	AskPrice int64
 }
 
+const basisPointsDivisor int64 = 10000
+
 func MidPrice(snapshot engine.OrderBookSnapshot, fallback int64) int64 {
 	var bid int64
 	var ask int64
@@ -39,7 +41,7 @@ func QuoteFromMid(mid int64, spreadBps int64) Quote {
 	if spreadBps <= 0 {
 		spreadBps = 1
 	}
-	spread := mid * spreadBps / 10000
+	spread := mid * spreadBps / basisPointsDivisor
 	if spread < 1 {
 		spread = 1
 	}

@@ -27,8 +27,10 @@ type config struct {
 }
 
 type orderState struct {
-	buyID  int64
-	sellID int64
+	buyID   int64
+	sellID  int64
+	lastBid int64
+	lastAsk int64
 }
 
 func main() {
@@ -64,9 +66,6 @@ func runOnce(client *bots.APIClient, cfg config, state *orderState) error {
 			log.Printf("cancel order %d failed: %v", orderID, err)
 		}
 	}
-	cancelOrder(state.buyID)
-	cancelOrder(state.sellID)
-
 	var snapshot engine.OrderBookSnapshot
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.RequestTimeout)
 	orderbook, err := client.OrderBook(ctx, cfg.AssetID, cfg.Depth)
@@ -78,6 +77,13 @@ func runOnce(client *bots.APIClient, cfg config, state *orderState) error {
 	}
 
 	quote := bots.QuoteFromSnapshot(snapshot, cfg.SpreadBps, cfg.FallbackPrice)
+	shouldRefresh := state.buyID == 0 || state.sellID == 0 || state.lastBid != quote.BidPrice || state.lastAsk != quote.AskPrice
+	if !shouldRefresh {
+		return nil
+	}
+	cancelOrder(state.buyID)
+	cancelOrder(state.sellID)
+
 	buyReq := bots.OrderRequest{
 		AssetID:  cfg.AssetID,
 		UserID:   cfg.UserID,
@@ -113,6 +119,8 @@ func runOnce(client *bots.APIClient, cfg config, state *orderState) error {
 		state.sellID = order.ID
 		log.Printf("sell order placed id=%d price=%d qty=%d", order.ID, order.Price, order.Quantity)
 	}
+	state.lastBid = quote.BidPrice
+	state.lastAsk = quote.AskPrice
 	return nil
 }
 

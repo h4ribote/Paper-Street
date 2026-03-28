@@ -96,7 +96,7 @@ func (c *APIClient) SubmitOrder(ctx context.Context, request OrderRequest) (*eng
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return nil, decodeAPIError(resp)
 	}
 	var response orderResponse

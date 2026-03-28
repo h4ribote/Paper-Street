@@ -15,6 +15,11 @@ import (
 	"github.com/h4ribote/Paper-Street/internal/bots"
 )
 
+const (
+	scannerInitialBuffer = 64 * 1024
+	scannerMaxBuffer     = 1024 * 1024
+)
+
 type config struct {
 	BaseURL        string
 	APIKey         string
@@ -34,7 +39,7 @@ func main() {
 	client := bots.NewAPIClient(cfg.BaseURL, cfg.APIKey, cfg.RequestTimeout)
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	scanner.Buffer(make([]byte, 0, scannerInitialBuffer), scannerMaxBuffer)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
