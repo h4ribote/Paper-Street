@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,10 +25,12 @@ const (
 	wsCloseInternal         = 5000
 	wsMaxSubscriptions      = 100
 	wsDefaultBroadcastEvery = time.Second
+	wsSnapshotTimeout       = 500 * time.Millisecond
 	wsSnapshotDepth         = 20
 	wsTradeLimit            = 50
 	wsNewsLimit             = 20
 	wsCandleLimit           = 60
+	wsMaxMessageSize        = 1 << 20 // 1MB
 )
 
 var (
@@ -263,9 +266,10 @@ func (h *wsHub) snapshotForTopic(client *wsClient, topic string) (interface{}, b
 		if !ok || h.engine == nil {
 			return nil, false
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), wsSnapshotTimeout)
 		defer cancel()
-		_ = h.engine.OrderBook(assetID)
+		// Initialize the order book goroutine so snapshots succeed even before any orders arrive.
+		h.engine.OrderBook(assetID)
 		snapshot, err := h.engine.Snapshot(ctx, assetID, wsSnapshotDepth)
 		if err != nil {
 			return nil, false
@@ -321,19 +325,23 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "websocket unavailable")
 		return
 	}
+	if s.APIKeys == nil {
+		respondError(w, http.StatusInternalServerError, "auth unavailable")
+		return
+	}
 	s.WSHub.Start(wsDefaultBroadcastEvery)
 	apiKey := strings.TrimSpace(r.URL.Query().Get("api_key"))
 	if apiKey == "" {
 		apiKey = strings.TrimSpace(r.Header.Get(apiKeyHeader))
 	}
 	upgrader := gws.Upgrader{
-		CheckOrigin: func(r *http.Request) bool { return true },
+		CheckOrigin: wsCheckOrigin,
 	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}
-	if apiKey == "" || (s.APIKeys != nil && !s.APIKeys.ContainsHex(apiKey)) {
+	if apiKey == "" || !s.APIKeys.ContainsHex(apiKey) {
 		writeWSClose(conn, wsCloseInvalidToken, "invalid api key")
 		return
 	}
@@ -358,7 +366,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) wsReadLoop(client *wsClient) {
 	defer s.WSHub.unregister(client)
-	client.conn.SetReadLimit(1 << 20)
+	client.conn.SetReadLimit(wsMaxMessageSize)
 	for {
 		var req wsRequest
 		if err := client.conn.ReadJSON(&req); err != nil {
@@ -407,4 +415,16 @@ func (s *Server) wsWriteLoop(client *wsClient) {
 func writeWSClose(conn *gws.Conn, code int, reason string) {
 	_ = conn.WriteControl(gws.CloseMessage, gws.FormatCloseMessage(code, reason), time.Now().Add(time.Second))
 	_ = conn.Close()
+}
+
+func wsCheckOrigin(r *http.Request) bool {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return true
+	}
+	originURL, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(originURL.Host, r.Host)
 }

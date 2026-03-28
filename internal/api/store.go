@@ -16,6 +16,7 @@ import (
 const (
 	defaultCurrency    = "USD"
 	defaultCashBalance = int64(1_000_000_000)
+	defaultAltBalance  = int64(100_000_000) // starter balance for non-default currencies
 	defaultAssetPrice  = int64(10_000)
 	userIDSeed         = int64(9_999)
 	macroGDPGrowth     = int64(312) // 3.12%
@@ -27,7 +28,7 @@ func stringsEqualFold(a, b string) bool {
 	return strings.TrimSpace(strings.ToUpper(a)) == strings.TrimSpace(strings.ToUpper(b))
 }
 
-func stringsOrDefault(value, fallback string) string {
+func stringOrDefault(value, fallback string) string {
 	if strings.TrimSpace(value) == "" {
 		return fallback
 	}
@@ -162,7 +163,7 @@ type MarketStore struct {
 	pools           map[int64]LiquidityPool
 	poolPositions   map[int64]PoolPosition
 	marginPools     map[int64]MarginPool
-	marginProviders map[int64]MarginProviderPosition
+	marginProviders map[marginProviderKey]MarginProviderPosition
 	indexes         map[int64]IndexDefinition
 	nextUserID      int64
 	nextExecutionID int64
@@ -193,7 +194,7 @@ func NewMarketStore() *MarketStore {
 		pools:           make(map[int64]LiquidityPool),
 		poolPositions:   make(map[int64]PoolPosition),
 		marginPools:     make(map[int64]MarginPool),
-		marginProviders: make(map[int64]MarginProviderPosition),
+		marginProviders: make(map[marginProviderKey]MarginProviderPosition),
 		indexes:         make(map[int64]IndexDefinition),
 		nextUserID:      userIDSeed,
 		nextNewsID:      0,
@@ -293,7 +294,7 @@ func (s *MarketStore) AddUser(username string) models.User {
 	s.nextUserID++
 	user := models.User{
 		ID:       s.nextUserID,
-		Username: stringsOrDefault(username, fmt.Sprintf("user-%d", s.nextUserID)),
+		Username: stringOrDefault(username, fmt.Sprintf("user-%d", s.nextUserID)),
 		Role:     "player",
 	}
 	s.users[user.ID] = user
@@ -689,7 +690,11 @@ func (s *MarketStore) ensureUserLocked(userID int64) models.User {
 	}
 	for currency := range s.currencies {
 		if _, ok := s.balances[userID][currency]; !ok {
-			s.balances[userID][currency] = defaultCashBalance
+			if currency == defaultCurrency {
+				s.balances[userID][currency] = defaultCashBalance
+			} else {
+				s.balances[userID][currency] = defaultAltBalance
+			}
 		}
 	}
 	if _, ok := s.positions[userID]; !ok {

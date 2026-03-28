@@ -639,6 +639,7 @@ func (s *Server) handleIndices(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var payload indexActionRequest
+		// Empty body defaults quantity to 1, matching the API spec.
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
 			respondError(w, http.StatusBadRequest, "invalid json body")
 			return

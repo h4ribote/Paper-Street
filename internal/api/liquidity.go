@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -13,6 +14,12 @@ const (
 	poolFeeLowBps      = int64(4)
 	poolFeeStandardBps = int64(20)
 	indexFeeBps        = int64(10)
+	bpsDenominator     = int64(10_000)
+	// Margin rate model parameters (basis points per day).
+	marginBaseRateBps  = int64(10)  // base rate at 0% utilization
+	marginSlopeBps     = int64(40)  // slope until the kink point
+	marginJumpBps      = int64(500) // slope after the kink point
+	marginKinkPointBps = int64(7000)
 )
 
 type LiquidityPool struct {
@@ -69,6 +76,11 @@ type MarginProviderPosition struct {
 type MarginSupplyResult struct {
 	Pool     MarginPool             `json:"pool"`
 	Position MarginProviderPosition `json:"position"`
+}
+
+type marginProviderKey struct {
+	PoolID int64
+	UserID int64
 }
 
 type IndexDefinition struct {
@@ -222,8 +234,10 @@ func (s *MarketStore) SwapPool(poolID, userID int64, fromCurrency, toCurrency st
 	if s.balances[userID][from] < amount {
 		return PoolSwapResult{}, errors.New("insufficient balance")
 	}
-	fee, _ := safeMultiplyInt64(amount, pool.FeeBps)
-	fee = fee / 10_000
+	fee, err := calculateFeeBps(amount, pool.FeeBps)
+	if err != nil {
+		return PoolSwapResult{}, err
+	}
 	amountOut := amount - fee
 	s.balances[userID][from] -= amount
 	s.balances[userID][to] += amountOut
@@ -317,7 +331,7 @@ func (s *MarketStore) updateMarginPool(poolID, userID, cashAmount, assetAmount i
 			s.positions[userID][pool.AssetID] += assetAmount
 		}
 	}
-	positionKey := marginProviderKey(poolID, userID)
+	positionKey := marginProviderKey{PoolID: poolID, UserID: userID}
 	position := s.marginProviders[positionKey]
 	if position.ID == 0 {
 		s.nextMarginPosID++
@@ -329,9 +343,9 @@ func (s *MarketStore) updateMarginPool(poolID, userID, cashAmount, assetAmount i
 		}
 	}
 	if cashAmount > 0 {
-		shares := cashAmount
-		if pool.TotalCashShares > 0 && prevCashTotal > 0 {
-			shares = cashAmount * pool.TotalCashShares / prevCashTotal
+		shares, err := sharesForAmount(cashAmount, pool.TotalCashShares, prevCashTotal)
+		if err != nil {
+			return MarginSupplyResult{}, err
 		}
 		if isSupply {
 			position.CashShares += shares
@@ -342,9 +356,9 @@ func (s *MarketStore) updateMarginPool(poolID, userID, cashAmount, assetAmount i
 		}
 	}
 	if assetAmount > 0 {
-		shares := assetAmount
-		if pool.TotalAssetShares > 0 && prevAssetTotal > 0 {
-			shares = assetAmount * pool.TotalAssetShares / prevAssetTotal
+		shares, err := sharesForAmount(assetAmount, pool.TotalAssetShares, prevAssetTotal)
+		if err != nil {
+			return MarginSupplyResult{}, err
 		}
 		if isSupply {
 			position.AssetShares += shares
@@ -386,8 +400,10 @@ func (s *MarketStore) updateIndexHoldings(userID, assetID, quantity int64, isCre
 	if !ok {
 		return IndexActionResult{}, errors.New("amount overflow")
 	}
-	fee, _ := safeMultiplyInt64(amount, definition.FeeBps)
-	fee = fee / 10_000
+	fee, err := calculateFeeBps(amount, definition.FeeBps)
+	if err != nil {
+		return IndexActionResult{}, err
+	}
 	total := amount + fee
 	s.ensureUserLocked(userID)
 	if isCreate {
@@ -480,9 +496,9 @@ func (s *MarketStore) ensureIndexLocked(assetID int64) IndexDefinition {
 	s.indexes[assetID] = definition
 	asset := s.ensureAssetLocked(assetID)
 	asset.Type = "INDEX"
-	asset.Sector = stringsOrDefault(asset.Sector, "MIXED")
+	asset.Sector = stringOrDefault(asset.Sector, "MIXED")
 	if asset.Symbol == "" || strings.HasPrefix(asset.Symbol, "ASSET-") {
-		asset.Symbol = "INDEX-" + strings.TrimSpace(asset.Symbol)
+		asset.Symbol = fmt.Sprintf("INDEX-%d", assetID)
 	}
 	s.assets[assetID] = asset
 	s.basePrices[assetID] = s.indexUnitPriceLocked(definition)
@@ -510,21 +526,44 @@ func marginRates(pool MarginPool) (cashRate int64, assetRate int64) {
 	return cashRate, assetRate
 }
 
+// utilizationRate returns the daily rate in basis points using a kinked model:
+// base + slope*(util/kink) for util <= kink, and base + slope + jump*(util-kink) beyond it.
 func utilizationRate(borrowed, total int64) int64 {
 	if total <= 0 {
 		return 0
 	}
-	util := float64(borrowed) / float64(total)
-	base := 10.0
-	slope := 40.0
-	jump := 500.0
-	kink := 0.7
-	if util <= kink {
-		return int64(base + slope*(util/kink))
+	utilBps := borrowed * bpsDenominator / total
+	if utilBps <= marginKinkPointBps {
+		product, ok := safeMultiplyInt64(marginSlopeBps, utilBps)
+		if !ok {
+			return marginBaseRateBps
+		}
+		return marginBaseRateBps + product/marginKinkPointBps
 	}
-	return int64(base + slope + jump*(util-kink))
+	excess := utilBps - marginKinkPointBps
+	// Jump multiplier applies to the absolute utilization delta in bps (normalized by 10,000).
+	product, ok := safeMultiplyInt64(marginJumpBps, excess)
+	if !ok {
+		return marginBaseRateBps + marginSlopeBps
+	}
+	return marginBaseRateBps + marginSlopeBps + product/bpsDenominator
 }
 
-func marginProviderKey(poolID, userID int64) int64 {
-	return (poolID << 32) | (userID & 0xffffffff)
+func sharesForAmount(amount, totalShares, totalLiquidity int64) (int64, error) {
+	if totalShares <= 0 || totalLiquidity <= 0 {
+		return amount, nil
+	}
+	product, ok := safeMultiplyInt64(amount, totalShares)
+	if !ok {
+		return 0, errors.New("share overflow")
+	}
+	return product / totalLiquidity, nil
+}
+
+func calculateFeeBps(amount, bps int64) (int64, error) {
+	fee, ok := safeMultiplyInt64(amount, bps)
+	if !ok {
+		return 0, errors.New("fee overflow")
+	}
+	return fee / bpsDenominator, nil
 }

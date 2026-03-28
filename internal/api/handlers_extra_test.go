@@ -121,7 +121,9 @@ func TestWebSocketTickerSubscription(t *testing.T) {
 	if err := conn.WriteJSON(wsRequest{Op: "subscribe", Args: []string{"market.ticker"}}); err != nil {
 		t.Fatalf("failed to subscribe: %v", err)
 	}
-	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("failed to set read deadline: %v", err)
+	}
 	var msg wsMessage
 	if err := conn.ReadJSON(&msg); err != nil {
 		t.Fatalf("failed to read message: %v", err)
