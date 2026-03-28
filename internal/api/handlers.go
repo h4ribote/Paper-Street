@@ -186,7 +186,7 @@ func (o orderRequest) toOrder(defaultUserID int64) (*engine.Order, error) {
 		userID = defaultUserID
 	}
 	if userID == 0 {
-		return nil, errors.New("user_id required")
+		return nil, errors.New("user_id required in request or via authentication")
 	}
 	if (orderType == engine.OrderTypeLimit || orderType == engine.OrderTypeStopLimit) && o.Price <= 0 {
 		return nil, errors.New("price required for limit orders")

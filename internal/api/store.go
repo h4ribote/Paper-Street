@@ -16,7 +16,7 @@ const (
 	defaultCurrency    = "USD"
 	defaultCashBalance = int64(1_000_000_000)
 	defaultAssetPrice  = int64(10_000)
-	defaultUserStartID = int64(9_999)
+	initialUserID      = int64(9_999)
 )
 
 func stringsEqualFold(a, b string) bool {
@@ -164,7 +164,7 @@ func NewMarketStore() *MarketStore {
 		lastPrices:   make(map[int64]int64),
 		prevPrices:   make(map[int64]int64),
 		volumes:      make(map[int64]int64),
-		nextUserID:   defaultUserStartID,
+		nextUserID:   initialUserID,
 		nextNewsID:   0,
 		macroIndicators: []MacroIndicator{
 			{Country: "Neo Venice", Type: "GDP_GROWTH", Value: 312, PublishedAt: now.Add(-24 * time.Hour).UnixMilli()},
@@ -700,6 +700,9 @@ func (s *MarketStore) applyExecutionLocked(exec engine.Execution) {
 	s.ensureUserLocked(sellerID)
 	s.ensureAssetLocked(exec.AssetID)
 	cashDelta := exec.Price * exec.Quantity
+	if s.balances[buyerID][defaultCurrency] < cashDelta {
+		return
+	}
 	s.balances[buyerID][defaultCurrency] -= cashDelta
 	s.balances[sellerID][defaultCurrency] += cashDelta
 	s.positions[buyerID][exec.AssetID] += exec.Quantity

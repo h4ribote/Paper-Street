@@ -542,17 +542,9 @@ func (s *Server) userIDFromRequest(r *http.Request) int64 {
 }
 
 func generateAPIKeyHex() (string, error) {
-	key, err := generateAPIKey()
-	if err != nil {
+	var key auth.APIKey
+	if _, err := rand.Read(key[:]); err != nil {
 		return "", err
 	}
 	return key.String(), nil
-}
-
-func generateAPIKey() (auth.APIKey, error) {
-	var key auth.APIKey
-	if _, err := rand.Read(key[:]); err != nil {
-		return auth.APIKey{}, err
-	}
-	return key, nil
 }
