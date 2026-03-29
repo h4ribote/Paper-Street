@@ -111,7 +111,7 @@ func (c *APIClient) CancelOrder(ctx context.Context, assetID int64, orderID int6
 		return fmt.Errorf("api client is nil")
 	}
 	if assetID <= 0 {
-		return fmt.Errorf("asset_id is required")
+		return fmt.Errorf("asset_id must be a positive integer")
 	}
 	url := fmt.Sprintf("%s/orders/%d?asset_id=%d", c.baseURL, orderID, assetID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)

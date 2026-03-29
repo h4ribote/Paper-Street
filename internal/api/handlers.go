@@ -105,14 +105,10 @@ func (s *Server) handleOrderByID(w http.ResponseWriter, r *http.Request) {
 		}
 		order, ok := s.Engine.FindOrder(assetID, id)
 		if !ok && s.Store != nil {
-			order, ok = s.Store.Order(id)
-			if ok && order.AssetID != assetID {
-				respondError(w, http.StatusNotFound, "order not found for asset")
-				return
-			}
+			order, ok = s.Store.OrderForAsset(id, assetID)
 		}
 		if !ok {
-			respondError(w, http.StatusNotFound, "order not found")
+			respondError(w, http.StatusNotFound, "order not found for asset")
 			return
 		}
 		respondJSON(w, http.StatusOK, order)
