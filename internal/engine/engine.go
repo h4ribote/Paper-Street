@@ -83,7 +83,8 @@ func (e *Engine) Snapshot(ctx context.Context, assetID int64, depth int) (OrderB
 }
 
 // FindOrder looks up an order within the specified asset's order book.
-// It returns false if the asset has no order book or the order isn't found.
+// It returns false if the asset ID is incorrect, the asset has no order book,
+// or the order isn't found in that book.
 func (e *Engine) FindOrder(assetID int64, orderID int64) (*Order, bool) {
 	book, ok := e.getOrderBook(assetID)
 	if !ok {
