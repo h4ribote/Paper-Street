@@ -82,19 +82,12 @@ func (e *Engine) Snapshot(ctx context.Context, assetID int64, depth int) (OrderB
 	return book.Snapshot(ctx, depth)
 }
 
-func (e *Engine) FindOrder(orderID int64) (*Order, bool) {
-	e.mu.RLock()
-	books := make([]*OrderBook, 0, len(e.orderBooks))
-	for _, book := range e.orderBooks {
-		books = append(books, book)
+func (e *Engine) FindOrder(assetID int64, orderID int64) (*Order, bool) {
+	book, ok := e.getOrderBook(assetID)
+	if !ok {
+		return nil, false
 	}
-	e.mu.RUnlock()
-	for _, book := range books {
-		if order, ok := book.FindOrder(orderID); ok {
-			return order, true
-		}
-	}
-	return nil, false
+	return book.FindOrder(orderID)
 }
 
 func (e *Engine) Shutdown(ctx context.Context) error {

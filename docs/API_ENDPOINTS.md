@@ -41,11 +41,11 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
     *   新規注文を発注します。
     *   Body: `asset_id`, `side` (BUY/SELL), `type` (MARKET/LIMIT/STOP), `quantity`, `price` (LIMITの場合)。
 *   `DELETE /orders/{order_id}`
-    *   指定した注文をキャンセルします。
+    *   指定した注文をキャンセルします。`asset_id` クエリパラメータが必須です。
 *   `GET /orders`
     *   注文一覧を取得します。ステータス（OPEN/FILLED/CANCELLED）でフィルタリング可能です。`limit` と `offset` でページネーションできます。
 *   `GET /orders/{order_id}`
-    *   注文の詳細情報を取得します。
+    *   注文の詳細情報を取得します。`asset_id` クエリパラメータが必須です。
 
 ## 4. Portfolio & Wallet (ポートフォリオ・資産)
 *   `GET /portfolio/balances`

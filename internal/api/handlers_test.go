@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -117,6 +118,55 @@ func TestHandleOrdersPagination(t *testing.T) {
 	}
 	if page[0].ID != all[1].ID {
 		t.Fatalf("expected order id %d at offset 1, got %d", all[1].ID, page[0].ID)
+	}
+}
+
+func TestHandleOrderByIDRequiresAssetID(t *testing.T) {
+	store := NewMarketStore()
+	apiKeys := auth.NewAPIKeyCache()
+	if err := apiKeys.AddHex(testAPIKeyUser1); err != nil {
+		t.Fatalf("failed to add api key: %v", err)
+	}
+	store.RegisterAPIKey(testAPIKeyUser1, 1)
+	store.EnsureUser(1)
+
+	eng := engine.NewEngine(store)
+	handler := NewRouter(eng, apiKeys, store)
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	created, err := eng.SubmitOrder(ctx, &engine.Order{
+		AssetID:  101,
+		UserID:   1,
+		Side:     engine.SideBuy,
+		Type:     engine.OrderTypeLimit,
+		Quantity: 1,
+		Price:    100,
+	})
+	if err != nil {
+		t.Fatalf("failed to create order: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/orders/%d", server.URL, created.Order.ID), nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set(apiKeyHeader, testAPIKeyUser1)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", resp.StatusCode)
+	}
+
+	var fetched engine.Order
+	getJSON(t, fmt.Sprintf("%s/orders/%d?asset_id=101", server.URL, created.Order.ID), testAPIKeyUser1, &fetched)
+	if fetched.ID != created.Order.ID || fetched.AssetID != 101 {
+		t.Fatalf("unexpected order returned %+v", fetched)
 	}
 }
 

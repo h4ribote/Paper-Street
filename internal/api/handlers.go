@@ -98,9 +98,17 @@ func (s *Server) handleOrderByID(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		order, ok := s.Engine.FindOrder(id)
+		assetID := parseQueryInt64(r, "asset_id")
+		if assetID == 0 {
+			respondError(w, http.StatusBadRequest, "asset_id required")
+			return
+		}
+		order, ok := s.Engine.FindOrder(assetID, id)
 		if !ok && s.Store != nil {
 			order, ok = s.Store.Order(id)
+			if ok && order.AssetID != assetID {
+				ok = false
+			}
 		}
 		if !ok {
 			respondError(w, http.StatusNotFound, "order not found")
@@ -108,9 +116,14 @@ func (s *Server) handleOrderByID(w http.ResponseWriter, r *http.Request) {
 		}
 		respondJSON(w, http.StatusOK, order)
 	case http.MethodDelete:
+		assetID := parseQueryInt64(r, "asset_id")
+		if assetID == 0 {
+			respondError(w, http.StatusBadRequest, "asset_id required")
+			return
+		}
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
-		result, err := s.Engine.CancelOrderByID(ctx, id)
+		result, err := s.Engine.CancelOrder(ctx, assetID, id)
 		if err != nil {
 			respondError(w, http.StatusBadRequest, err.Error())
 			return

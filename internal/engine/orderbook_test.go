@@ -26,7 +26,7 @@ func TestPriceTimePriority(t *testing.T) {
 	if buy.Order.Status != OrderStatusFilled {
 		t.Fatalf("expected buy order filled, got %s", buy.Order.Status)
 	}
-	if order, ok := eng.FindOrder(sell2.Order.ID); !ok || order.Remaining != 2 {
+	if order, ok := eng.FindOrder(1, sell2.Order.ID); !ok || order.Remaining != 2 {
 		t.Fatalf("expected remaining 2 on sell2, got %+v", order)
 	}
 }
@@ -67,7 +67,7 @@ func TestSelfTradePrevention(t *testing.T) {
 	if len(buy.Executions) != 0 {
 		t.Fatalf("expected no executions, got %d", len(buy.Executions))
 	}
-	cancelled, ok := eng.FindOrder(sell.Order.ID)
+	cancelled, ok := eng.FindOrder(1, sell.Order.ID)
 	if !ok || cancelled.Status != OrderStatusCancelled {
 		t.Fatalf("expected sell order cancelled, got %+v", cancelled)
 	}
@@ -99,11 +99,11 @@ func TestSelfTradePreventionMarketReduction(t *testing.T) {
 	if buy.Order.Remaining != 0 {
 		t.Fatalf("expected remaining cancelled, got %d", buy.Order.Remaining)
 	}
-	selfOrder, ok := eng.FindOrder(selfSell.Order.ID)
+	selfOrder, ok := eng.FindOrder(1, selfSell.Order.ID)
 	if !ok || selfOrder.Status != OrderStatusCancelled {
 		t.Fatalf("expected self sell order cancelled, got %+v", selfOrder)
 	}
-	otherOrder, ok := eng.FindOrder(otherSell.Order.ID)
+	otherOrder, ok := eng.FindOrder(1, otherSell.Order.ID)
 	if !ok || otherOrder.Remaining != 2 {
 		t.Fatalf("expected remaining 2 on other sell, got %+v", otherOrder)
 	}
@@ -118,11 +118,32 @@ func TestStopOrderTrigger(t *testing.T) {
 	_, _ = eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 3, Side: SideSell, Type: OrderTypeLimit, Quantity: 5, Price: 110})
 	_, _ = eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 4, Side: SideBuy, Type: OrderTypeMarket, Quantity: 5})
 
-	order, ok := eng.FindOrder(stop.Order.ID)
+	order, ok := eng.FindOrder(1, stop.Order.ID)
 	if !ok {
 		t.Fatalf("stop order not found")
 	}
 	if order.Status != OrderStatusFilled {
 		t.Fatalf("expected stop order filled, got %s", order.Status)
+	}
+}
+
+func TestFindOrderRoutesByAssetID(t *testing.T) {
+	eng := NewEngine(NewDiscardSink())
+	ctx := context.Background()
+
+	first, _ := eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 1, Side: SideBuy, Type: OrderTypeLimit, Quantity: 1, Price: 100})
+	second, _ := eng.SubmitOrder(ctx, &Order{AssetID: 2, UserID: 1, Side: SideBuy, Type: OrderTypeLimit, Quantity: 1, Price: 100})
+
+	order, ok := eng.FindOrder(1, first.Order.ID)
+	if !ok || order.AssetID != 1 {
+		t.Fatalf("expected order in asset 1, got %+v", order)
+	}
+	order, ok = eng.FindOrder(2, second.Order.ID)
+	if !ok || order.AssetID != 2 {
+		t.Fatalf("expected order in asset 2, got %+v", order)
+	}
+	order, ok = eng.FindOrder(2, first.Order.ID)
+	if !ok || order.AssetID != 2 {
+		t.Fatalf("expected asset-scoped lookup, got %+v", order)
 	}
 }
