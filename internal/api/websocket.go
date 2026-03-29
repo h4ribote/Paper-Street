@@ -240,12 +240,12 @@ func (h *wsHub) broadcastSnapshots() {
 	for _, client := range clients {
 		topics := client.subscriptionsSnapshot()
 		for _, topic := range topics {
-			h.sendUpdate(client, topic)
+			h.sendSnapshotOrDelta(client, topic)
 		}
 	}
 }
 
-func (h *wsHub) sendUpdate(client *wsClient, topic string) {
+func (h *wsHub) sendSnapshotOrDelta(client *wsClient, topic string) {
 	if strings.HasPrefix(topic, "market.orderbook.") {
 		h.sendOrderbookDelta(client, topic)
 		return
@@ -386,7 +386,7 @@ func orderbookDelta(previous, current engine.OrderBookSnapshot) (engine.OrderBoo
 	}, true
 }
 
-func diffLevels(previous, current []engine.Level, descending bool) ([]engine.Level, bool) {
+func diffLevels(previous, current []engine.Level, sortDescending bool) ([]engine.Level, bool) {
 	if len(previous) == 0 && len(current) == 0 {
 		return nil, false
 	}
@@ -413,7 +413,7 @@ func diffLevels(previous, current []engine.Level, descending bool) ([]engine.Lev
 		return nil, false
 	}
 	sort.Slice(changed, func(i, j int) bool {
-		if descending {
+		if sortDescending {
 			return changed[i].Price > changed[j].Price
 		}
 		return changed[i].Price < changed[j].Price
