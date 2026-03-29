@@ -15,6 +15,12 @@ import (
 	"github.com/h4ribote/Paper-Street/internal/engine"
 )
 
+type wsRawMessage struct {
+	Topic string          `json:"topic"`
+	Data  json.RawMessage `json:"data"`
+	TS    int64           `json:"ts"`
+}
+
 func TestPoolPositionLifecycle(t *testing.T) {
 	store := NewMarketStore()
 	apiKeys := auth.NewAPIKeyCache()
@@ -130,6 +136,79 @@ func TestWebSocketTickerSubscription(t *testing.T) {
 	}
 	if msg.Topic != "market.ticker" {
 		t.Fatalf("unexpected topic: %s", msg.Topic)
+	}
+}
+
+func TestWebSocketOrderBookDelta(t *testing.T) {
+	store := NewMarketStore()
+	apiKeys := auth.NewAPIKeyCache()
+	if err := apiKeys.AddHex(testAPIKeyUser1); err != nil {
+		t.Fatalf("failed to add api key: %v", err)
+	}
+	store.RegisterAPIKey(testAPIKeyUser1, 1)
+	store.EnsureUser(1)
+	eng := engine.NewEngine(store)
+	submitEngineOrder(t, eng, &engine.Order{
+		AssetID:  101,
+		UserID:   1,
+		Side:     engine.SideBuy,
+		Type:     engine.OrderTypeLimit,
+		Quantity: 1,
+		Price:    100,
+	})
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store))
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?api_key=" + testAPIKeyUser1
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to dial websocket: %v", err)
+	}
+	defer conn.Close()
+
+	if err := conn.WriteJSON(wsRequest{Op: "subscribe", Args: []string{"market.orderbook.101"}}); err != nil {
+		t.Fatalf("failed to subscribe: %v", err)
+	}
+	if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("failed to set read deadline: %v", err)
+	}
+	var snapshotMsg wsRawMessage
+	if err := conn.ReadJSON(&snapshotMsg); err != nil {
+		t.Fatalf("failed to read snapshot: %v", err)
+	}
+	if snapshotMsg.Topic != "market.orderbook.101" {
+		t.Fatalf("unexpected topic: %s", snapshotMsg.Topic)
+	}
+	var snapshot engine.OrderBookSnapshot
+	if err := json.Unmarshal(snapshotMsg.Data, &snapshot); err != nil {
+		t.Fatalf("failed to decode snapshot: %v", err)
+	}
+	if len(snapshot.Bids) != 1 || snapshot.Bids[0].Price != 100 {
+		t.Fatalf("unexpected snapshot bids: %+v", snapshot.Bids)
+	}
+
+	submitEngineOrder(t, eng, &engine.Order{
+		AssetID:  101,
+		UserID:   1,
+		Side:     engine.SideBuy,
+		Type:     engine.OrderTypeLimit,
+		Quantity: 1,
+		Price:    110,
+	})
+
+	if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("failed to set read deadline: %v", err)
+	}
+	var deltaMsg wsRawMessage
+	if err := conn.ReadJSON(&deltaMsg); err != nil {
+		t.Fatalf("failed to read delta: %v", err)
+	}
+	var delta engine.OrderBookSnapshot
+	if err := json.Unmarshal(deltaMsg.Data, &delta); err != nil {
+		t.Fatalf("failed to decode delta: %v", err)
+	}
+	if len(delta.Bids) != 1 || delta.Bids[0].Price != 110 {
+		t.Fatalf("expected delta with new price 110, got %+v", delta.Bids)
 	}
 }
 
