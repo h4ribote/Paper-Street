@@ -107,7 +107,8 @@ func (s *Server) handleOrderByID(w http.ResponseWriter, r *http.Request) {
 		if !ok && s.Store != nil {
 			order, ok = s.Store.Order(id)
 			if ok && order.AssetID != assetID {
-				ok = false
+				respondError(w, http.StatusBadRequest, "order belongs to different asset")
+				return
 			}
 		}
 		if !ok {

@@ -131,8 +131,8 @@ func TestFindOrderRoutesByAssetID(t *testing.T) {
 	eng := NewEngine(NewDiscardSink())
 	ctx := context.Background()
 
-	first, _ := eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 1, Side: SideBuy, Type: OrderTypeLimit, Quantity: 1, Price: 100})
-	second, _ := eng.SubmitOrder(ctx, &Order{AssetID: 2, UserID: 1, Side: SideBuy, Type: OrderTypeLimit, Quantity: 1, Price: 100})
+	first, _ := eng.SubmitOrder(ctx, &Order{ID: 101, AssetID: 1, UserID: 1, Side: SideBuy, Type: OrderTypeLimit, Quantity: 1, Price: 100})
+	second, _ := eng.SubmitOrder(ctx, &Order{ID: 202, AssetID: 2, UserID: 1, Side: SideBuy, Type: OrderTypeLimit, Quantity: 1, Price: 100})
 
 	order, ok := eng.FindOrder(1, first.Order.ID)
 	if !ok || order.AssetID != 1 {
@@ -142,8 +142,7 @@ func TestFindOrderRoutesByAssetID(t *testing.T) {
 	if !ok || order.AssetID != 2 {
 		t.Fatalf("expected order in asset 2, got %+v", order)
 	}
-	order, ok = eng.FindOrder(2, first.Order.ID)
-	if !ok || order.AssetID != 2 {
-		t.Fatalf("expected asset-scoped lookup, got %+v", order)
+	if _, ok := eng.FindOrder(2, first.Order.ID); ok {
+		t.Fatalf("expected asset-scoped lookup to reject wrong asset")
 	}
 }
