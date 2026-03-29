@@ -369,22 +369,14 @@ func orderbookDelta(previous, current engine.OrderBookSnapshot) (engine.OrderBoo
 	bids, bidsChanged := diffLevels(previous.Bids, current.Bids, true)
 	asks, asksChanged := diffLevels(previous.Asks, current.Asks, false)
 	lastPriceChanged := previous.LastPrice != current.LastPrice
-	if !bidsChanged && !asksChanged {
-		if !lastPriceChanged {
-			return engine.OrderBookSnapshot{}, false
-		}
-		return engine.OrderBookSnapshot{
-			AssetID:   current.AssetID,
-			LastPrice: current.LastPrice,
-			Bids:      []engine.Level{},
-			Asks:      []engine.Level{},
-		}, true
-	}
 	if !bidsChanged {
 		bids = []engine.Level{}
 	}
 	if !asksChanged {
 		asks = []engine.Level{}
+	}
+	if !bidsChanged && !asksChanged && !lastPriceChanged {
+		return engine.OrderBookSnapshot{}, false
 	}
 	return engine.OrderBookSnapshot{
 		AssetID:   current.AssetID,
@@ -398,22 +390,22 @@ func diffLevels(previous, current []engine.Level, sortDescending bool) ([]engine
 	if len(previous) == 0 && len(current) == 0 {
 		return nil, false
 	}
-	prevMap := make(map[int64]int64, len(previous))
+	previousMap := make(map[int64]int64, len(previous))
 	for _, level := range previous {
-		prevMap[level.Price] = level.Quantity
+		previousMap[level.Price] = level.Quantity
 	}
-	currMap := make(map[int64]int64, len(current))
+	currentMap := make(map[int64]int64, len(current))
 	for _, level := range current {
-		currMap[level.Price] = level.Quantity
+		currentMap[level.Price] = level.Quantity
 	}
 	changed := make([]engine.Level, 0, len(current))
-	for price, qty := range currMap {
-		if prevQty, ok := prevMap[price]; !ok || prevQty != qty {
+	for price, qty := range currentMap {
+		if prevQty, ok := previousMap[price]; !ok || prevQty != qty {
 			changed = append(changed, engine.Level{Price: price, Quantity: qty})
 		}
 	}
-	for price := range prevMap {
-		if _, ok := currMap[price]; !ok {
+	for price := range previousMap {
+		if _, ok := currentMap[price]; !ok {
 			changed = append(changed, engine.Level{Price: price, Quantity: 0})
 		}
 	}
