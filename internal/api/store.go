@@ -380,7 +380,7 @@ func (s *MarketStore) Order(orderID int64) (*engine.Order, bool) {
 }
 
 func (s *MarketStore) OrderForAsset(orderID int64, assetID int64) (*engine.Order, bool) {
-	if orderID == 0 || assetID == 0 {
+	if orderID <= 0 || assetID <= 0 {
 		return nil, false
 	}
 	s.mu.RLock()

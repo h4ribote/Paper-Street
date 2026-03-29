@@ -108,7 +108,7 @@ func (s *Server) handleOrderByID(w http.ResponseWriter, r *http.Request) {
 			order, ok = s.Store.OrderForAsset(id, assetID)
 		}
 		if !ok {
-			respondError(w, http.StatusNotFound, "order not found for asset")
+			respondError(w, http.StatusNotFound, "order not found or does not belong to asset")
 			return
 		}
 		respondJSON(w, http.StatusOK, order)
