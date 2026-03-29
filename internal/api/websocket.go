@@ -142,9 +142,6 @@ func (c *wsClient) close() {
 }
 
 func (c *wsClient) setOrderbookSnapshot(topic string, snapshot engine.OrderBookSnapshot) {
-	if c == nil {
-		return
-	}
 	c.mu.Lock()
 	if c.orderbookSnaps == nil {
 		c.orderbookSnaps = make(map[string]engine.OrderBookSnapshot)
@@ -154,9 +151,6 @@ func (c *wsClient) setOrderbookSnapshot(topic string, snapshot engine.OrderBookS
 }
 
 func (c *wsClient) orderbookSnapshot(topic string) (engine.OrderBookSnapshot, bool) {
-	if c == nil {
-		return engine.OrderBookSnapshot{}, false
-	}
 	c.mu.RLock()
 	snapshot, ok := c.orderbookSnaps[topic]
 	c.mu.RUnlock()
@@ -246,6 +240,9 @@ func (h *wsHub) broadcastSnapshots() {
 }
 
 func (h *wsHub) sendSnapshotOrDelta(client *wsClient, topic string) {
+	if client == nil {
+		return
+	}
 	if strings.HasPrefix(topic, "market.orderbook.") {
 		h.sendOrderbookDelta(client, topic)
 		return
@@ -254,9 +251,6 @@ func (h *wsHub) sendSnapshotOrDelta(client *wsClient, topic string) {
 }
 
 func (h *wsHub) sendSnapshot(client *wsClient, topic string) {
-	if client == nil {
-		return
-	}
 	data, ok := h.snapshotForTopic(client, topic)
 	if !ok {
 		return
@@ -272,9 +266,6 @@ func (h *wsHub) sendSnapshot(client *wsClient, topic string) {
 }
 
 func (h *wsHub) sendOrderbookDelta(client *wsClient, topic string) {
-	if client == nil {
-		return
-	}
 	data, ok := h.snapshotForTopic(client, topic)
 	if !ok {
 		return
