@@ -57,13 +57,14 @@ type wsPortfolioSnapshot struct {
 }
 
 type wsClient struct {
-	id            string
-	userID        int64
-	conn          *gws.Conn
-	send          chan wsMessage
-	subscriptions map[string]struct{}
-	mu            sync.RWMutex
-	closed        bool
+	id             string
+	userID         int64
+	conn           *gws.Conn
+	send           chan wsMessage
+	subscriptions  map[string]struct{}
+	orderbookSnaps map[string]engine.OrderBookSnapshot
+	mu             sync.RWMutex
+	closed         bool
 }
 
 func (c *wsClient) subscribe(topics []string) ([]string, error) {
@@ -94,7 +95,11 @@ func (c *wsClient) unsubscribe(topics []string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, topic := range topics {
-		delete(c.subscriptions, strings.TrimSpace(topic))
+		trimmed := strings.TrimSpace(topic)
+		delete(c.subscriptions, trimmed)
+		if strings.HasPrefix(trimmed, "market.orderbook.") {
+			delete(c.orderbookSnaps, trimmed)
+		}
 	}
 }
 
@@ -133,6 +138,22 @@ func (c *wsClient) close() {
 	close(c.send)
 	c.mu.Unlock()
 	_ = c.conn.Close()
+}
+
+func (c *wsClient) setOrderbookSnapshot(topic string, snapshot engine.OrderBookSnapshot) {
+	c.mu.Lock()
+	if c.orderbookSnaps == nil {
+		c.orderbookSnaps = make(map[string]engine.OrderBookSnapshot)
+	}
+	c.orderbookSnaps[topic] = snapshot
+	c.mu.Unlock()
+}
+
+func (c *wsClient) orderbookSnapshot(topic string) (engine.OrderBookSnapshot, bool) {
+	c.mu.RLock()
+	snapshot, ok := c.orderbookSnaps[topic]
+	c.mu.RUnlock()
+	return snapshot, ok
 }
 
 type wsHub struct {
@@ -212,22 +233,64 @@ func (h *wsHub) broadcastSnapshots() {
 	for _, client := range clients {
 		topics := client.subscriptionsSnapshot()
 		for _, topic := range topics {
-			h.sendSnapshot(client, topic)
+			h.sendSnapshotOrDelta(client, topic)
 		}
 	}
 }
 
-func (h *wsHub) sendSnapshot(client *wsClient, topic string) {
+func (h *wsHub) sendSnapshotOrDelta(client *wsClient, topic string) {
 	if client == nil {
 		return
 	}
+	if strings.HasPrefix(topic, "market.orderbook.") {
+		h.sendOrderbookDelta(client, topic)
+		return
+	}
+	h.sendSnapshot(client, topic)
+}
+
+func (h *wsHub) sendSnapshot(client *wsClient, topic string) {
 	data, ok := h.snapshotForTopic(client, topic)
 	if !ok {
 		return
 	}
+	if snapshot, isSnapshot := data.(engine.OrderBookSnapshot); isSnapshot {
+		client.setOrderbookSnapshot(topic, snapshot)
+	}
 	client.enqueue(wsMessage{
 		Topic: topic,
 		Data:  data,
+		TS:    time.Now().UTC().UnixMilli(),
+	})
+}
+
+func (h *wsHub) sendOrderbookDelta(client *wsClient, topic string) {
+	data, ok := h.snapshotForTopic(client, topic)
+	if !ok {
+		return
+	}
+	snapshot, ok := data.(engine.OrderBookSnapshot)
+	if !ok {
+		return
+	}
+	previous, ok := client.orderbookSnapshot(topic)
+	if !ok {
+		client.setOrderbookSnapshot(topic, snapshot)
+		client.enqueue(wsMessage{
+			Topic: topic,
+			Data:  snapshot,
+			TS:    time.Now().UTC().UnixMilli(),
+		})
+		return
+	}
+	delta, changed := orderbookDelta(previous, snapshot)
+	if !changed {
+		return
+	}
+	client.setOrderbookSnapshot(topic, snapshot)
+	client.enqueue(wsMessage{
+		Topic: topic,
+		Data:  delta,
 		TS:    time.Now().UTC().UnixMilli(),
 	})
 }
@@ -292,6 +355,77 @@ func (h *wsHub) snapshotForTopic(client *wsClient, topic string) (interface{}, b
 	}
 }
 
+func orderbookDelta(previous, current engine.OrderBookSnapshot) (engine.OrderBookSnapshot, bool) {
+	bids, bidsChanged := diffLevels(previous.Bids, current.Bids, true)
+	asks, asksChanged := diffLevels(previous.Asks, current.Asks, false)
+	lastPriceChanged := previous.LastPrice != current.LastPrice
+	if !bidsChanged && !asksChanged && !lastPriceChanged {
+		return engine.OrderBookSnapshot{}, false
+	}
+	return engine.OrderBookSnapshot{
+		AssetID:   current.AssetID,
+		LastPrice: current.LastPrice,
+		Bids:      bids,
+		Asks:      asks,
+	}, true
+}
+
+func diffLevels(previous, current []engine.Level, sortDescending bool) ([]engine.Level, bool) {
+	if len(previous) == 0 && len(current) == 0 {
+		return nil, false
+	}
+	changed := make([]engine.Level, 0, maxIntValue(len(previous), len(current)))
+	i := 0
+	j := 0
+	for i < len(previous) || j < len(current) {
+		if i >= len(previous) {
+			changed = append(changed, current[j:]...)
+			break
+		}
+		if j >= len(current) {
+			for ; i < len(previous); i++ {
+				changed = append(changed, engine.Level{Price: previous[i].Price, Quantity: 0})
+			}
+			break
+		}
+		prevLevel := previous[i]
+		currLevel := current[j]
+		if prevLevel.Price == currLevel.Price {
+			if prevLevel.Quantity != currLevel.Quantity {
+				changed = append(changed, currLevel)
+			}
+			i++
+			j++
+			continue
+		}
+		if priceComesBefore(prevLevel.Price, currLevel.Price, sortDescending) {
+			changed = append(changed, engine.Level{Price: prevLevel.Price, Quantity: 0})
+			i++
+			continue
+		}
+		changed = append(changed, currLevel)
+		j++
+	}
+	if len(changed) == 0 {
+		return nil, false
+	}
+	return changed, true
+}
+
+func priceComesBefore(left, right int64, sortDescending bool) bool {
+	if sortDescending {
+		return left > right
+	}
+	return left < right
+}
+
+func maxIntValue(left, right int) int {
+	if left > right {
+		return left
+	}
+	return right
+}
+
 func parseTopicAssetID(topic, prefix string) (int64, bool) {
 	trimmed := strings.TrimPrefix(topic, prefix)
 	if trimmed == "" {
@@ -353,11 +487,12 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	clientID := strconv.FormatUint(atomic.AddUint64(&s.WSHub.nextID, 1), 10)
 	client := &wsClient{
-		id:            clientID,
-		userID:        userID,
-		conn:          conn,
-		send:          make(chan wsMessage, 256),
-		subscriptions: make(map[string]struct{}),
+		id:             clientID,
+		userID:         userID,
+		conn:           conn,
+		send:           make(chan wsMessage, 256),
+		subscriptions:  make(map[string]struct{}),
+		orderbookSnaps: make(map[string]engine.OrderBookSnapshot),
 	}
 	s.WSHub.register(client)
 	go s.wsWriteLoop(client)
