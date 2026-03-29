@@ -131,8 +131,14 @@ func TestFindOrderRoutesByAssetID(t *testing.T) {
 	eng := NewEngine(NewDiscardSink())
 	ctx := context.Background()
 
-	first, _ := eng.SubmitOrder(ctx, &Order{ID: 101, AssetID: 1, UserID: 1, Side: SideBuy, Type: OrderTypeLimit, Quantity: 1, Price: 100})
-	second, _ := eng.SubmitOrder(ctx, &Order{ID: 202, AssetID: 2, UserID: 1, Side: SideBuy, Type: OrderTypeLimit, Quantity: 1, Price: 100})
+	first, err := eng.SubmitOrder(ctx, &Order{ID: 101, AssetID: 1, UserID: 1, Side: SideBuy, Type: OrderTypeLimit, Quantity: 1, Price: 100})
+	if err != nil {
+		t.Fatalf("failed to submit first order: %v", err)
+	}
+	second, err := eng.SubmitOrder(ctx, &Order{ID: 202, AssetID: 2, UserID: 1, Side: SideBuy, Type: OrderTypeLimit, Quantity: 1, Price: 100})
+	if err != nil {
+		t.Fatalf("failed to submit second order: %v", err)
+	}
 
 	order, ok := eng.FindOrder(1, first.Order.ID)
 	if !ok || order.AssetID != 1 {
