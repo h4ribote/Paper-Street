@@ -359,12 +359,6 @@ func orderbookDelta(previous, current engine.OrderBookSnapshot) (engine.OrderBoo
 	bids, bidsChanged := diffLevels(previous.Bids, current.Bids, true)
 	asks, asksChanged := diffLevels(previous.Asks, current.Asks, false)
 	lastPriceChanged := previous.LastPrice != current.LastPrice
-	if !bidsChanged {
-		bids = nil
-	}
-	if !asksChanged {
-		asks = nil
-	}
 	if !bidsChanged && !asksChanged && !lastPriceChanged {
 		return engine.OrderBookSnapshot{}, false
 	}
@@ -380,7 +374,7 @@ func diffLevels(previous, current []engine.Level, sortDescending bool) ([]engine
 	if len(previous) == 0 && len(current) == 0 {
 		return nil, false
 	}
-	changed := make([]engine.Level, 0)
+	changed := make([]engine.Level, 0, maxInt(len(previous), len(current)))
 	i := 0
 	j := 0
 	for i < len(previous) || j < len(current) {
@@ -423,6 +417,13 @@ func priceBefore(left, right int64, sortDescending bool) bool {
 		return left > right
 	}
 	return left < right
+}
+
+func maxInt(left, right int) int {
+	if left > right {
+		return left
+	}
+	return right
 }
 
 func parseTopicAssetID(topic, prefix string) (int64, bool) {
