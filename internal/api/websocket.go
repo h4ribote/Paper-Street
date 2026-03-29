@@ -374,7 +374,7 @@ func diffLevels(previous, current []engine.Level, sortDescending bool) ([]engine
 	if len(previous) == 0 && len(current) == 0 {
 		return nil, false
 	}
-	changed := make([]engine.Level, 0, minInt(len(previous), len(current)))
+	changed := make([]engine.Level, 0, maxIntValue(len(previous), len(current)))
 	i := 0
 	j := 0
 	for i < len(previous) || j < len(current) {
@@ -419,8 +419,8 @@ func priceComesBefore(left, right int64, sortDescending bool) bool {
 	return left < right
 }
 
-func minInt(left, right int) int {
-	if left < right {
+func maxIntValue(left, right int) int {
+	if left > right {
 		return left
 	}
 	return right
