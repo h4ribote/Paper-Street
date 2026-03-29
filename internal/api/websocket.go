@@ -369,8 +369,16 @@ func orderbookDelta(previous, current engine.OrderBookSnapshot) (engine.OrderBoo
 	bids, bidsChanged := diffLevels(previous.Bids, current.Bids, true)
 	asks, asksChanged := diffLevels(previous.Asks, current.Asks, false)
 	lastPriceChanged := previous.LastPrice != current.LastPrice
-	if !bidsChanged && !asksChanged && !lastPriceChanged {
-		return engine.OrderBookSnapshot{}, false
+	if !bidsChanged && !asksChanged {
+		if !lastPriceChanged {
+			return engine.OrderBookSnapshot{}, false
+		}
+		return engine.OrderBookSnapshot{
+			AssetID:   current.AssetID,
+			LastPrice: current.LastPrice,
+			Bids:      current.Bids,
+			Asks:      current.Asks,
+		}, true
 	}
 	if !bidsChanged {
 		bids = []engine.Level{}
@@ -398,7 +406,7 @@ func diffLevels(previous, current []engine.Level, sortDescending bool) ([]engine
 	for _, level := range current {
 		currMap[level.Price] = level.Quantity
 	}
-	changed := make([]engine.Level, 0)
+	changed := make([]engine.Level, 0, len(previous)+len(current))
 	for price, qty := range currMap {
 		if prevQty, ok := prevMap[price]; !ok || prevQty != qty {
 			changed = append(changed, engine.Level{Price: price, Quantity: qty})
