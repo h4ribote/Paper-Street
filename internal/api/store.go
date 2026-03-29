@@ -379,6 +379,19 @@ func (s *MarketStore) Order(orderID int64) (*engine.Order, bool) {
 	return cloneOrder(order), true
 }
 
+func (s *MarketStore) OrderForAsset(orderID int64, assetID int64) (*engine.Order, bool) {
+	if orderID <= 0 || assetID <= 0 {
+		return nil, false
+	}
+	s.mu.RLock()
+	order, ok := s.orders[orderID]
+	s.mu.RUnlock()
+	if !ok || order.AssetID != assetID {
+		return nil, false
+	}
+	return cloneOrder(order), true
+}
+
 func (s *MarketStore) Executions(assetID int64, limit int) []engine.Execution {
 	s.mu.RLock()
 	execs := make([]engine.Execution, 0, len(s.executions))

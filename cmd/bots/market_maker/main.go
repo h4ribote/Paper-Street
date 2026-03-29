@@ -71,8 +71,8 @@ func runOnce(client *bots.APIClient, cfg config, state *orderState) error {
 	if !missingOrders && !quoteChanged {
 		return nil
 	}
-	cancelOrder(client, cfg.RequestTimeout, state.buyID)
-	cancelOrder(client, cfg.RequestTimeout, state.sellID)
+	cancelOrder(client, cfg.RequestTimeout, cfg.AssetID, state.buyID)
+	cancelOrder(client, cfg.RequestTimeout, cfg.AssetID, state.sellID)
 
 	buyReq := bots.OrderRequest{
 		AssetID:  cfg.AssetID,
@@ -114,13 +114,13 @@ func runOnce(client *bots.APIClient, cfg config, state *orderState) error {
 	return nil
 }
 
-func cancelOrder(client *bots.APIClient, timeout time.Duration, orderID int64) {
+func cancelOrder(client *bots.APIClient, timeout time.Duration, assetID int64, orderID int64) {
 	if orderID == 0 || client == nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	if err := client.CancelOrder(ctx, orderID); err != nil {
+	if err := client.CancelOrder(ctx, assetID, orderID); err != nil {
 		log.Printf("cancel order %d failed: %v", orderID, err)
 	}
 }

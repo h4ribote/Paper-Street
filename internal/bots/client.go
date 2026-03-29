@@ -106,11 +106,14 @@ func (c *APIClient) SubmitOrder(ctx context.Context, request OrderRequest) (*eng
 	return &response.Order, nil
 }
 
-func (c *APIClient) CancelOrder(ctx context.Context, orderID int64) error {
+func (c *APIClient) CancelOrder(ctx context.Context, assetID int64, orderID int64) error {
 	if c == nil {
 		return fmt.Errorf("api client is nil")
 	}
-	url := fmt.Sprintf("%s/orders/%d", c.baseURL, orderID)
+	if assetID <= 0 {
+		return fmt.Errorf("asset_id must be a positive integer")
+	}
+	url := fmt.Sprintf("%s/orders/%d?asset_id=%d", c.baseURL, orderID, assetID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return err
