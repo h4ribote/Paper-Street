@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -361,10 +360,10 @@ func orderbookDelta(previous, current engine.OrderBookSnapshot) (engine.OrderBoo
 	asks, asksChanged := diffLevels(previous.Asks, current.Asks, false)
 	lastPriceChanged := previous.LastPrice != current.LastPrice
 	if !bidsChanged {
-		bids = []engine.Level{}
+		bids = nil
 	}
 	if !asksChanged {
-		asks = []engine.Level{}
+		asks = nil
 	}
 	if !bidsChanged && !asksChanged && !lastPriceChanged {
 		return engine.OrderBookSnapshot{}, false
@@ -381,35 +380,49 @@ func diffLevels(previous, current []engine.Level, sortDescending bool) ([]engine
 	if len(previous) == 0 && len(current) == 0 {
 		return nil, false
 	}
-	previousMap := make(map[int64]int64, len(previous))
-	for _, level := range previous {
-		previousMap[level.Price] = level.Quantity
-	}
-	currentMap := make(map[int64]int64, len(current))
-	for _, level := range current {
-		currentMap[level.Price] = level.Quantity
-	}
-	changed := make([]engine.Level, 0, len(current))
-	for price, qty := range currentMap {
-		if prevQty, ok := previousMap[price]; !ok || prevQty != qty {
-			changed = append(changed, engine.Level{Price: price, Quantity: qty})
+	changed := make([]engine.Level, 0)
+	i := 0
+	j := 0
+	for i < len(previous) || j < len(current) {
+		if i >= len(previous) {
+			changed = append(changed, current[j:]...)
+			break
 		}
-	}
-	for price := range previousMap {
-		if _, ok := currentMap[price]; !ok {
-			changed = append(changed, engine.Level{Price: price, Quantity: 0})
+		if j >= len(current) {
+			for ; i < len(previous); i++ {
+				changed = append(changed, engine.Level{Price: previous[i].Price, Quantity: 0})
+			}
+			break
 		}
+		prevLevel := previous[i]
+		currLevel := current[j]
+		if prevLevel.Price == currLevel.Price {
+			if prevLevel.Quantity != currLevel.Quantity {
+				changed = append(changed, currLevel)
+			}
+			i++
+			j++
+			continue
+		}
+		if priceBefore(prevLevel.Price, currLevel.Price, sortDescending) {
+			changed = append(changed, engine.Level{Price: prevLevel.Price, Quantity: 0})
+			i++
+			continue
+		}
+		changed = append(changed, currLevel)
+		j++
 	}
 	if len(changed) == 0 {
 		return nil, false
 	}
-	sort.Slice(changed, func(i, j int) bool {
-		if sortDescending {
-			return changed[i].Price > changed[j].Price
-		}
-		return changed[i].Price < changed[j].Price
-	})
 	return changed, true
+}
+
+func priceBefore(left, right int64, sortDescending bool) bool {
+	if sortDescending {
+		return left > right
+	}
+	return left < right
 }
 
 func parseTopicAssetID(topic, prefix string) (int64, bool) {
