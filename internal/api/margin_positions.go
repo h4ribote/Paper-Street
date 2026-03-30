@@ -14,7 +14,7 @@ const (
 	marginLeverageMin  = int64(1)
 	marginLeverageMax  = int64(5)
 	millisecondsPerDay = int64(24 * time.Hour / time.Millisecond)
-	marginInterestTick = int64(2 * time.Hour / time.Millisecond)
+	marginInterestTick = int64(2 * time.Hour / time.Millisecond) // accrue interest in 2-hour steps
 	marginPriceMissing = int64(0)
 )
 

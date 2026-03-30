@@ -356,18 +356,13 @@ func (s *MarketStore) updateMarginPool(poolID, userID, cashAmount, assetAmount i
 		return MarginSupplyResult{}, errors.New("margin pool not found")
 	}
 	s.ensureUserLocked(userID)
-	if pool.TotalCashShares == 0 && pool.TotalCash > 0 {
-		pool.TotalCashShares = pool.TotalCash
-	}
-	if pool.TotalAssetShares == 0 && pool.TotalAssets > 0 {
-		pool.TotalAssetShares = pool.TotalAssets
-	}
+	pool = normalizeMarginPoolShares(pool)
 	positionKey := marginProviderKey{PoolID: poolID, UserID: userID}
 	position := s.marginProviders[positionKey]
 	prevCashTotal := pool.TotalCash
 	prevAssetTotal := pool.TotalAssets
-	cashShares := int64(0)
-	assetShares := int64(0)
+	var cashShares int64
+	var assetShares int64
 	if cashAmount > 0 {
 		var err error
 		cashShares, err = sharesForAmount(cashAmount, pool.TotalCashShares, prevCashTotal)
@@ -543,6 +538,7 @@ func (s *MarketStore) seedMarginPools() {
 		{ID: 2, AssetID: 102, TotalCash: 4_000_000, TotalAssets: 18_000, BorrowedCash: 800_000, BorrowedAssets: 3_000},
 	}
 	for _, pool := range pools {
+		pool = normalizeMarginPoolShares(pool)
 		pool.CashRateBps, pool.AssetRateBps = marginRates(pool)
 		s.marginPools[pool.ID] = pool
 	}
@@ -614,6 +610,16 @@ func marginRates(pool MarginPool) (cashRate int64, assetRate int64) {
 	cashRate = utilizationRate(pool.BorrowedCash, pool.TotalCash)
 	assetRate = utilizationRate(pool.BorrowedAssets, pool.TotalAssets)
 	return cashRate, assetRate
+}
+
+func normalizeMarginPoolShares(pool MarginPool) MarginPool {
+	if pool.TotalCashShares == 0 && pool.TotalCash > 0 {
+		pool.TotalCashShares = pool.TotalCash
+	}
+	if pool.TotalAssetShares == 0 && pool.TotalAssets > 0 {
+		pool.TotalAssetShares = pool.TotalAssets
+	}
+	return pool
 }
 
 // utilizationRate returns the daily rate in basis points using a kinked model:
