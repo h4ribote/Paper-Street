@@ -10,3 +10,8 @@
 | [AI_ECOSYSTEM.md](./design/AI_ECOSYSTEM.md) | 12種類のボット戦略 | `internal/bots/` と `cmd/bots/` にあるのは **Market Maker / News Reactor のみ**。他の戦略は未実装。 | 未実装 |
 | [THEORETICAL_FX_RATE.md](./design/THEORETICAL_FX_RATE.md) | マクロ指標から理論FXレート算出 | 該当する計算・保存・配信処理は見当たらない。 | 未実装 |
 | [INDICES.md](./design/INDICES.md) | バスケット連動のCreation/Redemption・FX換算 | `internal/api/liquidity.go` に **単純合計価格の指数**とCreate/Redeemはあるが、**構成銘柄バスケットの受渡・FX換算・裁定バンド**は未実装。 | 部分実装 |
+| [EQUITY_FINANCING.md](./design/EQUITY_FINANCING.md) | 企業の資金調達・自社株買い（Treasury Stock Sale / New Issuance / Buyback） | 企業の株式発行数・自己株式・買い戻しに関するDB/ロジック/APIが見当たらない。 | 未実装 |
+| [ECONOMIC_SIMULATION_DETAILS.md](./design/ECONOMIC_SIMULATION_DETAILS.md) | 企業Botの生産・調達・在庫・価格サイクル | `production_recipes` / `production_inputs` を使った生産・調達・販売処理がバックエンドに存在しない。 | 未実装 |
+| [ECONOMY.md](./design/ECONOMY.md) | 永久債（Consol）の発行・買い戻し・クーポン支払い | `perpetual_bonds` テーブル以外の処理（発行オペ、利払いバッチ、価格ロジック）が未実装。 | 未実装 |
+| [NEWS_SYSTEM.md](./design/NEWS_SYSTEM.md) | 定期/ランダムニュース生成とNews Reactorの自動売買 | サーバーは起動時の `seedNews` のみで、定期生成・センチメントに基づく自動注文/市場インパクト処理が見当たらない。 | 部分実装 |
+| [MACRO_ECONOMICS.md](./design/MACRO_ECONOMICS.md) | GDP/CPI/失業率/金利を実需データ（C+I+G+X-M等）から算出 | 指標生成はあるが、経済活動データに連動した算出ロジックは未実装。 | 部分実装 |
