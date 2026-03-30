@@ -358,20 +358,47 @@ func (s *MarketStore) updateMarginPool(poolID, userID, cashAmount, assetAmount i
 	s.ensureUserLocked(userID)
 	pool = normalizeMarginPoolShares(pool)
 	positionKey := marginProviderKey{PoolID: poolID, UserID: userID}
-	position := s.marginProviders[positionKey]
-	prevCashTotal := pool.TotalCash
-	prevAssetTotal := pool.TotalAssets
+	var position MarginProviderPosition
+	currentCashTotal := pool.TotalCash
+	currentAssetTotal := pool.TotalAssets
 	var cashShares int64
 	var assetShares int64
 	if cashAmount > 0 {
 		var err error
-		cashShares, err = sharesForAmount(cashAmount, pool.TotalCashShares, prevCashTotal)
+		cashShares, err = sharesForAmount(cashAmount, pool.TotalCashShares, currentCashTotal)
 		if err != nil {
 			return MarginSupplyResult{}, err
 		}
 		if cashShares <= 0 {
 			return MarginSupplyResult{}, errors.New("cash amount too small for shares")
 		}
+	}
+	if assetAmount > 0 {
+		var err error
+		assetShares, err = sharesForAmount(assetAmount, pool.TotalAssetShares, currentAssetTotal)
+		if err != nil {
+			return MarginSupplyResult{}, err
+		}
+		if assetShares <= 0 {
+			return MarginSupplyResult{}, errors.New("asset amount too small for shares")
+		}
+	}
+	if !isSupply {
+		position = s.marginProviders[positionKey]
+	}
+	if assetAmount > 0 {
+		if !isSupply {
+			if position.ID == 0 || position.AssetShares < assetShares {
+				return MarginSupplyResult{}, errors.New("insufficient asset shares")
+			}
+			if pool.TotalAssets-pool.BorrowedAssets < assetAmount {
+				return MarginSupplyResult{}, errors.New("insufficient pool assets")
+			}
+		} else if s.positions[userID][pool.AssetID] < assetAmount {
+			return MarginSupplyResult{}, errors.New("insufficient asset balance")
+		}
+	}
+	if cashAmount > 0 {
 		if !isSupply {
 			if position.ID == 0 || position.CashShares < cashShares {
 				return MarginSupplyResult{}, errors.New("insufficient cash shares")
@@ -383,25 +410,8 @@ func (s *MarketStore) updateMarginPool(poolID, userID, cashAmount, assetAmount i
 			return MarginSupplyResult{}, errors.New("insufficient cash balance")
 		}
 	}
-	if assetAmount > 0 {
-		var err error
-		assetShares, err = sharesForAmount(assetAmount, pool.TotalAssetShares, prevAssetTotal)
-		if err != nil {
-			return MarginSupplyResult{}, err
-		}
-		if assetShares <= 0 {
-			return MarginSupplyResult{}, errors.New("asset amount too small for shares")
-		}
-		if !isSupply {
-			if position.ID == 0 || position.AssetShares < assetShares {
-				return MarginSupplyResult{}, errors.New("insufficient asset shares")
-			}
-			if pool.TotalAssets-pool.BorrowedAssets < assetAmount {
-				return MarginSupplyResult{}, errors.New("insufficient pool assets")
-			}
-		} else if s.positions[userID][pool.AssetID] < assetAmount {
-			return MarginSupplyResult{}, errors.New("insufficient asset balance")
-		}
+	if isSupply {
+		position = s.marginProviders[positionKey]
 	}
 	if position.ID == 0 {
 		if !isSupply {
