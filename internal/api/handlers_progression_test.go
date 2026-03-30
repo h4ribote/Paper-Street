@@ -1,8 +1,10 @@
 package api
 
 import (
+	"fmt"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/h4ribote/Paper-Street/internal/auth"
 	"github.com/h4ribote/Paper-Street/internal/engine"
@@ -76,30 +78,83 @@ func TestContractDeliveryAwardsXP(t *testing.T) {
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
 	store.EnsureUser(1)
 
-	store.mu.Lock()
-	store.positions[1][101] = 25
-	store.mu.Unlock()
-
 	eng := engine.NewEngine(store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store))
 	defer server.Close()
 
+	var contracts []ContractStatus
+	getJSON(t, server.URL+"/contracts?user_id=1", testAPIKeyUser1, &contracts)
+	if len(contracts) == 0 {
+		t.Fatalf("expected contracts, got %v", contracts)
+	}
+	var target ContractStatus
+	userRank, _ := rankDefinitionByName(defaultRankName)
+	for _, contract := range contracts {
+		minRank, ok := rankDefinitionByName(contract.MinRank)
+		if !ok || userRank.ID >= minRank.ID {
+			target = contract
+			break
+		}
+	}
+	if target.ID == 0 {
+		target = contracts[0]
+	}
+
 	var delivery ContractDeliveryResult
-	postJSON(t, server.URL+"/contracts/2/deliver", testAPIKeyUser1, contractDeliveryRequest{UserID: 1, Quantity: 10}, &delivery)
+	store.mu.Lock()
+	store.positions[1][target.AssetID] = 25
+	store.mu.Unlock()
+
+	postJSON(t, server.URL+"/contracts/"+fmt.Sprint(target.ID)+"/deliver", testAPIKeyUser1, contractDeliveryRequest{UserID: 1, Quantity: 10}, &delivery)
 
 	if delivery.Quantity != 10 {
 		t.Fatalf("expected quantity 10, got %d", delivery.Quantity)
 	}
-	if delivery.CashReward != 1200 {
-		t.Fatalf("expected cash reward 1200, got %d", delivery.CashReward)
+	expectedCash, ok := safeMultiplyInt64(delivery.Quantity, target.PricePerUnit)
+	if !ok {
+		t.Fatalf("cash reward overflow")
 	}
-	if delivery.XPReward != 20 {
-		t.Fatalf("expected xp reward 20, got %d", delivery.XPReward)
+	if delivery.CashReward != expectedCash {
+		t.Fatalf("expected cash reward %d, got %d", expectedCash, delivery.CashReward)
+	}
+	expectedXP, ok := safeMultiplyInt64(delivery.Quantity, target.XPPerUnit)
+	if !ok {
+		t.Fatalf("xp reward overflow")
+	}
+	if delivery.XPReward != expectedXP {
+		t.Fatalf("expected xp reward %d, got %d", expectedXP, delivery.XPReward)
 	}
 	if delivery.Contract.UserDelivered != 10 {
 		t.Fatalf("expected user delivered 10, got %d", delivery.Contract.UserDelivered)
 	}
-	if delivery.UserProgress.XP != 20 {
-		t.Fatalf("expected xp 20, got %d", delivery.UserProgress.XP)
+	if delivery.UserProgress.XP != expectedXP {
+		t.Fatalf("expected xp %d, got %d", expectedXP, delivery.UserProgress.XP)
+	}
+}
+
+func TestContractPriceUsesVWAPPremium(t *testing.T) {
+	store := NewMarketStore()
+	now := time.Now().UTC()
+	store.mu.Lock()
+	store.executions = append(store.executions, engine.Execution{
+		AssetID:       contractAssetAUR,
+		Price:         100,
+		Quantity:      10,
+		OccurredAtUTC: now.Add(-1 * time.Hour),
+	})
+	store.executions = append(store.executions, engine.Execution{
+		AssetID:       contractAssetAUR,
+		Price:         200,
+		Quantity:      10,
+		OccurredAtUTC: now.Add(-30 * time.Minute),
+	})
+	premium := store.contractPremiumBpsLocked(contractAssetAUR, contractKindProcurement)
+	price := store.calculateContractPriceLocked(contractAssetAUR, contractKindProcurement, now)
+	store.mu.Unlock()
+
+	vwap := int64(150)
+	expected := (vwap*(10_000+premium) + 9_999) / 10_000
+	if price != expected {
+		t.Fatalf("expected price %d, got %d", expected, price)
 	}
 }

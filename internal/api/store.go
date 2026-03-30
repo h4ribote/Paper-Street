@@ -60,6 +60,16 @@ func safeMultiplyInt64(a, b int64) (int64, bool) {
 	return a * b, true
 }
 
+func safeAddInt64(a, b int64) (int64, bool) {
+	if b > 0 && a > math.MaxInt64-b {
+		return 0, false
+	}
+	if b < 0 && a < math.MinInt64-b {
+		return 0, false
+	}
+	return a + b, true
+}
+
 type NewsItem struct {
 	ID          int64    `json:"id"`
 	Headline    string   `json:"headline"`
@@ -181,6 +191,7 @@ type MarketStore struct {
 	nextUserID           int64
 	nextExecutionID      int64
 	nextNewsID           int64
+	nextContractID       int64
 	nextPoolPosID        int64
 	nextMarginPosID      int64
 	nextMarginPositionID int64
