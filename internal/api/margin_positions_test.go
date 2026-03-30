@@ -163,8 +163,7 @@ func TestMarginInterestAccrualUpdatesPool(t *testing.T) {
 		t.Fatalf("expected positive fee, got %d", expectedFee)
 	}
 	now := time.Now().UTC().UnixMilli()
-	position.lastFeeAt = now - marginInterestTick
-	store.marginPositions[position.ID] = position
+	setMarginPositionLastFeeAt(store, position.ID, now-marginInterestTick)
 	poolBefore := pool.TotalCash
 
 	positions = store.MarginPositions(1)
@@ -179,4 +178,12 @@ func TestMarginInterestAccrualUpdatesPool(t *testing.T) {
 	if updated.AccumulatedFees != expectedFee {
 		t.Fatalf("expected accumulated fees %d, got %d", expectedFee, updated.AccumulatedFees)
 	}
+}
+
+func setMarginPositionLastFeeAt(store *MarketStore, positionID, lastFeeAt int64) {
+	store.mu.Lock()
+	position := store.marginPositions[positionID]
+	position.lastFeeAt = lastFeeAt
+	store.marginPositions[positionID] = position
+	store.mu.Unlock()
 }

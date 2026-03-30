@@ -357,6 +357,7 @@ func (s *MarketStore) updateMarginPool(poolID, userID, cashAmount, assetAmount i
 	}
 	s.ensureUserLocked(userID)
 	pool = normalizeMarginPoolShares(pool)
+	s.marginPools[poolID] = pool
 	positionKey := marginProviderKey{PoolID: poolID, UserID: userID}
 	position := s.marginProviders[positionKey]
 	prevCashTotal := pool.TotalCash
