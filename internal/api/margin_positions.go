@@ -377,13 +377,17 @@ func (s *MarketStore) liquidateMarginPositionLocked(position MarginPosition) {
 	if remaining < 0 {
 		remaining = 0
 	}
-	fee := remaining * liquidationFeeBps / bpsDenominator
-	if fee < 0 {
-		fee = 0
-	}
-	payout := remaining - fee
-	if payout < 0 {
-		payout = 0
+	fee := int64(0)
+	payout := int64(0)
+	if remaining > 0 {
+		product, ok := safeMultiplyInt64(remaining, liquidationFeeBps)
+		if ok {
+			fee = product / bpsDenominator
+		}
+		if fee > remaining {
+			fee = remaining
+		}
+		payout = remaining - fee
 	}
 	s.ensureUserLocked(position.UserID)
 	if payout > 0 {

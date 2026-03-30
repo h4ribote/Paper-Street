@@ -110,6 +110,18 @@ func TestMarginLiquidationTriggered(t *testing.T) {
 	if events[0].PositionID != positionID {
 		t.Fatalf("unexpected liquidation position id: %d", events[0].PositionID)
 	}
+	if events[0].UserID != 1 {
+		t.Fatalf("unexpected liquidation user id: %d", events[0].UserID)
+	}
+	if events[0].AssetID != 101 {
+		t.Fatalf("unexpected liquidation asset id: %d", events[0].AssetID)
+	}
+	if events[0].Side != engine.SideBuy {
+		t.Fatalf("unexpected liquidation side: %s", events[0].Side)
+	}
+	if events[0].Quantity != 10 {
+		t.Fatalf("unexpected liquidation quantity: %d", events[0].Quantity)
+	}
 	if events[0].LossRatioBps < marginLossCutBps {
 		t.Fatalf("expected loss ratio above threshold, got %d", events[0].LossRatioBps)
 	}
