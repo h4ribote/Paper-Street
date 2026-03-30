@@ -237,6 +237,7 @@ CREATE TABLE IF NOT EXISTS orders (
     
     quantity BIGINT NOT NULL,
     price BIGINT, -- Limit price (scaled)
+    stop_price BIGINT, -- Stop trigger price (scaled)
     
     filled_quantity BIGINT DEFAULT 0,
     average_fill_price BIGINT DEFAULT 0,
