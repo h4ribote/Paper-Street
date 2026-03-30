@@ -159,6 +159,11 @@ func chooseMacroPattern(patterns []newsPattern, indicatorType string, seed int) 
 		return nil
 	}
 	indicatorType = strings.ToUpper(strings.TrimSpace(indicatorType))
+	switch indicatorType {
+	case "GDP_GROWTH", "CPI", "UNEMPLOYMENT", "UNEMPLOYMENT_RATE", "UER", "INTEREST_RATE":
+	default:
+		return nil
+	}
 	for _, pattern := range patterns {
 		if indicatorMatchesPattern(indicatorType, pattern) {
 			return &pattern
@@ -173,6 +178,8 @@ func indicatorMatchesPattern(indicatorType string, pattern newsPattern) bool {
 		return patternHasVariable(pattern, "gdp_growth")
 	case "CPI":
 		return patternHasVariable(pattern, "cpi")
+	case "UNEMPLOYMENT", "UNEMPLOYMENT_RATE", "UER":
+		return patternHasVariable(pattern, "unemployment")
 	case "INTEREST_RATE":
 		return patternHasVariable(pattern, "rate")
 	default:
@@ -301,6 +308,8 @@ func macroNewsVariables(indicator MacroIndicator, now time.Time) map[string]stri
 		vars["gdp_est"] = formatMacroPercent(maxInt64(indicator.Value-20, 0))
 	case "CPI":
 		vars["cpi"] = formatMacroPercent(indicator.Value)
+	case "UNEMPLOYMENT", "UNEMPLOYMENT_RATE", "UER":
+		vars["unemployment"] = formatMacroPercent(indicator.Value)
 	case "INTEREST_RATE":
 		vars["rate"] = formatMacroPercent(indicator.Value)
 		vars["basis_points"] = "25"
@@ -360,8 +369,14 @@ func currencyForCountry(country string, fallback string) string {
 		return "VND"
 	case "BOROS FEDERATION":
 		return "BRB"
-	case "ATLAS REPUBLIC":
-		return "ATL"
+	case "EL DORADO":
+		return "DRL"
+	case "SAN VERDE":
+		return "VDP"
+	case "NOVAYA ZEMLYA":
+		return "ZMR"
+	case "PEARL RIVER ZONE":
+		return "RVD"
 	default:
 		return fallback
 	}
@@ -375,6 +390,14 @@ func centralBankForCountry(country, fallback string) string {
 		return "Venice Monetary Authority"
 	case "BOROS FEDERATION":
 		return "Boros Central Bank"
+	case "EL DORADO":
+		return "El Dorado Reserve"
+	case "SAN VERDE":
+		return "San Verde Monetary Council"
+	case "NOVAYA ZEMLYA":
+		return "Zemlya Central Bank"
+	case "PEARL RIVER ZONE":
+		return "Pearl River Authority"
 	default:
 		return fallback
 	}

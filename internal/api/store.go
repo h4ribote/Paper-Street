@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"log"
 	"math"
 	"sort"
@@ -22,10 +23,15 @@ const (
 	defaultAssetPrice  = int64(10_000)
 	dbOperationTimeout = 2 * time.Second
 	userIDSeed         = int64(9_999)
-	macroGDPGrowth     = int64(312) // 3.12%
-	macroCPI           = int64(215) // 2.15%
-	macroInterestRate  = int64(175) // 1.75%
 	minSellerProceeds  = int64(1)
+	macroQuarterPeriod = 14 * 24 * time.Hour
+	macroWeekPeriod    = 7 * 24 * time.Hour
+	macroCycleQuarters = int64(8)
+	macroTypeGDPGrowth = "GDP_GROWTH"
+	macroTypeCPI       = "CPI"
+	macroTypeUnemp     = "UNEMPLOYMENT"
+	macroTypeInterest  = "INTEREST_RATE"
+	macroTypeCCI       = "CONSUMER_CONFIDENCE"
 )
 
 func stringsEqualFold(a, b string) bool {
@@ -115,6 +121,181 @@ type MacroIndicator struct {
 	Type        string `json:"type"`
 	Value       int64  `json:"value"`
 	PublishedAt int64  `json:"published_at"`
+}
+
+type macroCPIWeights struct {
+	Food     float64
+	Energy   float64
+	Goods    float64
+	Services float64
+}
+
+type macroProfile struct {
+	Country             string
+	CPIWeights          macroCPIWeights
+	BaseGDP             float64
+	PotentialGDP        float64
+	BaseCPI             float64
+	InflationTarget     float64
+	NaturalUnemployment float64
+	OkunBeta            float64
+	RealRate            float64
+	GDPAmplitude        float64
+	CPIAmplitude        float64
+	GDPSectorWeight     float64
+	MarketSensitivity   float64
+	PolicyBias          float64
+	CCIBase             float64
+	CCIAmplitude        float64
+	SectorFocus         string
+	SeasonalBoost       float64
+	SeasonalQuarters    []int
+}
+
+type macroPriceIndex struct {
+	Food     float64
+	Energy   float64
+	Goods    float64
+	Services float64
+	Overall  float64
+}
+
+var macroProfiles = []macroProfile{
+	{
+		Country:             "Arcadia",
+		CPIWeights:          macroCPIWeights{Food: 0.10, Energy: 0.20, Goods: 0.30, Services: 0.40},
+		BaseGDP:             3.5,
+		PotentialGDP:        3.2,
+		BaseCPI:             2.0,
+		InflationTarget:     2.0,
+		NaturalUnemployment: 4.5,
+		OkunBeta:            0.6,
+		RealRate:            2.0,
+		GDPAmplitude:        1.4,
+		CPIAmplitude:        0.7,
+		GDPSectorWeight:     0.10,
+		MarketSensitivity:   0.15,
+		PolicyBias:          0.1,
+		CCIBase:             102.0,
+		CCIAmplitude:        6.0,
+		SectorFocus:         "SERVICES",
+	},
+	{
+		Country:             "Boros Federation",
+		CPIWeights:          macroCPIWeights{Food: 0.30, Energy: 0.40, Goods: 0.20, Services: 0.10},
+		BaseGDP:             2.8,
+		PotentialGDP:        2.6,
+		BaseCPI:             2.6,
+		InflationTarget:     2.0,
+		NaturalUnemployment: 5.2,
+		OkunBeta:            0.7,
+		RealRate:            2.2,
+		GDPAmplitude:        1.6,
+		CPIAmplitude:        0.9,
+		GDPSectorWeight:     0.12,
+		MarketSensitivity:   0.10,
+		PolicyBias:          0.3,
+		CCIBase:             98.0,
+		CCIAmplitude:        7.0,
+		SectorFocus:         "ENERGY",
+	},
+	{
+		Country:             "El Dorado",
+		CPIWeights:          macroCPIWeights{Food: 0.20, Energy: 0.10, Goods: 0.50, Services: 0.20},
+		BaseGDP:             4.0,
+		PotentialGDP:        3.5,
+		BaseCPI:             3.2,
+		InflationTarget:     2.5,
+		NaturalUnemployment: 6.5,
+		OkunBeta:            0.8,
+		RealRate:            2.0,
+		GDPAmplitude:        2.0,
+		CPIAmplitude:        1.2,
+		GDPSectorWeight:     0.14,
+		MarketSensitivity:   0.08,
+		PolicyBias:          0.2,
+		CCIBase:             96.0,
+		CCIAmplitude:        8.0,
+		SectorFocus:         "GOODS",
+	},
+	{
+		Country:             "Neo Venice",
+		CPIWeights:          macroCPIWeights{Food: 0.30, Energy: 0.20, Goods: 0.30, Services: 0.20},
+		BaseGDP:             3.2,
+		PotentialGDP:        3.0,
+		BaseCPI:             2.1,
+		InflationTarget:     2.0,
+		NaturalUnemployment: 3.8,
+		OkunBeta:            0.5,
+		RealRate:            1.8,
+		GDPAmplitude:        1.2,
+		CPIAmplitude:        0.6,
+		GDPSectorWeight:     0.12,
+		MarketSensitivity:   0.20,
+		PolicyBias:          -0.4,
+		CCIBase:             104.0,
+		CCIAmplitude:        6.0,
+		SectorFocus:         "SERVICES",
+	},
+	{
+		Country:             "San Verde",
+		CPIWeights:          macroCPIWeights{Food: 0.20, Energy: 0.30, Goods: 0.40, Services: 0.10},
+		BaseGDP:             2.6,
+		PotentialGDP:        2.4,
+		BaseCPI:             2.4,
+		InflationTarget:     2.0,
+		NaturalUnemployment: 5.5,
+		OkunBeta:            0.6,
+		RealRate:            2.0,
+		GDPAmplitude:        1.0,
+		CPIAmplitude:        0.8,
+		GDPSectorWeight:     0.10,
+		MarketSensitivity:   0.06,
+		PolicyBias:          0.1,
+		CCIBase:             97.0,
+		CCIAmplitude:        5.0,
+		SectorFocus:         "FOOD",
+		SeasonalBoost:       0.8,
+		SeasonalQuarters:    []int{2, 4},
+	},
+	{
+		Country:             "Novaya Zemlya",
+		CPIWeights:          macroCPIWeights{Food: 0.40, Energy: 0.10, Goods: 0.40, Services: 0.10},
+		BaseGDP:             2.2,
+		PotentialGDP:        2.1,
+		BaseCPI:             2.8,
+		InflationTarget:     2.2,
+		NaturalUnemployment: 6.0,
+		OkunBeta:            0.7,
+		RealRate:            2.1,
+		GDPAmplitude:        1.3,
+		CPIAmplitude:        1.1,
+		GDPSectorWeight:     0.12,
+		MarketSensitivity:   0.05,
+		PolicyBias:          0.2,
+		CCIBase:             95.0,
+		CCIAmplitude:        6.0,
+		SectorFocus:         "ENERGY",
+	},
+	{
+		Country:             "Pearl River Zone",
+		CPIWeights:          macroCPIWeights{Food: 0.30, Energy: 0.40, Goods: 0.10, Services: 0.20},
+		BaseGDP:             3.1,
+		PotentialGDP:        3.0,
+		BaseCPI:             2.7,
+		InflationTarget:     2.3,
+		NaturalUnemployment: 4.0,
+		OkunBeta:            0.6,
+		RealRate:            2.0,
+		GDPAmplitude:        1.5,
+		CPIAmplitude:        1.0,
+		GDPSectorWeight:     0.13,
+		MarketSensitivity:   0.12,
+		PolicyBias:          0.1,
+		CCIBase:             100.0,
+		CCIAmplitude:        7.0,
+		SectorFocus:         "SERVICES",
+	},
 }
 
 type Season struct {
@@ -245,11 +426,7 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 		contractProgress:   make(map[int64]map[int64]int64),
 		nextUserID:         userIDSeed,
 		nextNewsID:         0,
-		macroIndicators: []MacroIndicator{
-			{Country: "Neo Venice", Type: "GDP_GROWTH", Value: macroGDPGrowth, PublishedAt: now.Add(-24 * time.Hour).UnixMilli()},
-			{Country: "Arcadia", Type: "CPI", Value: macroCPI, PublishedAt: now.Add(-12 * time.Hour).UnixMilli()},
-			{Country: "Atlas Republic", Type: "INTEREST_RATE", Value: macroInterestRate, PublishedAt: now.Add(-6 * time.Hour).UnixMilli()},
-		},
+		macroIndicators:    make([]MacroIndicator, 0),
 		seasons: []Season{
 			{Name: "Season 1: The Great Resurgence", Theme: "RECOVERY", StartAt: now.Add(-7 * 24 * time.Hour).UnixMilli(), EndAt: now.Add(53 * 24 * time.Hour).UnixMilli()},
 		},
@@ -265,6 +442,9 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 	}
 	if queries == nil {
 		store.seedAssets()
+		store.mu.Lock()
+		store.refreshMacroIndicatorsLocked(now)
+		store.mu.Unlock()
 		store.seedPools()
 		store.seedMarginPools()
 		store.seedIndexes()
@@ -280,6 +460,9 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 	if err := store.loadFromDB(ctx); err != nil {
 		return nil, err
 	}
+	store.mu.Lock()
+	store.refreshMacroIndicatorsLocked(now)
+	store.mu.Unlock()
 	store.seedPools()
 	store.seedMarginPools()
 	store.seedIndexes()
@@ -716,11 +899,225 @@ func (s *MarketStore) Candles(assetID int64, timeframe time.Duration, start, end
 }
 
 func (s *MarketStore) MacroIndicators() []MacroIndicator {
-	s.mu.RLock()
+	now := time.Now().UTC()
+	s.mu.Lock()
+	s.refreshMacroIndicatorsLocked(now)
 	indicators := make([]MacroIndicator, len(s.macroIndicators))
 	copy(indicators, s.macroIndicators)
-	s.mu.RUnlock()
+	s.mu.Unlock()
 	return indicators
+}
+
+func (s *MarketStore) refreshMacroIndicatorsLocked(now time.Time) {
+	s.macroIndicators = s.buildMacroIndicatorsLocked(now)
+}
+
+func (s *MarketStore) buildMacroIndicatorsLocked(now time.Time) []MacroIndicator {
+	if len(macroProfiles) == 0 {
+		return nil
+	}
+	quarterStart := macroPeriodStart(now, macroQuarterPeriod)
+	weekStart := macroPeriodStart(now, macroWeekPeriod)
+	quarterIndex := macroPeriodIndex(now, macroQuarterPeriod)
+	weekIndex := macroPeriodIndex(now, macroWeekPeriod)
+	cycleValue := macroCycleValue(quarterIndex, macroCycleQuarters)
+	priceIndex := s.macroPriceIndexLocked()
+	indicators := make([]MacroIndicator, 0, len(macroProfiles)*5)
+	for _, profile := range macroProfiles {
+		weights := normalizeMacroWeights(profile.CPIWeights)
+		weightedIndex := weights.Food*priceIndex.Food + weights.Energy*priceIndex.Energy + weights.Goods*priceIndex.Goods + weights.Services*priceIndex.Services
+		sectorIndex := macroSectorIndex(profile.SectorFocus, priceIndex)
+		gdpGrowth := profile.BaseGDP
+		gdpGrowth += profile.GDPAmplitude * cycleValue
+		gdpGrowth += (sectorIndex-1.0)*100.0*profile.GDPSectorWeight + (priceIndex.Overall-1.0)*100.0*profile.MarketSensitivity
+		gdpGrowth += macroNoise(profile.Country, quarterIndex, "gdp") * 0.4
+		gdpGrowth += macroSeasonalBoost(profile, quarterIndex)
+		gdpGrowth = macroClamp(gdpGrowth, -5.0, 10.0)
+
+		cpi := profile.BaseCPI
+		cpi += profile.CPIAmplitude * cycleValue
+		cpi += (weightedIndex-1.0)*50.0 + macroNoise(profile.Country, quarterIndex, "cpi")*0.3
+		cpi = macroClamp(cpi, -1.5, 12.0)
+
+		gdpGap := gdpGrowth - profile.PotentialGDP
+		unemployment := profile.NaturalUnemployment - profile.OkunBeta*gdpGap + macroNoise(profile.Country, quarterIndex, "unemp")*0.3
+		unemployment = macroClamp(unemployment, 2.0, 20.0)
+
+		rate := profile.RealRate + cpi
+		rate += 0.5*(cpi-profile.InflationTarget) + 0.5*gdpGap
+		rate += profile.PolicyBias + macroNoise(profile.Country, weekIndex, "rate")*0.2
+		rate = macroClamp(rate, 0.0, 15.0)
+
+		cci := profile.CCIBase
+		cci += profile.CCIAmplitude * macroCycleValue(weekIndex, macroCycleQuarters*2)
+		cci += gdpGap*4.0 - (cpi-profile.InflationTarget)*2.0 - (unemployment-profile.NaturalUnemployment)*3.0
+		cci += macroNoise(profile.Country, weekIndex, "cci") * 4.0
+		cci = macroClamp(cci, 60.0, 140.0)
+
+		indicators = append(indicators,
+			MacroIndicator{Country: profile.Country, Type: macroTypeGDPGrowth, Value: macroPercentToBasis(gdpGrowth), PublishedAt: quarterStart.UnixMilli()},
+			MacroIndicator{Country: profile.Country, Type: macroTypeCPI, Value: macroPercentToBasis(cpi), PublishedAt: quarterStart.UnixMilli()},
+			MacroIndicator{Country: profile.Country, Type: macroTypeUnemp, Value: macroPercentToBasis(unemployment), PublishedAt: quarterStart.UnixMilli()},
+			MacroIndicator{Country: profile.Country, Type: macroTypeInterest, Value: macroPercentToBasis(rate), PublishedAt: weekStart.UnixMilli()},
+			MacroIndicator{Country: profile.Country, Type: macroTypeCCI, Value: macroIndexToBasis(cci), PublishedAt: weekStart.UnixMilli()},
+		)
+	}
+	return indicators
+}
+
+func macroPeriodIndex(now time.Time, period time.Duration) int64 {
+	if period <= 0 {
+		return 0
+	}
+	seconds := int64(period / time.Second)
+	if seconds <= 0 {
+		return 0
+	}
+	return now.Unix() / seconds
+}
+
+func macroPeriodStart(now time.Time, period time.Duration) time.Time {
+	if period <= 0 {
+		return now.UTC()
+	}
+	seconds := int64(period / time.Second)
+	if seconds <= 0 {
+		return now.UTC()
+	}
+	start := (now.Unix() / seconds) * seconds
+	return time.Unix(start, 0).UTC()
+}
+
+func macroCycleValue(periodIndex int64, cycleLength int64) float64 {
+	if cycleLength <= 0 {
+		return 0
+	}
+	angle := 2 * math.Pi * float64(periodIndex%cycleLength) / float64(cycleLength)
+	return math.Sin(angle)
+}
+
+func macroNoise(country string, periodIndex int64, salt string) float64 {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(strings.ToUpper(strings.TrimSpace(country))))
+	_, _ = h.Write([]byte(fmt.Sprintf(":%d:%s", periodIndex, salt)))
+	sum := h.Sum64()
+	return (float64(sum)/float64(^uint64(0)))*2 - 1
+}
+
+func macroClamp(value, min, max float64) float64 {
+	if value < min {
+		return min
+	}
+	if value > max {
+		return max
+	}
+	return value
+}
+
+func macroPercentToBasis(value float64) int64 {
+	return int64(math.Round(value * 100))
+}
+
+func macroIndexToBasis(value float64) int64 {
+	return int64(math.Round(value * 100))
+}
+
+func macroSectorIndex(focus string, index macroPriceIndex) float64 {
+	switch strings.ToUpper(strings.TrimSpace(focus)) {
+	case "FOOD":
+		return index.Food
+	case "ENERGY":
+		return index.Energy
+	case "GOODS":
+		return index.Goods
+	case "SERVICES":
+		return index.Services
+	default:
+		return index.Overall
+	}
+}
+
+func macroSeasonalBoost(profile macroProfile, quarterIndex int64) float64 {
+	if profile.SeasonalBoost == 0 || len(profile.SeasonalQuarters) == 0 {
+		return 0
+	}
+	quarterInYear := int(quarterIndex%4) + 1
+	for _, quarter := range profile.SeasonalQuarters {
+		if quarter == quarterInYear {
+			return profile.SeasonalBoost
+		}
+	}
+	return 0
+}
+
+func normalizeMacroWeights(weights macroCPIWeights) macroCPIWeights {
+	total := weights.Food + weights.Energy + weights.Goods + weights.Services
+	if total <= 0 {
+		return macroCPIWeights{Food: 0.30, Energy: 0.20, Goods: 0.30, Services: 0.20}
+	}
+	return macroCPIWeights{
+		Food:     weights.Food / total,
+		Energy:   weights.Energy / total,
+		Goods:    weights.Goods / total,
+		Services: weights.Services / total,
+	}
+}
+
+func (s *MarketStore) macroPriceIndexLocked() macroPriceIndex {
+	overall := macroIndexAccumulator{}
+	food := macroIndexAccumulator{}
+	energy := macroIndexAccumulator{}
+	goods := macroIndexAccumulator{}
+	services := macroIndexAccumulator{}
+	for assetID, asset := range s.assets {
+		base := s.basePrices[assetID]
+		if base <= 0 {
+			continue
+		}
+		price := s.lastPrices[assetID]
+		if price <= 0 {
+			price = base
+		}
+		ratio := float64(price) / float64(base)
+		overall.add(ratio)
+		switch strings.ToUpper(strings.TrimSpace(asset.Sector)) {
+		case "FOOD", "AGRI":
+			food.add(ratio)
+		case "ENERGY":
+			energy.add(ratio)
+		case "METAL", "CONS", "DEF", "BASIC", "INDUSTRIAL":
+			goods.add(ratio)
+		case "TECH", "FIN", "LOG", "BIO", "SERVICES":
+			services.add(ratio)
+		default:
+			goods.add(ratio)
+		}
+	}
+	overallIndex := overall.averageOrDefault(1.0)
+	return macroPriceIndex{
+		Food:     food.averageOrDefault(overallIndex),
+		Energy:   energy.averageOrDefault(overallIndex),
+		Goods:    goods.averageOrDefault(overallIndex),
+		Services: services.averageOrDefault(overallIndex),
+		Overall:  overallIndex,
+	}
+}
+
+type macroIndexAccumulator struct {
+	sum   float64
+	count int
+}
+
+func (acc *macroIndexAccumulator) add(value float64) {
+	acc.sum += value
+	acc.count++
+}
+
+func (acc *macroIndexAccumulator) averageOrDefault(fallback float64) float64 {
+	if acc.count == 0 {
+		return fallback
+	}
+	return acc.sum / float64(acc.count)
 }
 
 func (s *MarketStore) Seasons() []Season {
