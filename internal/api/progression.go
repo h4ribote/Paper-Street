@@ -27,6 +27,8 @@ const (
 	contractGovXP         = int64(3)
 	contractCorpName      = "OmniCorp"
 	contractGovName       = "Boros Federation"
+	contractCapexMinRank  = "Shark"
+	contractGovMinRank    = defaultRankName
 )
 
 type RankDefinition struct {
@@ -601,7 +603,7 @@ func contractTemplateForKind(kind contractKind, asset models.Asset) contractTemp
 		return contractTemplate{
 			title:        title,
 			assetID:      asset.ID,
-			minRank:      defaultRankName,
+			minRank:      contractGovMinRank,
 			deadline:     contractDeadlineShort,
 			baseRequired: contractGovBaseQty,
 			xpPerUnit:    contractGovXP,
@@ -617,7 +619,7 @@ func contractTemplateForKind(kind contractKind, asset models.Asset) contractTemp
 		return contractTemplate{
 			title:        title,
 			assetID:      asset.ID,
-			minRank:      "Shark",
+			minRank:      contractCapexMinRank,
 			deadline:     contractDeadlineLong,
 			baseRequired: contractCapexBaseQty,
 			xpPerUnit:    contractCapexXP,
