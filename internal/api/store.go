@@ -379,6 +379,8 @@ type MarketStore struct {
 	nextLiquidationID    int64
 	news                 []NewsItem
 	macroIndicators      []MacroIndicator
+	macroQuarterIndex    int64
+	macroWeekIndex       int64
 	seasons              []Season
 	regions              []Region
 	worldEvents          []WorldEvent
@@ -900,8 +902,21 @@ func (s *MarketStore) Candles(assetID int64, timeframe time.Duration, start, end
 
 func (s *MarketStore) MacroIndicators() []MacroIndicator {
 	now := time.Now().UTC()
+	quarterIndex := macroPeriodIndex(now, macroQuarterPeriod)
+	weekIndex := macroPeriodIndex(now, macroWeekPeriod)
+	s.mu.RLock()
+	if s.macroQuarterIndex == quarterIndex && s.macroWeekIndex == weekIndex && len(s.macroIndicators) > 0 {
+		indicators := make([]MacroIndicator, len(s.macroIndicators))
+		copy(indicators, s.macroIndicators)
+		s.mu.RUnlock()
+		return indicators
+	}
+	s.mu.RUnlock()
+
 	s.mu.Lock()
-	s.refreshMacroIndicatorsLocked(now)
+	if s.macroQuarterIndex != quarterIndex || s.macroWeekIndex != weekIndex || len(s.macroIndicators) == 0 {
+		s.refreshMacroIndicatorsLocked(now)
+	}
 	indicators := make([]MacroIndicator, len(s.macroIndicators))
 	copy(indicators, s.macroIndicators)
 	s.mu.Unlock()
@@ -910,6 +925,8 @@ func (s *MarketStore) MacroIndicators() []MacroIndicator {
 
 func (s *MarketStore) refreshMacroIndicatorsLocked(now time.Time) {
 	s.macroIndicators = s.buildMacroIndicatorsLocked(now)
+	s.macroQuarterIndex = macroPeriodIndex(now, macroQuarterPeriod)
+	s.macroWeekIndex = macroPeriodIndex(now, macroWeekPeriod)
 }
 
 func (s *MarketStore) buildMacroIndicatorsLocked(now time.Time) []MacroIndicator {
