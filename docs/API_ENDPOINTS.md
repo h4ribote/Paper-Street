@@ -74,7 +74,7 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
 *   `GET /user/missions`
     *   `GET /missions/daily` と同様に、当日のミッション進捗を返します。
 *   `POST /missions/{mission_id}/complete`
-    *   指定ミッションの達成を報告します。Body: `user_id` (任意)。
+    *   指定ミッションの達成を報告します（フロント側で達成検知後に送信）。Body: `user_id` (任意)。
 
 ## 6. Contracts (大口コントラクト)
 *   `GET /contracts`

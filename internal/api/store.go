@@ -871,14 +871,8 @@ func (s *MarketStore) applyExecutionLocked(exec engine.Execution) bool {
 	}
 	takerUser := s.users[taker.UserID]
 	makerUser := s.users[maker.UserID]
-	takerRank := rankDefinitionForXP(takerUser.XP)
-	makerRank := rankDefinitionForXP(makerUser.XP)
-	if def, ok := rankDefinitionByName(takerUser.Rank); ok {
-		takerRank = def
-	}
-	if def, ok := rankDefinitionByName(makerUser.Rank); ok {
-		makerRank = def
-	}
+	takerRank := resolveUserRank(takerUser)
+	makerRank := resolveUserRank(makerUser)
 	takerFeeBps10 := takerRank.TakerFeeBps10
 	makerFeeBps10 := makerRank.MakerFeeBps10
 	takerFee, err := calculateFeeBps10(cashDelta, takerFeeBps10)
@@ -896,7 +890,7 @@ func (s *MarketStore) applyExecutionLocked(exec engine.Execution) bool {
 		sellerFee = makerFee
 	}
 	if sellerFee >= cashDelta {
-		return false
+		sellerFee = cashDelta - 1
 	}
 	totalCost := cashDelta + buyerFee
 	if s.balances[buyerID][defaultCurrency] < totalCost {

@@ -6,9 +6,16 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/h4ribote/Paper-Street/internal/models"
 )
 
-const defaultRankName = "Shrimp"
+const (
+	defaultRankName   = "Shrimp"
+	secondsPerDay     = int64(24 * time.Hour / time.Second)
+	contractAssetOMNI = int64(101)
+	contractAssetAUR  = int64(103)
+)
 
 type RankDefinition struct {
 	ID                  int
@@ -123,6 +130,14 @@ func rankDefinitionForXP(xp int64) RankDefinition {
 	return current
 }
 
+func resolveUserRank(user models.User) RankDefinition {
+	rank := rankDefinitionForXP(user.XP)
+	if def, ok := rankDefinitionByName(user.Rank); ok {
+		rank = def
+	}
+	return rank
+}
+
 func nextRankXP(rank RankDefinition) int64 {
 	for _, candidate := range rankDefinitions {
 		if candidate.ID == rank.ID+1 {
@@ -167,10 +182,7 @@ func (s *MarketStore) fxFeeBpsForUserLocked(userID int64, baseFee int64) int64 {
 		return baseFee
 	}
 	user := s.users[userID]
-	rank := rankDefinitionForXP(user.XP)
-	if def, ok := rankDefinitionByName(user.Rank); ok {
-		rank = def
-	}
+	rank := resolveUserRank(user)
 	return applyDiscountBps(baseFee, rank.FXFeeDiscountBps)
 }
 
@@ -179,19 +191,13 @@ func (s *MarketStore) marginRateForUserLocked(userID int64, baseRate int64) int6
 		return baseRate
 	}
 	user := s.users[userID]
-	rank := rankDefinitionForXP(user.XP)
-	if def, ok := rankDefinitionByName(user.Rank); ok {
-		rank = def
-	}
+	rank := resolveUserRank(user)
 	return applyDiscountBps(baseRate, rank.InterestDiscountBps)
 }
 
 func (s *MarketStore) userRankInfoLocked(userID int64) UserRankInfo {
 	user := s.users[userID]
-	rank := rankDefinitionForXP(user.XP)
-	if def, ok := rankDefinitionByName(user.Rank); ok {
-		rank = def
-	}
+	rank := resolveUserRank(user)
 	return UserRankInfo{
 		UserID:              userID,
 		RankID:              rank.ID,
@@ -293,7 +299,7 @@ func (s *MarketStore) DailyMissions(date time.Time) []DailyMission {
 	s.mu.RUnlock()
 	catalog := dailyMissionCatalog()
 	missions := make([]DailyMission, 0, 6)
-	seed := date.Unix() / int64((24*time.Hour)/time.Second)
+	seed := date.Unix() / secondsPerDay
 	if seed < 0 {
 		seed = -seed
 	}
@@ -479,10 +485,7 @@ func (s *MarketStore) DeliverContract(userID, contractID, quantity int64) (Contr
 	}
 	s.ensureUserLocked(userID)
 	user := s.users[userID]
-	rankDef := rankDefinitionForXP(user.XP)
-	if def, ok := rankDefinitionByName(user.Rank); ok {
-		rankDef = def
-	}
+	rankDef := resolveUserRank(user)
 	minRankDef, ok := rankDefinitionByName(contract.MinRank)
 	if ok && rankDef.ID < minRankDef.ID {
 		s.mu.Unlock()
@@ -566,7 +569,7 @@ func (s *MarketStore) seedContracts(now time.Time) {
 		{
 			ID:            1,
 			Title:         "OmniCorp: Server Farm Expansion (Alpha)",
-			AssetID:       103,
+			AssetID:       contractAssetAUR,
 			TotalRequired: 5_000,
 			Delivered:     0,
 			PricePerUnit:  150,
@@ -577,7 +580,7 @@ func (s *MarketStore) seedContracts(now time.Time) {
 		{
 			ID:            2,
 			Title:         "Arcadia: Infrastructure Reserve Stockpile",
-			AssetID:       101,
+			AssetID:       contractAssetOMNI,
 			TotalRequired: 1_000,
 			Delivered:     0,
 			PricePerUnit:  120,
