@@ -177,11 +177,11 @@ func (s *MarketStore) accrueMarginFeesLocked(position MarginPosition, now int64)
 		return position
 	}
 	elapsed := now - position.lastFeeAt
-	accruals := elapsed / marginInterestTick
-	if accruals <= 0 {
+	accrualCount := elapsed / marginInterestTick
+	if accrualCount <= 0 {
 		return position
 	}
-	accrualMillis := accruals * marginInterestTick
+	accrualMillis := accrualCount * marginInterestTick
 	rate := s.marginBorrowRateLocked(position)
 	if rate <= 0 || accrualMillis <= 0 {
 		position.lastFeeAt += accrualMillis

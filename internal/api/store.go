@@ -915,6 +915,7 @@ func (s *MarketStore) applyExecutionLocked(exec engine.Execution) bool {
 		}
 	}
 	if buyerOrder.Leverage > marginLeverageMax || sellerOrder.Leverage > marginLeverageMax {
+		log.Printf("rejecting execution with leverage above %dx (buyer=%d seller=%d)", marginLeverageMax, buyerOrder.Leverage, sellerOrder.Leverage)
 		return false
 	}
 	buyerLeverage := normalizeLeverage(buyerOrder.Leverage)
