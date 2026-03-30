@@ -25,6 +25,8 @@ const (
 	contractGovBaseQty    = int64(2_000)
 	contractCapexXP       = int64(5)
 	contractGovXP         = int64(3)
+	contractCorpName      = "OmniCorp"
+	contractGovName       = "Boros Federation"
 )
 
 type RankDefinition struct {
@@ -592,9 +594,9 @@ func (s *MarketStore) pickContractAssetLocked(kind contractKind) models.Asset {
 func contractTemplateForKind(kind contractKind, asset models.Asset) contractTemplate {
 	switch kind {
 	case contractKindProcurement:
-		title := fmt.Sprintf("Boros Federation: %s Strategic Reserve", asset.Name)
+		title := fmt.Sprintf("%s: %s Strategic Reserve", contractGovName, asset.Name)
 		if strings.TrimSpace(asset.Name) == "" {
-			title = "Boros Federation: Strategic Reserve Procurement"
+			title = fmt.Sprintf("%s: Strategic Reserve Procurement", contractGovName)
 		}
 		return contractTemplate{
 			title:        title,
@@ -605,12 +607,12 @@ func contractTemplateForKind(kind contractKind, asset models.Asset) contractTemp
 			xpPerUnit:    contractGovXP,
 		}
 	default:
-		title := fmt.Sprintf("OmniCorp: %s Capacity Expansion", asset.Name)
+		title := fmt.Sprintf("%s: %s Capacity Expansion", contractCorpName, asset.Name)
 		if strings.TrimSpace(asset.Name) == "" {
-			title = "OmniCorp: Capacity Expansion"
+			title = fmt.Sprintf("%s: Capacity Expansion", contractCorpName)
 		}
 		if asset.ID == contractAssetAUR {
-			title = "OmniCorp: Server Farm Expansion (Alpha)"
+			title = fmt.Sprintf("%s: Server Farm Expansion (Alpha)", contractCorpName)
 		}
 		return contractTemplate{
 			title:        title,
