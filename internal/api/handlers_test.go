@@ -215,6 +215,52 @@ func TestHandleOrderBookDepthLimit(t *testing.T) {
 	}
 }
 
+func TestHandleOrderBookMethodNotAllowed(t *testing.T) {
+	store := NewMarketStore()
+	apiKeys := auth.NewAPIKeyCache()
+	if err := apiKeys.AddHex(testAPIKeyUser1); err != nil {
+		t.Fatalf("failed to add api key: %v", err)
+	}
+	eng := engine.NewEngine(store)
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store))
+	defer server.Close()
+
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/market/orderbook/101", nil)
+	if err != nil {
+		t.Fatalf("failed to build request: %v", err)
+	}
+	req.Header.Set(apiKeyHeader, testAPIKeyUser1)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status 405, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandleHealthMethodNotAllowed(t *testing.T) {
+	store := NewMarketStore()
+	apiKeys := auth.NewAPIKeyCache()
+	eng := engine.NewEngine(store)
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store))
+	defer server.Close()
+
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/health", nil)
+	if err != nil {
+		t.Fatalf("failed to build request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status 405, got %d", resp.StatusCode)
+	}
+}
+
 func submitOrder(t *testing.T, baseURL, apiKey string, order orderRequest) {
 	t.Helper()
 	payload, err := json.Marshal(order)

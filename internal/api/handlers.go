@@ -43,6 +43,10 @@ const (
 )
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
 	respondJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -158,6 +162,10 @@ func (s *Server) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleOrderBook(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
 	id, err := parseID(strings.TrimPrefix(r.URL.Path, "/market/orderbook/"))
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid asset id")

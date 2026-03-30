@@ -7,16 +7,20 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
 *   **APIキー認証**:
     *   APIキーは10バイトのバイナリを20文字の16進数で表現します。
     *   HTTPヘッダー `X-API-Key` に20文字の16進数キーを指定します。
+*   `GET /health`
+    *   稼働確認用のヘルスチェックです（認証不要）。
 *   `GET /auth/login`
     *   Discord OAuth2 ログインプロセスを開始します。
+    *   現行の簡易実装では `username` クエリ (任意) を受け取り、APIキーを即時発行します。
 *   `GET /auth/callback`
     *   Discord からのコールバックを受け取り、APIキー(20文字の16進数)を発行します。
+    *   現行の簡易実装では `username` クエリ (任意) を受け取り、APIキーを即時発行します。
 *   `POST /auth/refresh`
     *   APIキーをローテーションし、新しいキーを発行します。
 *   `POST /auth/logout`
     *   ログアウトし、APIキーを無効化します。
 *   `GET /users/me`
-    *   現在のユーザー情報を取得します。
+    *   現在のユーザー情報を取得します。`user_id` を指定した場合はそのユーザーを返します。
 
 ## 2. Market Data (市場データ)
 *   `GET /assets`
@@ -39,11 +43,14 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
 ## 3. Trading & Orders (取引・注文)
 *   `POST /orders`
     *   新規注文を発注します。
-    *   Body: `asset_id`, `side` (BUY/SELL), `type` (MARKET/LIMIT/STOP), `quantity`, `price` (LIMITの場合)。
+    *   Body: `asset_id`, `side` (BUY/SELL), `type` (MARKET/LIMIT/STOP/STOP_LIMIT), `quantity`。
+    *   `price` は LIMIT/STOP_LIMIT の場合に必須、`stop_price` は STOP/STOP_LIMIT の場合に必須です。
+    *   `user_id` は任意（APIキーに紐づくユーザーがある場合は省略可能）です。
 *   `DELETE /orders/{order_id}`
     *   指定した注文をキャンセルします。`asset_id` クエリパラメータが必須です。
 *   `GET /orders`
-    *   注文一覧を取得します。ステータス（OPEN/FILLED/CANCELLED）でフィルタリング可能です。`limit` と `offset` でページネーションできます。
+    *   注文一覧を取得します。ステータス（OPEN/PARTIAL/FILLED/CANCELLED/REJECTED）でフィルタリング可能です。
+    *   `asset_id` と `user_id` でも絞り込みできます。`limit` と `offset` でページネーションできます。
 *   `GET /orders/{order_id}`
     *   注文の詳細情報を取得します。`asset_id` クエリパラメータが必須です。
 
@@ -55,9 +62,9 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
 *   `GET /portfolio/positions`
     *   現在の建玉（信用ポジション）一覧を取得します。
 *   `GET /portfolio/history`
-    *   取引履歴、入出金履歴、配当などのログを取得します。
+    *   取引の約定履歴を取得します。
 *   `GET /portfolio/performance`
-    *   資産推移グラフ用データを取得します。
+    *   現在時点の資産評価スナップショットを取得します。
 
 ## 5. Liquidity Pools & FX (流動性プール・FX)
 *   `GET /pools`
@@ -66,12 +73,14 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
     *   指定したプールの詳細情報（流動性、手数料、現在のTickなど）を取得します。
 *   `POST /pools/{pool_id}/positions`
     *   流動性を提供し、ポジションを作成します（Concentrated Liquidity）。
+    *   Body: `base_amount`, `quote_amount`, `lower_tick`, `upper_tick`, `user_id` (任意)。
 *   `GET /pools/positions`
     *   ユーザーの流動性ポジション一覧を取得します。
 *   `DELETE /pools/positions/{position_id}`
     *   流動性を解除し、手数料と元本を回収します。
 *   `POST /pools/{pool_id}/swap`
     *   プールを介して通貨のスワップを行います。
+    *   Body: `from_currency`, `to_currency`, `amount`, `user_id` (任意)。
 
 ## 6. Margin Pools (信用取引プール)
 *   `GET /margin/pools`
@@ -80,8 +89,10 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
     *   プールの詳細（金利、在庫状況）を取得します。
 *   `POST /margin/pools/{pool_id}/supply`
     *   資金または株式を供給し、金利収入を得ます。
+    *   Body: `cash_amount`, `asset_amount`, `user_id` (任意)。
 *   `POST /margin/pools/{pool_id}/withdraw`
     *   供給した資金または株式を引き出します。
+    *   Body: `cash_amount`, `asset_amount`, `user_id` (任意)。
 
 ## 7. World Meta & Events (ゲーム世界情報)
 *   `GET /world/seasons/current`
@@ -95,14 +106,14 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
 
 ## 8. Leaderboard (ランキング)
 *   `GET /leaderboard`
-    *   資産ランキングを取得します。シーズン別、通算などのフィルタが可能です。
+    *   資産ランキングを取得します。`limit` で件数を指定できます（デフォルト20）。
 
 ## 9. Indices (指数)
 *   `POST /indices/{asset_id}/create`
     *   Index（指数）の構成銘柄（現物バスケット）を拠出し、Indexユニットを発行（Creation）します。
     *   **すべてのプレイヤーおよびBotが利用可能です。**
-    *   Body: `quantity` (作成するIndexの単位数。デフォルトは1)。
+    *   Body: `quantity` (作成するIndexの単位数。デフォルトは1)、`user_id` (任意)。
 *   `POST /indices/{asset_id}/redeem`
     *   保有しているIndexユニットを返還（償還）し、構成銘柄（現物バスケット）を受け取ります（Redemption）。
     *   **すべてのプレイヤーおよびBotが利用可能です。**
-    *   Body: `quantity` (償還するIndexの単位数。デフォルトは1)。
+    *   Body: `quantity` (償還するIndexの単位数。デフォルトは1)、`user_id` (任意)。
