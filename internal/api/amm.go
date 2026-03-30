@@ -132,7 +132,7 @@ func computePoolSwap(pool LiquidityPool, positions []PoolPosition, from, to stri
 			if nextIndex >= len(snapshot.ticks) {
 				denom := 1/currentSqrt - remaining/liquidity
 				if denom <= 0 {
-					return PoolSwapResult{}, LiquidityPool{}, errors.New("insufficient liquidity range")
+					return PoolSwapResult{}, LiquidityPool{}, errors.New("insufficient liquidity to complete swap at current tick range")
 				}
 				targetSqrt := 1 / denom
 				amountOut += liquidity * (targetSqrt - currentSqrt)
@@ -149,7 +149,7 @@ func computePoolSwap(pool LiquidityPool, positions []PoolPosition, from, to stri
 			if remaining <= amountToNext {
 				denom := 1/currentSqrt - remaining/liquidity
 				if denom <= 0 {
-					return PoolSwapResult{}, LiquidityPool{}, errors.New("insufficient liquidity range")
+					return PoolSwapResult{}, LiquidityPool{}, errors.New("insufficient liquidity to complete swap at current tick range")
 				}
 				targetSqrt := 1 / denom
 				amountOut += liquidity * (targetSqrt - currentSqrt)
@@ -175,7 +175,7 @@ func computePoolSwap(pool LiquidityPool, positions []PoolPosition, from, to stri
 			if prevIndex < 0 {
 				targetSqrt := currentSqrt - remaining/liquidity
 				if targetSqrt <= 0 {
-					return PoolSwapResult{}, LiquidityPool{}, errors.New("insufficient liquidity range")
+					return PoolSwapResult{}, LiquidityPool{}, errors.New("insufficient liquidity to complete swap at current tick range")
 				}
 				amountOut += liquidity * (1/targetSqrt - 1/currentSqrt)
 				currentSqrt = targetSqrt
@@ -191,7 +191,7 @@ func computePoolSwap(pool LiquidityPool, positions []PoolPosition, from, to stri
 			if remaining <= amountToPrev {
 				targetSqrt := currentSqrt - remaining/liquidity
 				if targetSqrt <= 0 {
-					return PoolSwapResult{}, LiquidityPool{}, errors.New("insufficient liquidity range")
+					return PoolSwapResult{}, LiquidityPool{}, errors.New("insufficient liquidity to complete swap at current tick range")
 				}
 				amountOut += liquidity * (1/targetSqrt - 1/currentSqrt)
 				currentSqrt = targetSqrt

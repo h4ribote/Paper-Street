@@ -26,8 +26,8 @@ func TestSwapPoolTickMath(t *testing.T) {
 
 	fee := amountIn * poolFeeLowBps / bpsDenominator
 	amountAfterFee := float64(amountIn - fee)
-	expectedSqrt := 1 / (1 - amountAfterFee/float64(pool.Liquidity))
-	expectedOut := float64(pool.Liquidity) * (expectedSqrt - 1)
+	expectedTargetSqrt := 1 / (1 - amountAfterFee/float64(pool.Liquidity))
+	expectedOut := float64(pool.Liquidity) * (expectedTargetSqrt - 1)
 	expectedOutInt := int64(math.Floor(expectedOut))
 
 	if result.AmountOut != expectedOutInt {
