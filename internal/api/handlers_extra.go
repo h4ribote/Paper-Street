@@ -42,6 +42,11 @@ type marginPoolRequest struct {
 	AssetAmount int64 `json:"asset_amount"`
 }
 
+type marginTopUpRequest struct {
+	UserID int64 `json:"user_id"`
+	Amount int64 `json:"amount"`
+}
+
 type indexActionRequest struct {
 	UserID   int64 `json:"user_id"`
 	Quantity int64 `json:"quantity"`
@@ -559,6 +564,78 @@ func (s *Server) handleMarginPoolByID(w http.ResponseWriter, r *http.Request) {
 	default:
 		respondError(w, http.StatusNotFound, "unknown margin action")
 	}
+}
+
+func (s *Server) handleMarginPositions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if s.Store == nil {
+		respondJSON(w, http.StatusOK, []MarginPosition{})
+		return
+	}
+	userID := parseUserID(r)
+	if userID == 0 {
+		userID = s.userIDFromRequest(r)
+	}
+	respondJSON(w, http.StatusOK, s.Store.MarginPositions(userID))
+}
+
+func (s *Server) handleMarginPositionByID(w http.ResponseWriter, r *http.Request) {
+	positionID, segments, err := parsePathID(r.URL.Path, "/margin/positions/")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid position id")
+		return
+	}
+	if len(segments) == 0 {
+		respondError(w, http.StatusNotFound, "unknown margin position action")
+		return
+	}
+	switch segments[0] {
+	case "topup":
+		if r.Method != http.MethodPost {
+			respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		if s.Store == nil {
+			respondError(w, http.StatusInternalServerError, "store unavailable")
+			return
+		}
+		var payload marginTopUpRequest
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			respondError(w, http.StatusBadRequest, "invalid json body")
+			return
+		}
+		userID := payload.UserID
+		if userID == 0 {
+			userID = s.userIDFromRequest(r)
+		}
+		position, err := s.Store.AddMargin(userID, positionID, payload.Amount)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		respondJSON(w, http.StatusOK, position)
+	default:
+		respondError(w, http.StatusNotFound, "unknown margin position action")
+	}
+}
+
+func (s *Server) handleMarginLiquidations(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if s.Store == nil {
+		respondJSON(w, http.StatusOK, []MarginLiquidation{})
+		return
+	}
+	userID := parseUserID(r)
+	if userID == 0 {
+		userID = s.userIDFromRequest(r)
+	}
+	respondJSON(w, http.StatusOK, s.Store.MarginLiquidations(userID))
 }
 
 func (s *Server) handleCurrentSeason(w http.ResponseWriter, r *http.Request) {

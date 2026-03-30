@@ -154,40 +154,44 @@ type AssetFilter struct {
 }
 
 type MarketStore struct {
-	mu               sync.RWMutex
-	assets           map[int64]models.Asset
-	basePrices       map[int64]int64
-	users            map[int64]models.User
-	orders           map[int64]*engine.Order
-	executions       []engine.Execution
-	balances         map[int64]map[string]int64
-	positions        map[int64]map[int64]int64
-	apiKeyToUser     map[string]int64
-	lastPrices       map[int64]int64
-	prevPrices       map[int64]int64
-	volumes          map[int64]int64
-	currencies       map[string]struct{}
-	pools            map[int64]LiquidityPool
-	poolPositions    map[int64]PoolPosition
-	marginPools      map[int64]MarginPool
-	marginProviders  map[marginProviderKey]MarginProviderPosition
-	indexes          map[int64]IndexDefinition
-	dailyMissions    map[string][]DailyMission
-	missionProgress  map[int64]map[string]*DailyMissionProgress
-	contracts        map[int64]*Contract
-	contractProgress map[int64]map[int64]int64
-	nextUserID       int64
-	nextExecutionID  int64
-	nextNewsID       int64
-	nextPoolPosID    int64
-	nextMarginPosID  int64
-	news             []NewsItem
-	macroIndicators  []MacroIndicator
-	seasons          []Season
-	regions          []Region
-	worldEvents      []WorldEvent
-	queries          *db.Queries
-	currencyIDs      map[string]int64
+	mu                   sync.RWMutex
+	assets               map[int64]models.Asset
+	basePrices           map[int64]int64
+	users                map[int64]models.User
+	orders               map[int64]*engine.Order
+	executions           []engine.Execution
+	balances             map[int64]map[string]int64
+	positions            map[int64]map[int64]int64
+	apiKeyToUser         map[string]int64
+	lastPrices           map[int64]int64
+	prevPrices           map[int64]int64
+	volumes              map[int64]int64
+	currencies           map[string]struct{}
+	pools                map[int64]LiquidityPool
+	poolPositions        map[int64]PoolPosition
+	marginPools          map[int64]MarginPool
+	marginProviders      map[marginProviderKey]MarginProviderPosition
+	marginPositions      map[int64]MarginPosition
+	marginLiquidations   []MarginLiquidation
+	indexes              map[int64]IndexDefinition
+	dailyMissions        map[string][]DailyMission
+	missionProgress      map[int64]map[string]*DailyMissionProgress
+	contracts            map[int64]*Contract
+	contractProgress     map[int64]map[int64]int64
+	nextUserID           int64
+	nextExecutionID      int64
+	nextNewsID           int64
+	nextPoolPosID        int64
+	nextMarginPosID      int64
+	nextMarginPositionID int64
+	nextLiquidationID    int64
+	news                 []NewsItem
+	macroIndicators      []MacroIndicator
+	seasons              []Season
+	regions              []Region
+	worldEvents          []WorldEvent
+	queries              *db.Queries
+	currencyIDs          map[string]int64
 }
 
 // NewMarketStore builds an in-memory store. newMarketStore only errors when DB queries are supplied.
@@ -206,28 +210,30 @@ func NewMarketStoreWithDB(ctx context.Context, queries *db.Queries) (*MarketStor
 func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, error) {
 	now := time.Now().UTC()
 	store := &MarketStore{
-		assets:           make(map[int64]models.Asset),
-		basePrices:       make(map[int64]int64),
-		users:            make(map[int64]models.User),
-		orders:           make(map[int64]*engine.Order),
-		balances:         make(map[int64]map[string]int64),
-		positions:        make(map[int64]map[int64]int64),
-		apiKeyToUser:     make(map[string]int64),
-		lastPrices:       make(map[int64]int64),
-		prevPrices:       make(map[int64]int64),
-		volumes:          make(map[int64]int64),
-		currencies:       map[string]struct{}{defaultCurrency: {}},
-		pools:            make(map[int64]LiquidityPool),
-		poolPositions:    make(map[int64]PoolPosition),
-		marginPools:      make(map[int64]MarginPool),
-		marginProviders:  make(map[marginProviderKey]MarginProviderPosition),
-		indexes:          make(map[int64]IndexDefinition),
-		dailyMissions:    make(map[string][]DailyMission),
-		missionProgress:  make(map[int64]map[string]*DailyMissionProgress),
-		contracts:        make(map[int64]*Contract),
-		contractProgress: make(map[int64]map[int64]int64),
-		nextUserID:       userIDSeed,
-		nextNewsID:       0,
+		assets:             make(map[int64]models.Asset),
+		basePrices:         make(map[int64]int64),
+		users:              make(map[int64]models.User),
+		orders:             make(map[int64]*engine.Order),
+		balances:           make(map[int64]map[string]int64),
+		positions:          make(map[int64]map[int64]int64),
+		apiKeyToUser:       make(map[string]int64),
+		lastPrices:         make(map[int64]int64),
+		prevPrices:         make(map[int64]int64),
+		volumes:            make(map[int64]int64),
+		currencies:         map[string]struct{}{defaultCurrency: {}},
+		pools:              make(map[int64]LiquidityPool),
+		poolPositions:      make(map[int64]PoolPosition),
+		marginPools:        make(map[int64]MarginPool),
+		marginProviders:    make(map[marginProviderKey]MarginProviderPosition),
+		marginPositions:    make(map[int64]MarginPosition),
+		marginLiquidations: make([]MarginLiquidation, 0),
+		indexes:            make(map[int64]IndexDefinition),
+		dailyMissions:      make(map[string][]DailyMission),
+		missionProgress:    make(map[int64]map[string]*DailyMissionProgress),
+		contracts:          make(map[int64]*Contract),
+		contractProgress:   make(map[int64]map[int64]int64),
+		nextUserID:         userIDSeed,
+		nextNewsID:         0,
 		macroIndicators: []MacroIndicator{
 			{Country: "Neo Venice", Type: "GDP_GROWTH", Value: macroGDPGrowth, PublishedAt: now.Add(-24 * time.Hour).UnixMilli()},
 			{Country: "Arcadia", Type: "CPI", Value: macroCPI, PublishedAt: now.Add(-12 * time.Hour).UnixMilli()},
@@ -316,6 +322,7 @@ func (s *MarketStore) EnqueueExecution(execution engine.Execution) {
 	}
 	s.lastPrices[execution.AssetID] = execution.Price
 	s.volumes[execution.AssetID] += execution.Quantity
+	s.checkMarginLiquidationsLocked(execution.AssetID)
 	buyerID, sellerID := s.executionParties(taker, maker)
 	buyerCash := s.balances[buyerID][defaultCurrency]
 	sellerCash := s.balances[sellerID][defaultCurrency]
@@ -859,12 +866,16 @@ func (s *MarketStore) applyExecutionLocked(exec engine.Execution) bool {
 		return false
 	}
 	var buyerID, sellerID int64
+	buyerOrder := taker
+	sellerOrder := maker
 	if taker.Side == engine.SideBuy {
 		buyerID = taker.UserID
 		sellerID = maker.UserID
 	} else {
 		buyerID = maker.UserID
 		sellerID = taker.UserID
+		buyerOrder = maker
+		sellerOrder = taker
 	}
 	if buyerID == 0 || sellerID == 0 {
 		return false
@@ -903,16 +914,86 @@ func (s *MarketStore) applyExecutionLocked(exec engine.Execution) bool {
 			sellerFee = cashDelta - minSellerProceeds
 		}
 	}
-	totalCost := cashDelta + buyerFee
-	if s.balances[buyerID][defaultCurrency] < totalCost {
+	buyerLeverage := normalizeLeverage(buyerOrder.Leverage)
+	sellerLeverage := normalizeLeverage(sellerOrder.Leverage)
+	buyerIsMargin := buyerLeverage > 1
+	sellerIsMargin := sellerLeverage > 1
+	var buyerMarginUsed int64
+	var sellerMarginUsed int64
+	if buyerIsMargin {
+		buyerMarginUsed, err = requiredMargin(cashDelta, buyerLeverage)
+		if err != nil {
+			return false
+		}
+	}
+	if sellerIsMargin {
+		sellerMarginUsed, err = requiredMargin(cashDelta, sellerLeverage)
+		if err != nil {
+			return false
+		}
+	}
+	buyerBorrowed := int64(0)
+	if buyerIsMargin && cashDelta > buyerMarginUsed {
+		buyerBorrowed = cashDelta - buyerMarginUsed
+	}
+	sellerBorrowed := int64(0)
+	if sellerIsMargin {
+		sellerBorrowed = exec.Quantity
+	}
+	if buyerIsMargin {
+		if err := s.canBorrowMarginLocked(exec.AssetID, engine.SideBuy, buyerBorrowed); err != nil {
+			return false
+		}
+	}
+	if sellerIsMargin {
+		if err := s.canBorrowMarginLocked(exec.AssetID, engine.SideSell, sellerBorrowed); err != nil {
+			return false
+		}
+	}
+	if buyerIsMargin {
+		requiredCash := buyerMarginUsed + buyerFee
+		if s.balances[buyerID][defaultCurrency] < requiredCash {
+			return false
+		}
+	} else {
+		totalCost := cashDelta + buyerFee
+		if s.balances[buyerID][defaultCurrency] < totalCost {
+			return false
+		}
+	}
+	if sellerIsMargin && s.balances[sellerID][defaultCurrency] < sellerMarginUsed {
 		return false
 	}
-	s.balances[buyerID][defaultCurrency] -= totalCost
+	if buyerIsMargin {
+		s.balances[buyerID][defaultCurrency] -= buyerMarginUsed + buyerFee
+	} else {
+		s.balances[buyerID][defaultCurrency] -= cashDelta + buyerFee
+	}
 	if cashDelta > sellerFee {
 		s.balances[sellerID][defaultCurrency] += cashDelta - sellerFee
 	}
-	s.positions[buyerID][exec.AssetID] += exec.Quantity
-	s.positions[sellerID][exec.AssetID] -= exec.Quantity
+	if sellerIsMargin {
+		s.balances[sellerID][defaultCurrency] -= sellerMarginUsed
+	}
+	if !buyerIsMargin {
+		s.positions[buyerID][exec.AssetID] += exec.Quantity
+	}
+	if !sellerIsMargin {
+		s.positions[sellerID][exec.AssetID] -= exec.Quantity
+	}
+	now := time.Now().UTC().UnixMilli()
+	if buyerIsMargin {
+		if err := s.applyMarginBorrowLocked(exec.AssetID, engine.SideBuy, buyerBorrowed); err != nil {
+			return false
+		}
+		s.openMarginPositionLocked(buyerID, exec.AssetID, engine.SideBuy, exec.Quantity, exec.Price, buyerMarginUsed, buyerLeverage, buyerBorrowed, now)
+	}
+	if sellerIsMargin {
+		if err := s.applyMarginBorrowLocked(exec.AssetID, engine.SideSell, sellerBorrowed); err != nil {
+			return false
+		}
+		s.openMarginPositionLocked(sellerID, exec.AssetID, engine.SideSell, exec.Quantity, exec.Price, sellerMarginUsed, sellerLeverage, sellerBorrowed, now)
+	}
 	return true
 }
 

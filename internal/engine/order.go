@@ -38,6 +38,7 @@ type Order struct {
 	Remaining int64       `json:"remaining"`
 	Price     int64       `json:"price,omitempty"`
 	StopPrice int64       `json:"stop_price,omitempty"`
+	Leverage  int64       `json:"leverage,omitempty"`
 	Status    OrderStatus `json:"status"`
 	CreatedAt time.Time   `json:"created_at"`
 	UpdatedAt time.Time   `json:"updated_at"`
