@@ -293,7 +293,10 @@ func (s *MarketStore) DailyMissions(date time.Time) []DailyMission {
 	s.mu.RUnlock()
 	catalog := dailyMissionCatalog()
 	missions := make([]DailyMission, 0, 6)
-	seed := date.Year()*1000 + date.YearDay()
+	seed := date.Unix() / int64((24*time.Hour)/time.Second)
+	if seed < 0 {
+		seed = -seed
+	}
 	grades := []string{"C", "B", "A"}
 	for _, grade := range grades {
 		list := catalog[grade]
@@ -302,7 +305,7 @@ func (s *MarketStore) DailyMissions(date time.Time) []DailyMission {
 		}
 		offset := 0
 		if len(list) > 1 {
-			offset = seed % len(list)
+			offset = int(seed % int64(len(list)))
 		}
 		first := list[offset]
 		second := list[(offset+1)%len(list)]

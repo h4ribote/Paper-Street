@@ -864,6 +864,8 @@ func (s *MarketStore) applyExecutionLocked(exec engine.Execution) bool {
 	}
 	s.ensureUserLocked(buyerID)
 	s.ensureUserLocked(sellerID)
+	s.ensureUserLocked(taker.UserID)
+	s.ensureUserLocked(maker.UserID)
 	s.ensureAssetLocked(exec.AssetID)
 	cashDelta, ok := safeMultiplyInt64(exec.Price, exec.Quantity)
 	if !ok {
