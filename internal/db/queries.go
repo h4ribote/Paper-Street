@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -157,7 +158,13 @@ func (q *Queries) UpsertAsset(ctx context.Context, asset models.Asset, basePrice
 		return errors.New("asset id required")
 	}
 	if asset.Symbol == "" {
-		asset.Symbol = strings.ToUpper(strings.TrimSpace(asset.Name))
+		if strings.TrimSpace(asset.Name) != "" {
+			asset.Symbol = strings.ToUpper(strings.TrimSpace(asset.Name))
+		}
+	}
+	// Fallback for ticker so inserts don't violate NOT NULL/UNIQUE constraints.
+	if asset.Symbol == "" {
+		asset.Symbol = fmt.Sprintf("ASSET-%d", asset.ID)
 	}
 	if asset.Type == "" {
 		asset.Type = "STOCK"

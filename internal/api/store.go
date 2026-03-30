@@ -182,8 +182,8 @@ type MarketStore struct {
 	currencyIDs     map[string]int64
 }
 
+// NewMarketStore builds an in-memory store. newMarketStore only errors when DB queries are supplied.
 func NewMarketStore() *MarketStore {
-	// newMarketStore only errors when DB queries are supplied.
 	store, _ := newMarketStore(context.Background(), nil)
 	return store
 }
@@ -273,6 +273,7 @@ func (s *MarketStore) EnqueueOrder(order *engine.Order) {
 	userSnapshot := user
 	assetSnapshot := asset
 	s.mu.Unlock()
+	// Persistence is best-effort; in-memory state remains authoritative during runtime.
 	s.persistOrder(cloned, userSnapshot, assetSnapshot, basePrice)
 }
 
@@ -310,6 +311,7 @@ func (s *MarketStore) EnqueueExecution(execution engine.Execution) {
 	buyerUser := s.users[buyerID]
 	sellerUser := s.users[sellerID]
 	s.mu.Unlock()
+	// Persistence is best-effort; in-memory state remains authoritative during runtime.
 	s.persistExecution(executionSnapshot{
 		Execution: execution,
 		Taker:     taker,
