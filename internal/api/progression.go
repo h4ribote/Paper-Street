@@ -11,10 +11,12 @@ import (
 )
 
 const (
-	defaultRankName   = "Shrimp"
-	secondsPerDay     = int64(24 * time.Hour / time.Second)
-	contractAssetOMNI = int64(101)
-	contractAssetAUR  = int64(103)
+	defaultRankName       = "Shrimp"
+	secondsPerDay         = int64(24 * time.Hour / time.Second)
+	contractAssetOMNI     = int64(101)
+	contractAssetAUR      = int64(103)
+	contractDeadlineLong  = 72 * time.Hour
+	contractDeadlineShort = 48 * time.Hour
 )
 
 type RankDefinition struct {
@@ -574,7 +576,7 @@ func (s *MarketStore) seedContracts(now time.Time) {
 			Delivered:     0,
 			PricePerUnit:  150,
 			MinRank:       "Shark",
-			DeadlineAt:    now.Add(72 * time.Hour).UnixMilli(),
+			DeadlineAt:    now.Add(contractDeadlineLong).UnixMilli(),
 			XPPerUnit:     5,
 		},
 		{
@@ -585,7 +587,7 @@ func (s *MarketStore) seedContracts(now time.Time) {
 			Delivered:     0,
 			PricePerUnit:  120,
 			MinRank:       "Shrimp",
-			DeadlineAt:    now.Add(48 * time.Hour).UnixMilli(),
+			DeadlineAt:    now.Add(contractDeadlineShort).UnixMilli(),
 			XPPerUnit:     2,
 		},
 	}

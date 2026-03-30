@@ -25,6 +25,7 @@ const (
 	macroGDPGrowth     = int64(312) // 3.12%
 	macroCPI           = int64(215) // 2.15%
 	macroInterestRate  = int64(175) // 1.75%
+	minSellerProceeds  = int64(1)
 )
 
 func stringsEqualFold(a, b string) bool {
@@ -890,7 +891,11 @@ func (s *MarketStore) applyExecutionLocked(exec engine.Execution) bool {
 		sellerFee = makerFee
 	}
 	if sellerFee >= cashDelta {
-		sellerFee = cashDelta - 1
+		if cashDelta <= minSellerProceeds {
+			sellerFee = 0
+		} else {
+			sellerFee = cashDelta - minSellerProceeds
+		}
 	}
 	totalCost := cashDelta + buyerFee
 	if s.balances[buyerID][defaultCurrency] < totalCost {
