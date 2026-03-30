@@ -12,6 +12,7 @@ import (
 
 	"github.com/h4ribote/Paper-Street/internal/api"
 	"github.com/h4ribote/Paper-Street/internal/auth"
+	"github.com/h4ribote/Paper-Street/internal/db"
 	"github.com/h4ribote/Paper-Street/internal/engine"
 )
 
@@ -21,7 +22,7 @@ func main() {
 		port = "8000"
 	}
 
-	store := api.NewMarketStore()
+	store := createStore()
 	engine := engine.NewEngine(store)
 	apiKeys := loadAPIKeys()
 	handler := api.NewRouter(engine, apiKeys, store)
@@ -50,6 +51,28 @@ func main() {
 	if err := engine.Shutdown(ctx); err != nil {
 		log.Printf("engine shutdown error: %v", err)
 	}
+}
+
+func createStore() *api.MarketStore {
+	dsn := strings.TrimSpace(os.Getenv("DATABASE_DSN"))
+	if dsn == "" {
+		return api.NewMarketStore()
+	}
+	conn, err := db.NewConnection(dsn)
+	if err != nil {
+		log.Fatalf("db connection error: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := conn.Ping(ctx); err != nil {
+		log.Fatalf("db ping error: %v", err)
+	}
+	queries := db.NewQueries(conn)
+	store, err := api.NewMarketStoreWithDB(ctx, queries)
+	if err != nil {
+		log.Fatalf("db store error: %v", err)
+	}
+	return store
 }
 
 func loadAPIKeys() *auth.APIKeyCache {

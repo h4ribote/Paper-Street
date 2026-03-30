@@ -3,12 +3,14 @@ package api
 import (
 	"context"
 	"fmt"
+	"log"
 	"math"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/h4ribote/Paper-Street/internal/db"
 	"github.com/h4ribote/Paper-Street/internal/engine"
 	"github.com/h4ribote/Paper-Street/internal/models"
 )
@@ -18,6 +20,7 @@ const (
 	defaultCashBalance = int64(1_000_000_000)
 	defaultAltBalance  = int64(100_000_000) // starter balance for non-default currencies
 	defaultAssetPrice  = int64(10_000)
+	dbOperationTimeout = 2 * time.Second
 	userIDSeed         = int64(9_999)
 	macroGDPGrowth     = int64(312) // 3.12%
 	macroCPI           = int64(215) // 2.15%
@@ -175,9 +178,24 @@ type MarketStore struct {
 	seasons         []Season
 	regions         []Region
 	worldEvents     []WorldEvent
+	queries         *db.Queries
+	currencyIDs     map[string]int64
 }
 
+// NewMarketStore builds an in-memory store. newMarketStore only errors when DB queries are supplied.
 func NewMarketStore() *MarketStore {
+	store, _ := newMarketStore(context.Background(), nil)
+	return store
+}
+
+func NewMarketStoreWithDB(ctx context.Context, queries *db.Queries) (*MarketStore, error) {
+	if queries == nil {
+		return nil, fmt.Errorf("db queries required")
+	}
+	return newMarketStore(ctx, queries)
+}
+
+func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, error) {
 	now := time.Now().UTC()
 	store := &MarketStore{
 		assets:          make(map[int64]models.Asset),
@@ -213,13 +231,30 @@ func NewMarketStore() *MarketStore {
 		worldEvents: []WorldEvent{
 			{ID: 1, Name: "Central Bank Briefing", Description: "Liquidity outlook update", StartsAt: now.Add(2 * time.Hour).UnixMilli(), EndsAt: now.Add(3 * time.Hour).UnixMilli()},
 		},
+		queries:     queries,
+		currencyIDs: make(map[string]int64),
 	}
-	store.seedAssets()
+	if queries == nil {
+		store.seedAssets()
+		store.seedPools()
+		store.seedMarginPools()
+		store.seedIndexes()
+		store.seedNews(now)
+		return store, nil
+	}
+	currencyID, err := queries.EnsureDefaultCurrency(ctx, defaultCurrency)
+	if err != nil {
+		return nil, err
+	}
+	store.currencyIDs[defaultCurrency] = currencyID
+	if err := store.loadFromDB(ctx); err != nil {
+		return nil, err
+	}
 	store.seedPools()
 	store.seedMarginPools()
 	store.seedIndexes()
 	store.seedNews(now)
-	return store
+	return store, nil
 }
 
 func (s *MarketStore) EnqueueOrder(order *engine.Order) {
@@ -227,32 +262,82 @@ func (s *MarketStore) EnqueueOrder(order *engine.Order) {
 		return
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	// In-memory state is authoritative even if DB persistence fails.
 	s.ensureUserLocked(order.UserID)
 	s.ensureAssetLocked(order.AssetID)
-	s.orders[order.ID] = cloneOrder(order)
+	cloned := cloneOrder(order)
+	s.orders[order.ID] = cloned
+	user := s.users[order.UserID]
+	asset := s.assets[order.AssetID]
+	basePrice := s.basePrices[order.AssetID]
+	// user/asset are value types; copy while holding the lock for persistence snapshots.
+	userSnapshot := user
+	assetSnapshot := asset
+	s.mu.Unlock()
+	// Persistence is best-effort; in-memory state remains authoritative during runtime.
+	s.persistOrder(cloned, userSnapshot, assetSnapshot, basePrice)
 }
 
 func (s *MarketStore) EnqueueExecution(execution engine.Execution) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	takerOrder := s.orders[execution.TakerOrderID]
+	makerOrder := s.orders[execution.MakerOrderID]
+	if takerOrder == nil || makerOrder == nil {
+		s.mu.Unlock()
+		return
+	}
+	if !s.applyExecutionLocked(execution) {
+		s.mu.Unlock()
+		return
+	}
 	if execution.ID == 0 {
 		s.nextExecutionID++
 		execution.ID = s.nextExecutionID
 	}
-	if !s.applyExecutionLocked(execution) {
-		return
-	}
+	taker := cloneOrder(takerOrder)
+	maker := cloneOrder(makerOrder)
 	s.executions = append(s.executions, execution)
 	if last := s.lastPrices[execution.AssetID]; last != 0 {
 		s.prevPrices[execution.AssetID] = last
 	}
 	s.lastPrices[execution.AssetID] = execution.Price
 	s.volumes[execution.AssetID] += execution.Quantity
+	buyerID, sellerID := s.executionParties(taker, maker)
+	buyerCash := s.balances[buyerID][defaultCurrency]
+	sellerCash := s.balances[sellerID][defaultCurrency]
+	buyerQty := s.positions[buyerID][execution.AssetID]
+	sellerQty := s.positions[sellerID][execution.AssetID]
+	asset := s.assets[execution.AssetID]
+	basePrice := s.basePrices[execution.AssetID]
+	buyerUser := s.users[buyerID]
+	sellerUser := s.users[sellerID]
+	s.mu.Unlock()
+	// Persistence is best-effort; in-memory state remains authoritative during runtime.
+	s.persistExecution(executionSnapshot{
+		Execution: execution,
+		Taker:     taker,
+		Asset:     asset,
+		BasePrice: basePrice,
+		Buyer: partySnapshot{
+			UserID:   buyerID,
+			User:     buyerUser,
+			Cash:     buyerCash,
+			Quantity: buyerQty,
+		},
+		Seller: partySnapshot{
+			UserID:   sellerID,
+			User:     sellerUser,
+			Cash:     sellerCash,
+			Quantity: sellerQty,
+		},
+	})
 }
 
 func (s *MarketStore) Shutdown(ctx context.Context) error {
-	return nil
+	if s.queries == nil {
+		return nil
+	}
+	return s.queries.Close()
 }
 
 func (s *MarketStore) RegisterAPIKey(key string, userID int64) {
@@ -290,7 +375,6 @@ func (s *MarketStore) UserForAPIKey(key string) (models.User, bool) {
 
 func (s *MarketStore) AddUser(username string) models.User {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.nextUserID++
 	user := models.User{
 		ID:       s.nextUserID,
@@ -300,13 +384,21 @@ func (s *MarketStore) AddUser(username string) models.User {
 	s.users[user.ID] = user
 	s.balances[user.ID] = map[string]int64{defaultCurrency: defaultCashBalance}
 	s.positions[user.ID] = make(map[int64]int64)
+	s.mu.Unlock()
+	s.persistUser(user, defaultCashBalance)
 	return user
 }
 
 func (s *MarketStore) EnsureUser(userID int64) models.User {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.ensureUserLocked(userID)
+	user := s.ensureUserLocked(userID)
+	var cashBalance int64
+	if user.ID != 0 {
+		cashBalance = s.balances[user.ID][defaultCurrency]
+	}
+	s.mu.Unlock()
+	s.persistUser(user, cashBalance)
+	return user
 }
 
 func (s *MarketStore) User(userID int64) (models.User, bool) {
@@ -810,4 +902,285 @@ func (s *MarketStore) evaluatePortfolioLocked(userID int64) (cash int64, equity 
 		}
 	}
 	return cash, equity
+}
+
+func (s *MarketStore) loadFromDB(ctx context.Context) error {
+	assets, err := s.queries.ListAssets(ctx)
+	if err != nil {
+		return err
+	}
+	if len(assets) == 0 {
+		s.seedAssets()
+		for _, asset := range s.assets {
+			basePrice := s.basePrices[asset.ID]
+			if basePrice == 0 {
+				basePrice = defaultAssetPrice
+			}
+			if err := s.queries.UpsertAsset(ctx, asset, basePrice); err != nil {
+				return err
+			}
+		}
+	} else {
+		for _, snapshot := range assets {
+			s.assets[snapshot.Asset.ID] = snapshot.Asset
+			basePrice := snapshot.BasePrice
+			if basePrice == 0 {
+				basePrice = defaultAssetPrice
+			}
+			s.basePrices[snapshot.Asset.ID] = basePrice
+		}
+	}
+
+	users, err := s.queries.ListUsers(ctx)
+	if err != nil {
+		return err
+	}
+	for _, user := range users {
+		s.users[user.ID] = user
+		if user.ID > s.nextUserID {
+			s.nextUserID = user.ID
+		}
+	}
+
+	currencyBalances, err := s.queries.ListCurrencyBalances(ctx)
+	if err != nil {
+		return err
+	}
+	for _, balance := range currencyBalances {
+		if _, ok := s.balances[balance.UserID]; !ok {
+			s.balances[balance.UserID] = make(map[string]int64)
+		}
+		s.balances[balance.UserID][balance.Currency] = balance.Amount
+		s.currencies[balance.Currency] = struct{}{}
+	}
+	s.currencies[defaultCurrency] = struct{}{}
+
+	assetBalances, err := s.queries.ListAssetBalances(ctx)
+	if err != nil {
+		return err
+	}
+	for _, balance := range assetBalances {
+		if _, ok := s.positions[balance.UserID]; !ok {
+			s.positions[balance.UserID] = make(map[int64]int64)
+		}
+		s.positions[balance.UserID][balance.AssetID] = balance.Quantity
+	}
+
+	orders, err := s.queries.ListOrders(ctx)
+	if err != nil {
+		return err
+	}
+	orderUsers := make(map[int64]int64)
+	for _, order := range orders {
+		s.orders[order.ID] = cloneOrder(order)
+		orderUsers[order.ID] = order.UserID
+		if order.UserID > s.nextUserID {
+			s.nextUserID = order.UserID
+		}
+	}
+
+	executionRecords, err := s.queries.ListExecutions(ctx)
+	if err != nil {
+		return err
+	}
+	for _, record := range executionRecords {
+		execution := engine.Execution{
+			ID:            record.ID,
+			AssetID:       record.AssetID,
+			Price:         record.Price,
+			Quantity:      record.Quantity,
+			OccurredAtUTC: record.ExecutedAt,
+		}
+		if record.IsTakerBuyer {
+			execution.TakerOrderID = record.BuyOrderID
+			execution.MakerOrderID = record.SellOrderID
+		} else {
+			execution.TakerOrderID = record.SellOrderID
+			execution.MakerOrderID = record.BuyOrderID
+		}
+		execution.TakerUserID = orderUsers[execution.TakerOrderID]
+		execution.MakerUserID = orderUsers[execution.MakerOrderID]
+		if execution.ID > s.nextExecutionID {
+			s.nextExecutionID = execution.ID
+		}
+		s.executions = append(s.executions, execution)
+	}
+
+	for userID := range s.users {
+		s.ensureUserLocked(userID)
+	}
+	s.refreshMarketStatsLocked()
+	return nil
+}
+
+func (s *MarketStore) refreshMarketStatsLocked() {
+	s.lastPrices = make(map[int64]int64)
+	s.prevPrices = make(map[int64]int64)
+	s.volumes = make(map[int64]int64)
+	if len(s.executions) == 0 {
+		return
+	}
+	execs := make([]engine.Execution, len(s.executions))
+	copy(execs, s.executions)
+	sort.Slice(execs, func(i, j int) bool { return execs[i].OccurredAtUTC.Before(execs[j].OccurredAtUTC) })
+	for _, exec := range execs {
+		if last, ok := s.lastPrices[exec.AssetID]; ok && last != 0 {
+			s.prevPrices[exec.AssetID] = last
+		}
+		s.lastPrices[exec.AssetID] = exec.Price
+		s.volumes[exec.AssetID] += exec.Quantity
+	}
+}
+
+func (s *MarketStore) executionParties(taker *engine.Order, maker *engine.Order) (int64, int64) {
+	if taker == nil || maker == nil {
+		return 0, 0
+	}
+	if taker.Side == engine.SideBuy {
+		return taker.UserID, maker.UserID
+	}
+	return maker.UserID, taker.UserID
+}
+
+func (s *MarketStore) dbContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), dbOperationTimeout)
+}
+
+func (s *MarketStore) persistUser(user models.User, cashBalance int64) {
+	if s.queries == nil || user.ID == 0 {
+		return
+	}
+	ctx, cancel := s.dbContext()
+	defer cancel()
+	if err := s.queries.UpsertUser(ctx, user, time.Now().UTC()); err != nil {
+		log.Printf("db upsert user %d: %v", user.ID, err)
+		return
+	}
+	currencyID := s.currencyIDs[defaultCurrency]
+	if currencyID == 0 {
+		return
+	}
+	if err := s.queries.SetCurrencyBalance(ctx, user.ID, currencyID, cashBalance); err != nil {
+		log.Printf("db set currency balance %d: %v", user.ID, err)
+	}
+}
+
+func (s *MarketStore) persistOrder(order *engine.Order, user models.User, asset models.Asset, basePrice int64) {
+	if s.queries == nil || order == nil {
+		return
+	}
+	ctx, cancel := s.dbContext()
+	defer cancel()
+	user = normalizeUser(user, order.UserID)
+	if err := s.queries.UpsertUser(ctx, user, time.Now().UTC()); err != nil {
+		log.Printf("db upsert user %d: %v", user.ID, err)
+		return
+	}
+	asset = normalizeAsset(asset, order.AssetID)
+	basePrice = normalizeBasePrice(basePrice)
+	if err := s.queries.UpsertAsset(ctx, asset, basePrice); err != nil {
+		log.Printf("db upsert asset %d: %v", asset.ID, err)
+		return
+	}
+	if err := s.queries.UpsertOrder(ctx, order); err != nil {
+		log.Printf("db upsert order %d: %v", order.ID, err)
+	}
+}
+
+type partySnapshot struct {
+	UserID   int64
+	User     models.User
+	Cash     int64
+	Quantity int64
+}
+
+type executionSnapshot struct {
+	Execution engine.Execution
+	Taker     *engine.Order
+	Asset     models.Asset
+	BasePrice int64
+	Buyer     partySnapshot
+	Seller    partySnapshot
+}
+
+func (s *MarketStore) persistExecution(snapshot executionSnapshot) {
+	if s.queries == nil || snapshot.Taker == nil || snapshot.Buyer.UserID == 0 || snapshot.Seller.UserID == 0 {
+		return
+	}
+	ctx, cancel := s.dbContext()
+	defer cancel()
+	buyer := normalizeUser(snapshot.Buyer.User, snapshot.Buyer.UserID)
+	seller := normalizeUser(snapshot.Seller.User, snapshot.Seller.UserID)
+	if err := s.queries.UpsertUser(ctx, buyer, time.Now().UTC()); err != nil {
+		log.Printf("db upsert user %d: %v", buyer.ID, err)
+		return
+	}
+	if err := s.queries.UpsertUser(ctx, seller, time.Now().UTC()); err != nil {
+		log.Printf("db upsert user %d: %v", seller.ID, err)
+		return
+	}
+	asset := normalizeAsset(snapshot.Asset, snapshot.Execution.AssetID)
+	basePrice := normalizeBasePrice(snapshot.BasePrice)
+	if err := s.queries.UpsertAsset(ctx, asset, basePrice); err != nil {
+		log.Printf("db upsert asset %d: %v", asset.ID, err)
+		return
+	}
+	if err := s.queries.InsertExecution(ctx, snapshot.Execution, snapshot.Taker.Side); err != nil {
+		log.Printf("db insert execution %d: %v", snapshot.Execution.ID, err)
+		return
+	}
+	currencyID := s.currencyIDs[defaultCurrency]
+	if currencyID != 0 {
+		if err := s.queries.SetCurrencyBalance(ctx, snapshot.Buyer.UserID, currencyID, snapshot.Buyer.Cash); err != nil {
+			log.Printf("db set currency balance %d: %v", snapshot.Buyer.UserID, err)
+		}
+		if err := s.queries.SetCurrencyBalance(ctx, snapshot.Seller.UserID, currencyID, snapshot.Seller.Cash); err != nil {
+			log.Printf("db set currency balance %d: %v", snapshot.Seller.UserID, err)
+		}
+	}
+	if err := s.queries.SetAssetBalance(ctx, snapshot.Buyer.UserID, snapshot.Execution.AssetID, snapshot.Buyer.Quantity); err != nil {
+		log.Printf("db set asset balance %d: %v", snapshot.Buyer.UserID, err)
+	}
+	if err := s.queries.SetAssetBalance(ctx, snapshot.Seller.UserID, snapshot.Execution.AssetID, snapshot.Seller.Quantity); err != nil {
+		log.Printf("db set asset balance %d: %v", snapshot.Seller.UserID, err)
+	}
+}
+
+func normalizeUser(user models.User, fallbackID int64) models.User {
+	if user.ID == 0 {
+		user.ID = fallbackID
+	}
+	if user.Username == "" && user.ID != 0 {
+		user.Username = fmt.Sprintf("user-%d", user.ID)
+	}
+	if user.Role == "" {
+		user.Role = "player"
+	}
+	return user
+}
+
+func normalizeAsset(asset models.Asset, fallbackID int64) models.Asset {
+	if asset.ID == 0 {
+		asset.ID = fallbackID
+	}
+	if asset.ID != 0 && asset.Symbol == "" {
+		asset.Symbol = fmt.Sprintf("ASSET-%d", asset.ID)
+	}
+	if asset.ID != 0 && asset.Name == "" {
+		asset.Name = fmt.Sprintf("Asset %d", asset.ID)
+	}
+	if asset.Type == "" {
+		asset.Type = "STOCK"
+	}
+	if asset.Sector == "" {
+		asset.Sector = "GENERAL"
+	}
+	return asset
+}
+
+func normalizeBasePrice(basePrice int64) int64 {
+	if basePrice == 0 {
+		return defaultAssetPrice
+	}
+	return basePrice
 }
