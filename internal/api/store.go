@@ -61,12 +61,15 @@ func safeMultiplyInt64(a, b int64) (int64, bool) {
 }
 
 type NewsItem struct {
-	ID          int64  `json:"id"`
-	Headline    string `json:"headline"`
-	Body        string `json:"body,omitempty"`
-	Impact      string `json:"impact,omitempty"`
-	AssetID     int64  `json:"asset_id,omitempty"`
-	PublishedAt int64  `json:"published_at"`
+	ID          int64    `json:"id"`
+	Headline    string   `json:"headline"`
+	Body        string   `json:"body,omitempty"`
+	Impact      string   `json:"impact,omitempty"`
+	AssetID     int64    `json:"asset_id,omitempty"`
+	Category    string   `json:"category,omitempty"`
+	Sentiment   float64  `json:"sentiment,omitempty"`
+	ImpactScope []string `json:"impact_scope,omitempty"`
+	PublishedAt int64    `json:"published_at"`
 }
 
 type Candle struct {
@@ -780,10 +783,13 @@ func (s *MarketStore) seedAssets() {
 }
 
 func (s *MarketStore) seedNews(now time.Time) {
-	headlines := []NewsItem{
-		{Headline: "Omni Dynamics announces a breakthrough in quantum logistics.", Impact: "POSITIVE", AssetID: 101},
-		{Headline: "Nyx Energy faces supply chain disruption in the Aurora Belt.", Impact: "NEGATIVE", AssetID: 102},
-		{Headline: "Aurora Metals signs a new long-term export agreement.", Impact: "POSITIVE", AssetID: 103},
+	headlines := s.generatePatternNews(now)
+	if len(headlines) == 0 {
+		headlines = []NewsItem{
+			{Headline: "Omni Dynamics announces a breakthrough in quantum logistics.", Impact: "POSITIVE", AssetID: 101},
+			{Headline: "Nyx Energy faces supply chain disruption in the Aurora Belt.", Impact: "NEGATIVE", AssetID: 102},
+			{Headline: "Aurora Metals signs a new long-term export agreement.", Impact: "POSITIVE", AssetID: 103},
+		}
 	}
 	for _, item := range headlines {
 		s.nextNewsID++
