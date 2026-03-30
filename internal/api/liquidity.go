@@ -144,11 +144,18 @@ func (s *MarketStore) CreatePoolPosition(poolID, userID, baseAmount, quoteAmount
 	if baseAmount <= 0 && quoteAmount <= 0 {
 		return PoolPosition{}, errors.New("base_amount or quote_amount required")
 	}
+	if lowerTick >= upperTick {
+		return PoolPosition{}, errors.New("invalid tick range")
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	pool, ok := s.pools[poolID]
 	if !ok {
 		return PoolPosition{}, errors.New("pool not found")
+	}
+	tickSpacing := tickSpacingForFee(pool.FeeBps)
+	if lowerTick%tickSpacing != 0 || upperTick%tickSpacing != 0 {
+		return PoolPosition{}, fmt.Errorf("tick spacing must align to %d", tickSpacing)
 	}
 	s.ensureUserLocked(userID)
 	if baseAmount > 0 {
@@ -206,9 +213,6 @@ func (s *MarketStore) ClosePoolPosition(userID, positionID int64) (PoolPosition,
 }
 
 func (s *MarketStore) SwapPool(poolID, userID int64, fromCurrency, toCurrency string, amount int64) (PoolSwapResult, error) {
-	if poolID == 0 {
-		return PoolSwapResult{}, errors.New("pool_id required")
-	}
 	if userID == 0 {
 		return PoolSwapResult{}, errors.New("user_id required")
 	}
@@ -217,44 +221,58 @@ func (s *MarketStore) SwapPool(poolID, userID int64, fromCurrency, toCurrency st
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	pool, ok := s.pools[poolID]
-	if !ok {
-		return PoolSwapResult{}, errors.New("pool not found")
-	}
 	from := strings.ToUpper(strings.TrimSpace(fromCurrency))
 	to := strings.ToUpper(strings.TrimSpace(toCurrency))
 	if from == "" || to == "" || from == to {
 		return PoolSwapResult{}, errors.New("invalid currencies")
 	}
-	valid := (from == pool.BaseCurrency && to == pool.QuoteCurrency) || (from == pool.QuoteCurrency && to == pool.BaseCurrency)
-	if !valid {
-		return PoolSwapResult{}, errors.New("currency pair not supported by pool")
-	}
 	s.ensureUserLocked(userID)
 	if s.balances[userID][from] < amount {
 		return PoolSwapResult{}, errors.New("insufficient balance")
+	}
+	if poolID == 0 {
+		plan, err := s.planSwapRouteLocked(from, to, amount, userID)
+		if err != nil {
+			return PoolSwapResult{}, err
+		}
+		for _, step := range plan.steps {
+			if s.balances[userID][step.from] < step.amountIn {
+				return PoolSwapResult{}, errors.New("insufficient balance for routed swap")
+			}
+			s.balances[userID][step.from] -= step.amountIn
+			s.balances[userID][step.to] += step.amountOut
+			s.pools[step.pool.ID] = step.updatedPool
+		}
+		return PoolSwapResult{
+			PoolID:       0,
+			FromCurrency: plan.from,
+			ToCurrency:   plan.to,
+			AmountIn:     plan.totalIn,
+			AmountOut:    plan.totalOut,
+			FeeAmount:    plan.totalFee,
+		}, nil
+	}
+	pool, ok := s.pools[poolID]
+	if !ok {
+		return PoolSwapResult{}, errors.New("pool not found")
+	}
+	valid := (from == pool.BaseCurrency && to == pool.QuoteCurrency) || (from == pool.QuoteCurrency && to == pool.BaseCurrency)
+	if !valid {
+		return PoolSwapResult{}, errors.New("currency pair not supported by pool")
 	}
 	feeBps := pool.FeeBps
 	if userID != 0 {
 		feeBps = s.fxFeeBpsForUserLocked(userID, feeBps)
 	}
-	fee, err := calculateFeeBps(amount, feeBps)
+	positions := s.poolPositionsForPoolLocked(poolID)
+	result, updatedPool, err := computePoolSwap(pool, positions, from, to, amount, feeBps)
 	if err != nil {
 		return PoolSwapResult{}, err
 	}
-	amountOut := amount - fee
 	s.balances[userID][from] -= amount
-	s.balances[userID][to] += amountOut
-	pool.Liquidity += fee
-	s.pools[poolID] = pool
-	return PoolSwapResult{
-		PoolID:       poolID,
-		FromCurrency: from,
-		ToCurrency:   to,
-		AmountIn:     amount,
-		AmountOut:    amountOut,
-		FeeAmount:    fee,
-	}, nil
+	s.balances[userID][to] += result.AmountOut
+	s.pools[poolID] = updatedPool
+	return result, nil
 }
 
 func (s *MarketStore) MarginPools() []MarginPool {
@@ -477,7 +495,9 @@ func (s *MarketStore) updateIndexHoldings(userID, assetID, quantity int64, isCre
 func (s *MarketStore) seedPools() {
 	pools := []LiquidityPool{
 		{ID: 1, BaseCurrency: "ARC", QuoteCurrency: "VDP", FeeBps: poolFeeLowBps, Liquidity: 2_000_000, CurrentTick: 120},
-		{ID: 2, BaseCurrency: "ARC", QuoteCurrency: "BRB", FeeBps: poolFeeStandardBps, Liquidity: 1_200_000, CurrentTick: -50},
+		{ID: 2, BaseCurrency: "ARC", QuoteCurrency: "VDP", FeeBps: poolFeeStandardBps, Liquidity: 1_000_000, CurrentTick: 120},
+		{ID: 3, BaseCurrency: "ARC", QuoteCurrency: "BRB", FeeBps: poolFeeLowBps, Liquidity: 900_000, CurrentTick: -50},
+		{ID: 4, BaseCurrency: "ARC", QuoteCurrency: "BRB", FeeBps: poolFeeStandardBps, Liquidity: 1_200_000, CurrentTick: -50},
 	}
 	for _, pool := range pools {
 		s.pools[pool.ID] = pool

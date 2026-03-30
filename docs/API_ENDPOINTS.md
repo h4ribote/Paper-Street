@@ -101,6 +101,7 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
 *   `POST /pools/{pool_id}/swap`
     *   プールを介して通貨のスワップを行います。
     *   Body: `from_currency`, `to_currency`, `amount`, `user_id` (任意)。
+    *   `pool_id` に `0` を指定した場合、Routerが最適なルート（Direct / ARCマルチホップ + Fee Tier 分割）を自動選択します。
 
 ## 8. Margin Pools (信用取引プール)
 *   `GET /margin/pools`
