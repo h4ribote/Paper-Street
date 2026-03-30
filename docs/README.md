@@ -4,4 +4,5 @@
 - [API_ENDPOINTS.md](./API_ENDPOINTS.md): HTTP API 一覧
 - [WEBSOCKET.md](./WEBSOCKET.md): WebSocket 仕様
 - [FILE_STRUCTURE.md](./FILE_STRUCTURE.md): ファイル構成の説明
+- [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md): 設計に対するバックエンド実装状況メモ
 - [design/](./design/): 詳細設計ドキュメント群
