@@ -20,6 +20,7 @@ const (
 	defaultCashBalance = int64(1_000_000_000)
 	defaultAltBalance  = int64(100_000_000) // starter balance for non-default currencies
 	defaultAssetPrice  = int64(10_000)
+	dbOperationTimeout = 2 * time.Second
 	userIDSeed         = int64(9_999)
 	macroGDPGrowth     = int64(312) // 3.12%
 	macroCPI           = int64(215) // 2.15%
@@ -182,6 +183,7 @@ type MarketStore struct {
 }
 
 func NewMarketStore() *MarketStore {
+	// newMarketStore only errors when DB queries are supplied.
 	store, _ := newMarketStore(context.Background(), nil)
 	return store
 }
@@ -267,6 +269,7 @@ func (s *MarketStore) EnqueueOrder(order *engine.Order) {
 	user := s.users[order.UserID]
 	asset := s.assets[order.AssetID]
 	basePrice := s.basePrices[order.AssetID]
+	// user/asset are value types; copy while holding the lock for persistence snapshots.
 	userSnapshot := user
 	assetSnapshot := asset
 	s.mu.Unlock()
@@ -275,13 +278,13 @@ func (s *MarketStore) EnqueueOrder(order *engine.Order) {
 
 func (s *MarketStore) EnqueueExecution(execution engine.Execution) {
 	s.mu.Lock()
-	if execution.ID == 0 {
-		s.nextExecutionID++
-		execution.ID = s.nextExecutionID
-	}
 	if !s.applyExecutionLocked(execution) {
 		s.mu.Unlock()
 		return
+	}
+	if execution.ID == 0 {
+		s.nextExecutionID++
+		execution.ID = s.nextExecutionID
 	}
 	takerOrder := s.orders[execution.TakerOrderID]
 	makerOrder := s.orders[execution.MakerOrderID]
@@ -1036,11 +1039,16 @@ func (s *MarketStore) executionParties(taker *engine.Order, maker *engine.Order)
 	return maker.UserID, taker.UserID
 }
 
+func (s *MarketStore) dbContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), dbOperationTimeout)
+}
+
 func (s *MarketStore) persistUser(user models.User, cashBalance int64) {
 	if s.queries == nil || user.ID == 0 {
 		return
 	}
-	ctx := context.Background()
+	ctx, cancel := s.dbContext()
+	defer cancel()
 	if err := s.queries.UpsertUser(ctx, user, time.Now().UTC()); err != nil {
 		log.Printf("db upsert user %d: %v", user.ID, err)
 		return
@@ -1058,7 +1066,8 @@ func (s *MarketStore) persistOrder(order *engine.Order, user models.User, asset 
 	if s.queries == nil || order == nil {
 		return
 	}
-	ctx := context.Background()
+	ctx, cancel := s.dbContext()
+	defer cancel()
 	user = normalizeUser(user, order.UserID)
 	if err := s.queries.UpsertUser(ctx, user, time.Now().UTC()); err != nil {
 		log.Printf("db upsert user %d: %v", user.ID, err)
@@ -1095,7 +1104,8 @@ func (s *MarketStore) persistExecution(snapshot executionSnapshot) {
 	if s.queries == nil || snapshot.Taker == nil || snapshot.Buyer.UserID == 0 || snapshot.Seller.UserID == 0 {
 		return
 	}
-	ctx := context.Background()
+	ctx, cancel := s.dbContext()
+	defer cancel()
 	buyer := normalizeUser(snapshot.Buyer.User, snapshot.Buyer.UserID)
 	seller := normalizeUser(snapshot.Seller.User, snapshot.Seller.UserID)
 	if err := s.queries.UpsertUser(ctx, buyer, time.Now().UTC()); err != nil {
