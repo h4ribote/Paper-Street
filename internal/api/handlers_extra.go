@@ -469,6 +469,14 @@ func (s *Server) handleMarginPools(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, []MarginPool{})
 		return
 	}
+	userID := parseUserID(r)
+	if userID == 0 {
+		userID = s.userIDFromRequest(r)
+	}
+	if userID != 0 {
+		respondJSON(w, http.StatusOK, s.Store.MarginPoolsForUser(userID))
+		return
+	}
 	respondJSON(w, http.StatusOK, s.Store.MarginPools())
 }
 
@@ -487,7 +495,11 @@ func (s *Server) handleMarginPoolByID(w http.ResponseWriter, r *http.Request) {
 			respondJSON(w, http.StatusOK, MarginPool{})
 			return
 		}
-		pool, ok := s.Store.MarginPool(poolID)
+		userID := parseUserID(r)
+		if userID == 0 {
+			userID = s.userIDFromRequest(r)
+		}
+		pool, ok := s.Store.MarginPoolForUser(poolID, userID)
 		if !ok {
 			respondError(w, http.StatusNotFound, "margin pool not found")
 			return

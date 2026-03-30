@@ -234,7 +234,11 @@ func (s *MarketStore) SwapPool(poolID, userID int64, fromCurrency, toCurrency st
 	if s.balances[userID][from] < amount {
 		return PoolSwapResult{}, errors.New("insufficient balance")
 	}
-	fee, err := calculateFeeBps(amount, pool.FeeBps)
+	feeBps := pool.FeeBps
+	if userID != 0 {
+		feeBps = s.fxFeeBpsForUserLocked(userID, feeBps)
+	}
+	fee, err := calculateFeeBps(amount, feeBps)
 	if err != nil {
 		return PoolSwapResult{}, err
 	}
@@ -264,6 +268,23 @@ func (s *MarketStore) MarginPools() []MarginPool {
 	return pools
 }
 
+func (s *MarketStore) MarginPoolsForUser(userID int64) []MarginPool {
+	if userID == 0 {
+		return s.MarginPools()
+	}
+	s.mu.Lock()
+	s.ensureUserLocked(userID)
+	pools := make([]MarginPool, 0, len(s.marginPools))
+	for _, pool := range s.marginPools {
+		pool.CashRateBps = s.marginRateForUserLocked(userID, pool.CashRateBps)
+		pool.AssetRateBps = s.marginRateForUserLocked(userID, pool.AssetRateBps)
+		pools = append(pools, pool)
+	}
+	s.mu.Unlock()
+	sort.Slice(pools, func(i, j int) bool { return pools[i].ID < pools[j].ID })
+	return pools
+}
+
 func (s *MarketStore) MarginPool(poolID int64) (MarginPool, bool) {
 	if poolID == 0 {
 		return MarginPool{}, false
@@ -271,6 +292,24 @@ func (s *MarketStore) MarginPool(poolID int64) (MarginPool, bool) {
 	s.mu.RLock()
 	pool, ok := s.marginPools[poolID]
 	s.mu.RUnlock()
+	return pool, ok
+}
+
+func (s *MarketStore) MarginPoolForUser(poolID, userID int64) (MarginPool, bool) {
+	if poolID == 0 {
+		return MarginPool{}, false
+	}
+	if userID == 0 {
+		return s.MarginPool(poolID)
+	}
+	s.mu.Lock()
+	s.ensureUserLocked(userID)
+	pool, ok := s.marginPools[poolID]
+	if ok {
+		pool.CashRateBps = s.marginRateForUserLocked(userID, pool.CashRateBps)
+		pool.AssetRateBps = s.marginRateForUserLocked(userID, pool.AssetRateBps)
+	}
+	s.mu.Unlock()
 	return pool, ok
 }
 
