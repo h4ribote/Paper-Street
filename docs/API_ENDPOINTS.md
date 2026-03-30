@@ -46,6 +46,7 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
     *   Body: `asset_id`, `side` (BUY/SELL), `type` (MARKET/LIMIT/STOP/STOP_LIMIT), `quantity`。
     *   `price` は LIMIT/STOP_LIMIT の場合に必須、`stop_price` は STOP/STOP_LIMIT の場合に必須です。
     *   `user_id` は任意（APIキーに紐づくユーザーがある場合は省略可能）です。
+    *   `leverage` は任意（デフォルト1）。2以上を指定すると分離マージンの証拠金でポジションが作成されます。
 *   `DELETE /orders/{order_id}`
     *   指定した注文をキャンセルします。`asset_id` クエリパラメータが必須です。
 *   `GET /orders`
@@ -114,6 +115,12 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
 *   `POST /margin/pools/{pool_id}/withdraw`
     *   供給した資金または株式を引き出します。
     *   Body: `cash_amount`, `asset_amount`, `user_id` (任意)。
+*   `GET /margin/positions`
+    *   分離マージンポジションの一覧を取得します。`user_id` を指定するとユーザーに限定します。
+*   `POST /margin/positions/{position_id}/topup`
+    *   既存のポジションに追証を行います。Body: `amount`, `user_id` (任意)。
+*   `GET /margin/liquidations`
+    *   強制決済の履歴を取得します。`user_id` を指定するとユーザーに限定します。
 
 ## 9. World Meta & Events (ゲーム世界情報)
 *   `GET /world/seasons/current`

@@ -31,6 +31,7 @@ type orderRequest struct {
 	Quantity  int64  `json:"quantity"`
 	Price     int64  `json:"price"`
 	StopPrice int64  `json:"stop_price"`
+	Leverage  int64  `json:"leverage"`
 }
 
 type errorResponse struct {
@@ -239,6 +240,13 @@ func (o orderRequest) toOrder(defaultUserID int64) (*engine.Order, error) {
 	if (orderType == engine.OrderTypeStop || orderType == engine.OrderTypeStopLimit) && o.StopPrice <= 0 {
 		return nil, errors.New("stop_price required for stop orders")
 	}
+	leverage := o.Leverage
+	if leverage == 0 {
+		leverage = 1
+	}
+	if leverage < 1 {
+		return nil, errors.New("leverage must be at least 1")
+	}
 	return &engine.Order{
 		AssetID:   o.AssetID,
 		UserID:    userID,
@@ -247,6 +255,7 @@ func (o orderRequest) toOrder(defaultUserID int64) (*engine.Order, error) {
 		Quantity:  o.Quantity,
 		Price:     o.Price,
 		StopPrice: o.StopPrice,
+		Leverage:  leverage,
 	}, nil
 }
 
