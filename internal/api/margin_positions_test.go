@@ -179,6 +179,9 @@ func TestMarginInterestAccrualUpdatesPool(t *testing.T) {
 	if updated.AccumulatedFees != expectedFee {
 		t.Fatalf("expected accumulated fees %d, got %d", expectedFee, updated.AccumulatedFees)
 	}
+	if updated.lastFeeAt != lastFeeAt+accrualMillis {
+		t.Fatalf("expected lastFeeAt %d, got %d", lastFeeAt+accrualMillis, updated.lastFeeAt)
+	}
 }
 
 func setMarginPositionLastFeeAt(store *MarketStore, positionID, lastFeeAt int64) {
