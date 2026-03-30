@@ -158,12 +158,8 @@ func TestMarginInterestAccrualUpdatesPool(t *testing.T) {
 	}
 	position := positions[0]
 	pool := store.marginPools[1]
-	expectedFee, ok := accruedMarginFee(position.BorrowedAmount, pool.CashRateBps, marginInterestTick)
-	if !ok || expectedFee <= 0 {
-		t.Fatalf("expected positive fee, got %d", expectedFee)
-	}
-	now := time.Now().UTC().UnixMilli()
-	setMarginPositionLastFeeAt(store, position.ID, now-marginInterestTick)
+	lastFeeAt := time.Now().UTC().UnixMilli() - marginInterestTick
+	setMarginPositionLastFeeAt(store, position.ID, lastFeeAt)
 	poolBefore := pool.TotalCash
 
 	positions = store.MarginPositions(1)
@@ -171,6 +167,12 @@ func TestMarginInterestAccrualUpdatesPool(t *testing.T) {
 		t.Fatalf("expected 1 margin position, got %d", len(positions))
 	}
 	updated := positions[0]
+	elapsed := updated.UpdatedAt - lastFeeAt
+	accrualMillis := (elapsed / marginInterestTick) * marginInterestTick
+	expectedFee, ok := accruedMarginFee(position.BorrowedAmount, pool.CashRateBps, accrualMillis)
+	if !ok || expectedFee <= 0 {
+		t.Fatalf("expected positive fee, got %d", expectedFee)
+	}
 	poolAfter := store.marginPools[1]
 	if poolAfter.TotalCash != poolBefore+expectedFee {
 		t.Fatalf("expected pool cash %d, got %d", poolBefore+expectedFee, poolAfter.TotalCash)

@@ -177,6 +177,7 @@ func (s *MarketStore) accrueMarginFeesLocked(position MarginPosition, now int64)
 		return position
 	}
 	elapsed := now - position.lastFeeAt
+	// Accrue only full intervals; partial periods are carried forward.
 	accrualCount := elapsed / marginInterestTick
 	if accrualCount <= 0 {
 		return position
