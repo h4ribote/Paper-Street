@@ -2,7 +2,6 @@ package api
 
 import (
 	"testing"
-	"time"
 
 	"github.com/h4ribote/Paper-Street/internal/engine"
 )
@@ -158,7 +157,7 @@ func TestMarginInterestAccrualUpdatesPool(t *testing.T) {
 	}
 	position := positions[0]
 	pool := store.marginPools[1]
-	lastFeeAt := time.Now().UTC().UnixMilli() - marginInterestTick
+	lastFeeAt := int64(1)
 	setMarginPositionLastFeeAt(store, position.ID, lastFeeAt)
 	poolBefore := pool.TotalCash
 

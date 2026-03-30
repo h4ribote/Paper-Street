@@ -357,7 +357,6 @@ func (s *MarketStore) updateMarginPool(poolID, userID, cashAmount, assetAmount i
 	}
 	s.ensureUserLocked(userID)
 	pool = normalizeMarginPoolShares(pool)
-	s.marginPools[poolID] = pool
 	positionKey := marginProviderKey{PoolID: poolID, UserID: userID}
 	position := s.marginProviders[positionKey]
 	prevCashTotal := pool.TotalCash
@@ -420,34 +419,24 @@ func (s *MarketStore) updateMarginPool(poolID, userID, cashAmount, assetAmount i
 		if isSupply {
 			s.balances[userID][defaultCurrency] -= cashAmount
 			pool.TotalCash += cashAmount
-		} else {
-			pool.TotalCash -= cashAmount
-			s.balances[userID][defaultCurrency] += cashAmount
-		}
-	}
-	if assetAmount > 0 {
-		if isSupply {
-			s.positions[userID][pool.AssetID] -= assetAmount
-			pool.TotalAssets += assetAmount
-		} else {
-			pool.TotalAssets -= assetAmount
-			s.positions[userID][pool.AssetID] += assetAmount
-		}
-	}
-	if cashAmount > 0 {
-		if isSupply {
 			position.CashShares += cashShares
 			pool.TotalCashShares += cashShares
 		} else {
+			pool.TotalCash -= cashAmount
+			s.balances[userID][defaultCurrency] += cashAmount
 			position.CashShares -= cashShares
 			pool.TotalCashShares -= cashShares
 		}
 	}
 	if assetAmount > 0 {
 		if isSupply {
+			s.positions[userID][pool.AssetID] -= assetAmount
+			pool.TotalAssets += assetAmount
 			position.AssetShares += assetShares
 			pool.TotalAssetShares += assetShares
 		} else {
+			pool.TotalAssets -= assetAmount
+			s.positions[userID][pool.AssetID] += assetAmount
 			position.AssetShares -= assetShares
 			pool.TotalAssetShares -= assetShares
 		}
