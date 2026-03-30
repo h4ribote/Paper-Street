@@ -140,7 +140,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]models.User, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	users := []models.User{}
+	var users []models.User
 	for rows.Next() {
 		var user models.User
 		if err := rows.Scan(&user.ID, &user.Username); err != nil {
@@ -177,7 +177,7 @@ func (q *Queries) ListAssets(ctx context.Context) ([]AssetSnapshot, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	assets := []AssetSnapshot{}
+	var assets []AssetSnapshot
 	for rows.Next() {
 		var asset models.Asset
 		var basePrice int64
@@ -237,7 +237,7 @@ func (q *Queries) ListOrders(ctx context.Context) ([]*engine.Order, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	orders := []*engine.Order{}
+	var orders []*engine.Order
 	for rows.Next() {
 		order := &engine.Order{}
 		var price sql.NullInt64
@@ -303,7 +303,7 @@ func (q *Queries) ListExecutions(ctx context.Context) ([]ExecutionRecord, error)
 		return nil, err
 	}
 	defer rows.Close()
-	executions := []ExecutionRecord{}
+	var executions []ExecutionRecord
 	for rows.Next() {
 		var record ExecutionRecord
 		var executedAt int64
@@ -340,7 +340,7 @@ func (q *Queries) ListCurrencyBalances(ctx context.Context) ([]CurrencyBalance, 
 		return nil, err
 	}
 	defer rows.Close()
-	balances := []CurrencyBalance{}
+	var balances []CurrencyBalance
 	for rows.Next() {
 		var balance CurrencyBalance
 		if err := rows.Scan(&balance.UserID, &balance.Currency, &balance.Amount); err != nil {
@@ -369,7 +369,7 @@ func (q *Queries) ListAssetBalances(ctx context.Context) ([]AssetBalance, error)
 		return nil, err
 	}
 	defer rows.Close()
-	balances := []AssetBalance{}
+	var balances []AssetBalance
 	for rows.Next() {
 		var balance AssetBalance
 		if err := rows.Scan(&balance.UserID, &balance.AssetID, &balance.Quantity); err != nil {

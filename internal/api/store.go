@@ -273,8 +273,6 @@ func (s *MarketStore) EnqueueOrder(order *engine.Order) {
 
 func (s *MarketStore) EnqueueExecution(execution engine.Execution) {
 	s.mu.Lock()
-	taker := cloneOrder(s.orders[execution.TakerOrderID])
-	maker := cloneOrder(s.orders[execution.MakerOrderID])
 	if execution.ID == 0 {
 		s.nextExecutionID++
 		execution.ID = s.nextExecutionID
@@ -283,6 +281,8 @@ func (s *MarketStore) EnqueueExecution(execution engine.Execution) {
 		s.mu.Unlock()
 		return
 	}
+	taker := cloneOrder(s.orders[execution.TakerOrderID])
+	maker := cloneOrder(s.orders[execution.MakerOrderID])
 	s.executions = append(s.executions, execution)
 	if last := s.lastPrices[execution.AssetID]; last != 0 {
 		s.prevPrices[execution.AssetID] = last
