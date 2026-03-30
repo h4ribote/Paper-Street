@@ -247,6 +247,9 @@ func (o orderRequest) toOrder(defaultUserID int64) (*engine.Order, error) {
 	if leverage < 1 {
 		return nil, errors.New("leverage must be at least 1")
 	}
+	if leverage > marginLeverageMax {
+		return nil, errors.New("leverage must be at most 5")
+	}
 	return &engine.Order{
 		AssetID:   o.AssetID,
 		UserID:    userID,

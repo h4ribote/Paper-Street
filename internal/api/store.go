@@ -914,6 +914,9 @@ func (s *MarketStore) applyExecutionLocked(exec engine.Execution) bool {
 			sellerFee = cashDelta - minSellerProceeds
 		}
 	}
+	if buyerOrder.Leverage > marginLeverageMax || sellerOrder.Leverage > marginLeverageMax {
+		return false
+	}
 	buyerLeverage := normalizeLeverage(buyerOrder.Leverage)
 	sellerLeverage := normalizeLeverage(sellerOrder.Leverage)
 	buyerIsMargin := buyerLeverage > 1
