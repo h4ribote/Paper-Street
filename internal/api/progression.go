@@ -1,0 +1,590 @@
+package api
+
+import (
+	"errors"
+	"fmt"
+	"sort"
+	"strings"
+	"time"
+)
+
+const defaultRankName = "Shrimp"
+
+type RankDefinition struct {
+	ID                  int
+	Name                string
+	RequiredXP          int64
+	MakerFeeBps10       int64
+	TakerFeeBps10       int64
+	InterestDiscountBps int64
+	FXFeeDiscountBps    int64
+}
+
+var rankDefinitions = []RankDefinition{
+	{ID: 1, Name: "Shrimp", RequiredXP: 0, MakerFeeBps10: 40, TakerFeeBps10: 100, InterestDiscountBps: 0, FXFeeDiscountBps: 0},
+	{ID: 2, Name: "Fish", RequiredXP: 500, MakerFeeBps10: 20, TakerFeeBps10: 75, InterestDiscountBps: 500, FXFeeDiscountBps: 0},
+	{ID: 3, Name: "Shark", RequiredXP: 2_500, MakerFeeBps10: 10, TakerFeeBps10: 50, InterestDiscountBps: 1_000, FXFeeDiscountBps: 0},
+	{ID: 4, Name: "Whale", RequiredXP: 15_000, MakerFeeBps10: 0, TakerFeeBps10: 25, InterestDiscountBps: 2_000, FXFeeDiscountBps: 0},
+	{ID: 5, Name: "Leviathan", RequiredXP: 50_000, MakerFeeBps10: 0, TakerFeeBps10: 0, InterestDiscountBps: 5_000, FXFeeDiscountBps: 5_000},
+}
+
+type UserRankInfo struct {
+	UserID              int64  `json:"user_id"`
+	RankID              int    `json:"rank_id"`
+	Rank                string `json:"rank"`
+	XP                  int64  `json:"xp"`
+	NextRankXP          int64  `json:"next_rank_xp,omitempty"`
+	MakerFeeBps         int64  `json:"maker_fee_bps"`
+	TakerFeeBps         int64  `json:"taker_fee_bps"`
+	InterestDiscountBps int64  `json:"interest_discount_bps"`
+	FXFeeDiscountBps    int64  `json:"fx_fee_discount_bps"`
+}
+
+type DailyMission struct {
+	ID          string `json:"id"`
+	Grade       string `json:"grade"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+type DailyMissionStatus struct {
+	Mission   DailyMission `json:"mission"`
+	Completed bool         `json:"completed"`
+}
+
+type DailyMissionReward struct {
+	Grade string `json:"grade"`
+	XP    int64  `json:"xp"`
+	Cash  int64  `json:"cash"`
+}
+
+type DailyMissionResponse struct {
+	Date     string               `json:"date"`
+	Missions []DailyMissionStatus `json:"missions"`
+}
+
+type MissionCompletionResult struct {
+	Mission      DailyMission        `json:"mission"`
+	Completed    bool                `json:"completed"`
+	Reward       *DailyMissionReward `json:"reward,omitempty"`
+	UserProgress UserRankInfo        `json:"user_progress"`
+}
+
+type DailyMissionProgress struct {
+	Completed map[string]bool
+	Rewarded  map[string]bool
+}
+
+type Contract struct {
+	ID            int64  `json:"id"`
+	Title         string `json:"title"`
+	AssetID       int64  `json:"asset_id"`
+	TotalRequired int64  `json:"total_required"`
+	Delivered     int64  `json:"delivered"`
+	PricePerUnit  int64  `json:"price_per_unit"`
+	MinRank       string `json:"min_rank"`
+	DeadlineAt    int64  `json:"deadline_at"`
+	XPPerUnit     int64  `json:"xp_per_unit"`
+}
+
+type ContractStatus struct {
+	Contract
+	Remaining     int64 `json:"remaining"`
+	UserDelivered int64 `json:"user_delivered"`
+	Expired       bool  `json:"expired"`
+	Fulfilled     bool  `json:"fulfilled"`
+}
+
+type ContractDeliveryResult struct {
+	Contract     ContractStatus `json:"contract"`
+	Quantity     int64          `json:"quantity"`
+	CashReward   int64          `json:"cash_reward"`
+	XPReward     int64          `json:"xp_reward"`
+	UserProgress UserRankInfo   `json:"user_progress"`
+}
+
+func rankDefinitionByName(name string) (RankDefinition, bool) {
+	trimmed := strings.TrimSpace(name)
+	for _, rank := range rankDefinitions {
+		if strings.EqualFold(rank.Name, trimmed) {
+			return rank, true
+		}
+	}
+	return RankDefinition{}, false
+}
+
+func rankDefinitionForXP(xp int64) RankDefinition {
+	current := rankDefinitions[0]
+	for _, rank := range rankDefinitions {
+		if xp >= rank.RequiredXP {
+			current = rank
+		}
+	}
+	return current
+}
+
+func nextRankXP(rank RankDefinition) int64 {
+	for _, candidate := range rankDefinitions {
+		if candidate.ID == rank.ID+1 {
+			return candidate.RequiredXP
+		}
+	}
+	return 0
+}
+
+func feeBps10ToBps(bps10 int64) int64 {
+	if bps10 <= 0 {
+		return 0
+	}
+	return (bps10 + 5) / 10
+}
+
+func calculateFeeBps10(amount, bps10 int64) (int64, error) {
+	const bps10Denominator = int64(100_000)
+	fee, ok := safeMultiplyInt64(amount, bps10)
+	if !ok {
+		return 0, errors.New("fee overflow")
+	}
+	return fee / bps10Denominator, nil
+}
+
+func applyDiscountBps(value, discountBps int64) int64 {
+	if discountBps <= 0 {
+		return value
+	}
+	if discountBps >= bpsDenominator {
+		return 0
+	}
+	product, ok := safeMultiplyInt64(value, bpsDenominator-discountBps)
+	if !ok {
+		return value
+	}
+	return product / bpsDenominator
+}
+
+func (s *MarketStore) fxFeeBpsForUserLocked(userID int64, baseFee int64) int64 {
+	if userID == 0 {
+		return baseFee
+	}
+	user := s.users[userID]
+	rank := rankDefinitionForXP(user.XP)
+	if def, ok := rankDefinitionByName(user.Rank); ok {
+		rank = def
+	}
+	return applyDiscountBps(baseFee, rank.FXFeeDiscountBps)
+}
+
+func (s *MarketStore) marginRateForUserLocked(userID int64, baseRate int64) int64 {
+	if userID == 0 {
+		return baseRate
+	}
+	user := s.users[userID]
+	rank := rankDefinitionForXP(user.XP)
+	if def, ok := rankDefinitionByName(user.Rank); ok {
+		rank = def
+	}
+	return applyDiscountBps(baseRate, rank.InterestDiscountBps)
+}
+
+func (s *MarketStore) userRankInfoLocked(userID int64) UserRankInfo {
+	user := s.users[userID]
+	rank := rankDefinitionForXP(user.XP)
+	if def, ok := rankDefinitionByName(user.Rank); ok {
+		rank = def
+	}
+	return UserRankInfo{
+		UserID:              userID,
+		RankID:              rank.ID,
+		Rank:                rank.Name,
+		XP:                  user.XP,
+		NextRankXP:          nextRankXP(rank),
+		MakerFeeBps:         feeBps10ToBps(rank.MakerFeeBps10),
+		TakerFeeBps:         feeBps10ToBps(rank.TakerFeeBps10),
+		InterestDiscountBps: rank.InterestDiscountBps,
+		FXFeeDiscountBps:    rank.FXFeeDiscountBps,
+	}
+}
+
+func (s *MarketStore) UserRankInfo(userID int64) (UserRankInfo, bool) {
+	if userID == 0 {
+		return UserRankInfo{}, false
+	}
+	s.mu.Lock()
+	s.ensureUserLocked(userID)
+	info := s.userRankInfoLocked(userID)
+	s.mu.Unlock()
+	return info, true
+}
+
+func (s *MarketStore) AddXP(userID, amount int64) (UserRankInfo, error) {
+	if userID == 0 {
+		return UserRankInfo{}, errors.New("user_id required")
+	}
+	if amount <= 0 {
+		return UserRankInfo{}, errors.New("xp amount must be positive")
+	}
+	s.mu.Lock()
+	user := s.ensureUserLocked(userID)
+	user.XP += amount
+	rank := rankDefinitionForXP(user.XP)
+	user.Rank = rank.Name
+	s.users[userID] = user
+	info := s.userRankInfoLocked(userID)
+	cash := s.balances[userID][defaultCurrency]
+	s.mu.Unlock()
+	s.persistUser(user, cash)
+	return info, nil
+}
+
+func dailyMissionCatalog() map[string][]DailyMission {
+	return map[string][]DailyMission{
+		"C": {
+			{ID: "C1", Grade: "C", Name: "Window Shopper", Description: "異なる3つの銘柄の詳細画面を開く"},
+			{ID: "C2", Grade: "C", Name: "First Bid", Description: "指値注文を1回出す"},
+			{ID: "C3", Grade: "C", Name: "News Reader", Description: "ニュース詳細を3件開く"},
+			{ID: "C4", Grade: "C", Name: "Tourist", Description: "異なる2つの地域の銘柄を保有する"},
+			{ID: "C5", Grade: "C", Name: "Penny Pincher", Description: "株価が100 ARC未満の銘柄を購入する"},
+			{ID: "C6", Grade: "C", Name: "Safety First", Description: "国債を購入する"},
+		},
+		"B": {
+			{ID: "B1", Grade: "B", Name: "Day Trader", Description: "同一銘柄を1日以内に売却する"},
+			{ID: "B2", Grade: "B", Name: "Profit Taker", Description: "評価益+5%超で利確する"},
+			{ID: "B3", Grade: "B", Name: "Stop Loss", Description: "逆指値注文を発注する"},
+			{ID: "B4", Grade: "B", Name: "Short Seller", Description: "信用売りポジションを建てる"},
+			{ID: "B5", Grade: "B", Name: "Sector Rotation", Description: "上昇セクターを買い下落セクターを売る"},
+			{ID: "B6", Grade: "B", Name: "Buy The Dip", Description: "前日比-3%以上下落銘柄を買う"},
+			{ID: "B7", Grade: "B", Name: "Yield Hunter", Description: "利回り5%以上の銘柄を保有する"},
+			{ID: "B8", Grade: "B", Name: "Tech Lover", Description: "TECHセクター比率50%以上にする"},
+		},
+		"A": {
+			{ID: "A1", Grade: "A", Name: "Market Maker", Description: "買い/売り指値を同時に5分維持する"},
+			{ID: "A2", Grade: "A", Name: "Liquidity King", Description: "FXプールに10,000 ARC以上供給する"},
+			{ID: "A3", Grade: "A", Name: "Arbitrageur", Description: "指数と構成銘柄を同日に取引する"},
+			{ID: "A4", Grade: "A", Name: "Big Ticket", Description: "50,000 ARC以上の約定を成立させる"},
+			{ID: "A5", Grade: "A", Name: "News Reactor", Description: "Breakingニュース30秒以内に取引する"},
+			{ID: "A6", Grade: "A", Name: "Contrarian", Description: "センチメントと逆のポジションを建てる"},
+			{ID: "A7", Grade: "A", Name: "Leverage Master", Description: "レバレッジ20倍以上で8時間維持する"},
+			{ID: "A8", Grade: "A", Name: "The Squeeze", Description: "ショートフィー高騰銘柄でロングする"},
+		},
+	}
+}
+
+func missionRewardForGrade(grade string) DailyMissionReward {
+	switch strings.ToUpper(grade) {
+	case "C":
+		return DailyMissionReward{Grade: "C", XP: 5, Cash: 400}
+	case "B":
+		return DailyMissionReward{Grade: "B", XP: 25}
+	case "A":
+		return DailyMissionReward{Grade: "A", XP: 60}
+	default:
+		return DailyMissionReward{Grade: grade}
+	}
+}
+
+func (s *MarketStore) DailyMissions(date time.Time) []DailyMission {
+	date = date.UTC()
+	key := date.Format("2006-01-02")
+	s.mu.RLock()
+	if missions, ok := s.dailyMissions[key]; ok {
+		s.mu.RUnlock()
+		return missions
+	}
+	s.mu.RUnlock()
+	catalog := dailyMissionCatalog()
+	missions := make([]DailyMission, 0, 6)
+	seed := date.Year()*1000 + date.YearDay()
+	grades := []string{"C", "B", "A"}
+	for _, grade := range grades {
+		list := catalog[grade]
+		if len(list) == 0 {
+			continue
+		}
+		offset := 0
+		if len(list) > 1 {
+			offset = seed % len(list)
+		}
+		first := list[offset]
+		second := list[(offset+1)%len(list)]
+		missions = append(missions, first, second)
+	}
+	sort.Slice(missions, func(i, j int) bool { return missions[i].ID < missions[j].ID })
+	s.mu.Lock()
+	s.dailyMissions[key] = missions
+	s.mu.Unlock()
+	return missions
+}
+
+func (s *MarketStore) DailyMissionStatus(userID int64, date time.Time) ([]DailyMissionStatus, error) {
+	if userID == 0 {
+		return nil, errors.New("user_id required")
+	}
+	missions := s.DailyMissions(date)
+	key := date.UTC().Format("2006-01-02")
+	s.mu.Lock()
+	s.ensureUserLocked(userID)
+	progress := s.ensureMissionProgressLocked(userID, key)
+	statuses := make([]DailyMissionStatus, 0, len(missions))
+	for _, mission := range missions {
+		statuses = append(statuses, DailyMissionStatus{
+			Mission:   mission,
+			Completed: progress.Completed[mission.ID],
+		})
+	}
+	s.mu.Unlock()
+	return statuses, nil
+}
+
+func (s *MarketStore) CompleteDailyMission(userID int64, missionID string, date time.Time) (MissionCompletionResult, error) {
+	if userID == 0 {
+		return MissionCompletionResult{}, errors.New("user_id required")
+	}
+	missionID = strings.TrimSpace(missionID)
+	if missionID == "" {
+		return MissionCompletionResult{}, errors.New("mission_id required")
+	}
+	date = date.UTC()
+	missions := s.DailyMissions(date)
+	var mission DailyMission
+	found := false
+	for _, candidate := range missions {
+		if candidate.ID == missionID {
+			mission = candidate
+			found = true
+			break
+		}
+	}
+	if !found {
+		return MissionCompletionResult{}, errors.New("mission not available today")
+	}
+	key := date.Format("2006-01-02")
+	var reward *DailyMissionReward
+	var info UserRankInfo
+	s.mu.Lock()
+	s.ensureUserLocked(userID)
+	progress := s.ensureMissionProgressLocked(userID, key)
+	if !progress.Completed[missionID] {
+		progress.Completed[missionID] = true
+	}
+	grade := strings.ToUpper(mission.Grade)
+	if grade != "" && !progress.Rewarded[grade] {
+		pairCompleted := true
+		for _, candidate := range missions {
+			if strings.EqualFold(candidate.Grade, grade) && !progress.Completed[candidate.ID] {
+				pairCompleted = false
+				break
+			}
+		}
+		if pairCompleted {
+			progress.Rewarded[grade] = true
+			rewardValue := missionRewardForGrade(grade)
+			if rewardValue.XP > 0 {
+				user := s.users[userID]
+				user.XP += rewardValue.XP
+				rank := rankDefinitionForXP(user.XP)
+				user.Rank = rank.Name
+				s.users[userID] = user
+			}
+			if rewardValue.Cash > 0 {
+				s.balances[userID][defaultCurrency] += rewardValue.Cash
+			}
+			reward = &rewardValue
+		}
+	}
+	info = s.userRankInfoLocked(userID)
+	user := s.users[userID]
+	cash := s.balances[userID][defaultCurrency]
+	s.mu.Unlock()
+	if reward != nil {
+		s.persistUser(user, cash)
+	}
+	return MissionCompletionResult{
+		Mission:      mission,
+		Completed:    true,
+		Reward:       reward,
+		UserProgress: info,
+	}, nil
+}
+
+func (s *MarketStore) ensureMissionProgressLocked(userID int64, dateKey string) *DailyMissionProgress {
+	progressByDate, ok := s.missionProgress[userID]
+	if !ok {
+		progressByDate = make(map[string]*DailyMissionProgress)
+		s.missionProgress[userID] = progressByDate
+	}
+	progress, ok := progressByDate[dateKey]
+	if !ok {
+		progress = &DailyMissionProgress{
+			Completed: make(map[string]bool),
+			Rewarded:  make(map[string]bool),
+		}
+		progressByDate[dateKey] = progress
+	}
+	return progress
+}
+
+func (s *MarketStore) Contracts(userID int64) []ContractStatus {
+	s.mu.RLock()
+	contracts := make([]ContractStatus, 0, len(s.contracts))
+	for _, contract := range s.contracts {
+		contracts = append(contracts, s.contractStatusLocked(contract, userID))
+	}
+	s.mu.RUnlock()
+	sort.Slice(contracts, func(i, j int) bool { return contracts[i].ID < contracts[j].ID })
+	return contracts
+}
+
+func (s *MarketStore) Contract(contractID, userID int64) (ContractStatus, bool) {
+	if contractID == 0 {
+		return ContractStatus{}, false
+	}
+	s.mu.RLock()
+	contract, ok := s.contracts[contractID]
+	if !ok {
+		s.mu.RUnlock()
+		return ContractStatus{}, false
+	}
+	status := s.contractStatusLocked(contract, userID)
+	s.mu.RUnlock()
+	return status, true
+}
+
+func (s *MarketStore) DeliverContract(userID, contractID, quantity int64) (ContractDeliveryResult, error) {
+	if userID == 0 {
+		return ContractDeliveryResult{}, errors.New("user_id required")
+	}
+	if contractID == 0 {
+		return ContractDeliveryResult{}, errors.New("contract_id required")
+	}
+	if quantity <= 0 {
+		return ContractDeliveryResult{}, errors.New("quantity must be positive")
+	}
+	now := time.Now().UTC().UnixMilli()
+	s.mu.Lock()
+	contract, ok := s.contracts[contractID]
+	if !ok {
+		s.mu.Unlock()
+		return ContractDeliveryResult{}, errors.New("contract not found")
+	}
+	if contract.DeadlineAt > 0 && now > contract.DeadlineAt {
+		s.mu.Unlock()
+		return ContractDeliveryResult{}, errors.New("contract expired")
+	}
+	if contract.Delivered >= contract.TotalRequired {
+		s.mu.Unlock()
+		return ContractDeliveryResult{}, errors.New("contract fulfilled")
+	}
+	s.ensureUserLocked(userID)
+	user := s.users[userID]
+	rankDef := rankDefinitionForXP(user.XP)
+	if def, ok := rankDefinitionByName(user.Rank); ok {
+		rankDef = def
+	}
+	minRankDef, ok := rankDefinitionByName(contract.MinRank)
+	if ok && rankDef.ID < minRankDef.ID {
+		s.mu.Unlock()
+		return ContractDeliveryResult{}, fmt.Errorf("rank %s required", minRankDef.Name)
+	}
+	remaining := contract.TotalRequired - contract.Delivered
+	if quantity > remaining {
+		s.mu.Unlock()
+		return ContractDeliveryResult{}, errors.New("quantity exceeds remaining")
+	}
+	available := s.positions[userID][contract.AssetID]
+	if available < quantity {
+		s.mu.Unlock()
+		return ContractDeliveryResult{}, errors.New("insufficient asset holdings")
+	}
+	contract.Delivered += quantity
+	s.positions[userID][contract.AssetID] -= quantity
+	contractProgress := s.ensureContractProgressLocked(userID)
+	contractProgress[contractID] += quantity
+	cashReward, ok := safeMultiplyInt64(quantity, contract.PricePerUnit)
+	if !ok {
+		s.mu.Unlock()
+		return ContractDeliveryResult{}, errors.New("cash reward overflow")
+	}
+	xpReward, ok := safeMultiplyInt64(quantity, contract.XPPerUnit)
+	if !ok {
+		s.mu.Unlock()
+		return ContractDeliveryResult{}, errors.New("xp reward overflow")
+	}
+	s.balances[userID][defaultCurrency] += cashReward
+	if xpReward > 0 {
+		user.XP += xpReward
+		rank := rankDefinitionForXP(user.XP)
+		user.Rank = rank.Name
+		s.users[userID] = user
+	}
+	status := s.contractStatusLocked(contract, userID)
+	info := s.userRankInfoLocked(userID)
+	cash := s.balances[userID][defaultCurrency]
+	s.mu.Unlock()
+	s.persistUser(user, cash)
+	return ContractDeliveryResult{
+		Contract:     status,
+		Quantity:     quantity,
+		CashReward:   cashReward,
+		XPReward:     xpReward,
+		UserProgress: info,
+	}, nil
+}
+
+func (s *MarketStore) ensureContractProgressLocked(userID int64) map[int64]int64 {
+	progress, ok := s.contractProgress[userID]
+	if !ok {
+		progress = make(map[int64]int64)
+		s.contractProgress[userID] = progress
+	}
+	return progress
+}
+
+func (s *MarketStore) contractStatusLocked(contract *Contract, userID int64) ContractStatus {
+	status := ContractStatus{}
+	if contract == nil {
+		return status
+	}
+	status.Contract = *contract
+	status.Remaining = contract.TotalRequired - contract.Delivered
+	if status.Remaining < 0 {
+		status.Remaining = 0
+	}
+	if userID != 0 {
+		status.UserDelivered = s.contractProgress[userID][contract.ID]
+	}
+	now := time.Now().UTC().UnixMilli()
+	status.Expired = contract.DeadlineAt > 0 && now > contract.DeadlineAt
+	status.Fulfilled = contract.Delivered >= contract.TotalRequired
+	return status
+}
+
+func (s *MarketStore) seedContracts(now time.Time) {
+	contracts := []Contract{
+		{
+			ID:            1,
+			Title:         "OmniCorp: Server Farm Expansion (Alpha)",
+			AssetID:       103,
+			TotalRequired: 5_000,
+			Delivered:     0,
+			PricePerUnit:  150,
+			MinRank:       "Shark",
+			DeadlineAt:    now.Add(72 * time.Hour).UnixMilli(),
+			XPPerUnit:     5,
+		},
+		{
+			ID:            2,
+			Title:         "Arcadia: Infrastructure Reserve Stockpile",
+			AssetID:       101,
+			TotalRequired: 1_000,
+			Delivered:     0,
+			PricePerUnit:  120,
+			MinRank:       "Shrimp",
+			DeadlineAt:    now.Add(48 * time.Hour).UnixMilli(),
+			XPPerUnit:     2,
+		},
+	}
+	for i := range contracts {
+		contract := contracts[i]
+		s.contracts[contract.ID] = &contract
+	}
+}

@@ -127,16 +127,20 @@ func (q *Queries) UpsertUser(ctx context.Context, user models.User, createdAt ti
 	if createdAt.IsZero() {
 		createdAt = time.Now().UTC()
 	}
+	rank := strings.TrimSpace(user.Rank)
+	if rank == "" {
+		rank = defaultUserRank
+	}
 	_, err := q.Conn.DB.ExecContext(ctx, `
 		INSERT INTO users (user_id, username, rank, created_at)
 		VALUES (?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE username = VALUES(username), rank = VALUES(rank)
-	`, user.ID, strings.TrimSpace(user.Username), defaultUserRank, createdAt.UnixMilli())
+	`, user.ID, strings.TrimSpace(user.Username), rank, createdAt.UnixMilli())
 	return err
 }
 
 func (q *Queries) ListUsers(ctx context.Context) ([]models.User, error) {
-	rows, err := q.Conn.DB.QueryContext(ctx, "SELECT user_id, username FROM users")
+	rows, err := q.Conn.DB.QueryContext(ctx, "SELECT user_id, username, rank FROM users")
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +148,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]models.User, error) {
 	var users []models.User
 	for rows.Next() {
 		var user models.User
-		if err := rows.Scan(&user.ID, &user.Username); err != nil {
+		if err := rows.Scan(&user.ID, &user.Username, &user.Rank); err != nil {
 			return nil, err
 		}
 		user.Role = "player"

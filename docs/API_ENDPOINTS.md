@@ -66,7 +66,27 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
 *   `GET /portfolio/performance`
     *   現在時点の資産評価スナップショットを取得します。
 
-## 5. Liquidity Pools & FX (流動性プール・FX)
+## 5. Progression & Missions (進行・ミッション)
+*   `GET /user/rank`
+    *   現在のランク/XP情報を取得します。`user_id` を指定しない場合は認証ユーザーを参照します。
+*   `GET /missions/daily`
+    *   本日のデイリーミッション一覧と達成状況を取得します。`user_id` を指定しない場合は認証ユーザーを参照します。
+*   `GET /user/missions`
+    *   `GET /missions/daily` と同様に、当日のミッション進捗を返します。
+*   `POST /missions/{mission_id}/complete`
+    *   指定ミッションの達成を報告します。Body: `user_id` (任意)。
+
+## 6. Contracts (大口コントラクト)
+*   `GET /contracts`
+    *   募集中のコントラクト一覧を取得します。`user_id` を指定するとユーザーの納品状況を含みます。
+*   `GET /contracts/{contract_id}`
+    *   指定コントラクトの詳細を取得します。`user_id` を指定するとユーザーの納品状況を含みます。
+*   `POST /contracts/{contract_id}/deliver`
+    *   コントラクトへ納品します。Body: `quantity`, `user_id` (任意)。
+*   `GET /user/contracts`
+    *   `GET /contracts` と同様に、ユーザーの納品状況を返します。
+
+## 7. Liquidity Pools & FX (流動性プール・FX)
 *   `GET /pools`
     *   流動性プールの一覧を取得します。
 *   `GET /pools/{pool_id}`
@@ -82,7 +102,7 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
     *   プールを介して通貨のスワップを行います。
     *   Body: `from_currency`, `to_currency`, `amount`, `user_id` (任意)。
 
-## 6. Margin Pools (信用取引プール)
+## 8. Margin Pools (信用取引プール)
 *   `GET /margin/pools`
     *   信用取引（貸株・融資）プールの一覧を取得します。
 *   `GET /margin/pools/{pool_id}`
@@ -94,7 +114,7 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
     *   供給した資金または株式を引き出します。
     *   Body: `cash_amount`, `asset_amount`, `user_id` (任意)。
 
-## 7. World Meta & Events (ゲーム世界情報)
+## 9. World Meta & Events (ゲーム世界情報)
 *   `GET /world/seasons/current`
     *   現在のシーズン情報（テーマ、終了日時など）を取得します。
 *   `GET /world/regions`
@@ -104,11 +124,11 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
 *   `GET /world/events`
     *   予定されているイベントや過去のイベントログを取得します。
 
-## 8. Leaderboard (ランキング)
+## 10. Leaderboard (ランキング)
 *   `GET /leaderboard`
     *   資産ランキングを取得します。`limit` で件数を指定できます（デフォルト20）。
 
-## 9. Indices (指数)
+## 11. Indices (指数)
 *   `POST /indices/{asset_id}/create`
     *   Index（指数）の構成銘柄（現物バスケット）を拠出し、Indexユニットを発行（Creation）します。
     *   **すべてのプレイヤーおよびBotが利用可能です。**

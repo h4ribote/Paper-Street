@@ -150,36 +150,40 @@ type AssetFilter struct {
 }
 
 type MarketStore struct {
-	mu              sync.RWMutex
-	assets          map[int64]models.Asset
-	basePrices      map[int64]int64
-	users           map[int64]models.User
-	orders          map[int64]*engine.Order
-	executions      []engine.Execution
-	balances        map[int64]map[string]int64
-	positions       map[int64]map[int64]int64
-	apiKeyToUser    map[string]int64
-	lastPrices      map[int64]int64
-	prevPrices      map[int64]int64
-	volumes         map[int64]int64
-	currencies      map[string]struct{}
-	pools           map[int64]LiquidityPool
-	poolPositions   map[int64]PoolPosition
-	marginPools     map[int64]MarginPool
-	marginProviders map[marginProviderKey]MarginProviderPosition
-	indexes         map[int64]IndexDefinition
-	nextUserID      int64
-	nextExecutionID int64
-	nextNewsID      int64
-	nextPoolPosID   int64
-	nextMarginPosID int64
-	news            []NewsItem
-	macroIndicators []MacroIndicator
-	seasons         []Season
-	regions         []Region
-	worldEvents     []WorldEvent
-	queries         *db.Queries
-	currencyIDs     map[string]int64
+	mu               sync.RWMutex
+	assets           map[int64]models.Asset
+	basePrices       map[int64]int64
+	users            map[int64]models.User
+	orders           map[int64]*engine.Order
+	executions       []engine.Execution
+	balances         map[int64]map[string]int64
+	positions        map[int64]map[int64]int64
+	apiKeyToUser     map[string]int64
+	lastPrices       map[int64]int64
+	prevPrices       map[int64]int64
+	volumes          map[int64]int64
+	currencies       map[string]struct{}
+	pools            map[int64]LiquidityPool
+	poolPositions    map[int64]PoolPosition
+	marginPools      map[int64]MarginPool
+	marginProviders  map[marginProviderKey]MarginProviderPosition
+	indexes          map[int64]IndexDefinition
+	dailyMissions    map[string][]DailyMission
+	missionProgress  map[int64]map[string]*DailyMissionProgress
+	contracts        map[int64]*Contract
+	contractProgress map[int64]map[int64]int64
+	nextUserID       int64
+	nextExecutionID  int64
+	nextNewsID       int64
+	nextPoolPosID    int64
+	nextMarginPosID  int64
+	news             []NewsItem
+	macroIndicators  []MacroIndicator
+	seasons          []Season
+	regions          []Region
+	worldEvents      []WorldEvent
+	queries          *db.Queries
+	currencyIDs      map[string]int64
 }
 
 // NewMarketStore builds an in-memory store. newMarketStore only errors when DB queries are supplied.
@@ -198,24 +202,28 @@ func NewMarketStoreWithDB(ctx context.Context, queries *db.Queries) (*MarketStor
 func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, error) {
 	now := time.Now().UTC()
 	store := &MarketStore{
-		assets:          make(map[int64]models.Asset),
-		basePrices:      make(map[int64]int64),
-		users:           make(map[int64]models.User),
-		orders:          make(map[int64]*engine.Order),
-		balances:        make(map[int64]map[string]int64),
-		positions:       make(map[int64]map[int64]int64),
-		apiKeyToUser:    make(map[string]int64),
-		lastPrices:      make(map[int64]int64),
-		prevPrices:      make(map[int64]int64),
-		volumes:         make(map[int64]int64),
-		currencies:      map[string]struct{}{defaultCurrency: {}},
-		pools:           make(map[int64]LiquidityPool),
-		poolPositions:   make(map[int64]PoolPosition),
-		marginPools:     make(map[int64]MarginPool),
-		marginProviders: make(map[marginProviderKey]MarginProviderPosition),
-		indexes:         make(map[int64]IndexDefinition),
-		nextUserID:      userIDSeed,
-		nextNewsID:      0,
+		assets:           make(map[int64]models.Asset),
+		basePrices:       make(map[int64]int64),
+		users:            make(map[int64]models.User),
+		orders:           make(map[int64]*engine.Order),
+		balances:         make(map[int64]map[string]int64),
+		positions:        make(map[int64]map[int64]int64),
+		apiKeyToUser:     make(map[string]int64),
+		lastPrices:       make(map[int64]int64),
+		prevPrices:       make(map[int64]int64),
+		volumes:          make(map[int64]int64),
+		currencies:       map[string]struct{}{defaultCurrency: {}},
+		pools:            make(map[int64]LiquidityPool),
+		poolPositions:    make(map[int64]PoolPosition),
+		marginPools:      make(map[int64]MarginPool),
+		marginProviders:  make(map[marginProviderKey]MarginProviderPosition),
+		indexes:          make(map[int64]IndexDefinition),
+		dailyMissions:    make(map[string][]DailyMission),
+		missionProgress:  make(map[int64]map[string]*DailyMissionProgress),
+		contracts:        make(map[int64]*Contract),
+		contractProgress: make(map[int64]map[int64]int64),
+		nextUserID:       userIDSeed,
+		nextNewsID:       0,
 		macroIndicators: []MacroIndicator{
 			{Country: "Neo Venice", Type: "GDP_GROWTH", Value: macroGDPGrowth, PublishedAt: now.Add(-24 * time.Hour).UnixMilli()},
 			{Country: "Arcadia", Type: "CPI", Value: macroCPI, PublishedAt: now.Add(-12 * time.Hour).UnixMilli()},
@@ -240,6 +248,7 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 		store.seedMarginPools()
 		store.seedIndexes()
 		store.seedNews(now)
+		store.seedContracts(now)
 		return store, nil
 	}
 	currencyID, err := queries.EnsureDefaultCurrency(ctx, defaultCurrency)
@@ -254,6 +263,7 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 	store.seedMarginPools()
 	store.seedIndexes()
 	store.seedNews(now)
+	store.seedContracts(now)
 	return store, nil
 }
 
@@ -380,6 +390,7 @@ func (s *MarketStore) AddUser(username string) models.User {
 		ID:       s.nextUserID,
 		Username: stringOrDefault(username, fmt.Sprintf("user-%d", s.nextUserID)),
 		Role:     "player",
+		Rank:     defaultRankName,
 	}
 	s.users[user.ID] = user
 	s.balances[user.ID] = map[string]int64{defaultCurrency: defaultCashBalance}
@@ -787,8 +798,11 @@ func (s *MarketStore) ensureUserLocked(userID int64) models.User {
 	}
 	user, ok := s.users[userID]
 	if !ok {
-		user = models.User{ID: userID, Username: fmt.Sprintf("user-%d", userID), Role: "player"}
+		user = models.User{ID: userID, Username: fmt.Sprintf("user-%d", userID), Role: "player", Rank: defaultRankName}
 		s.users[userID] = user
+	}
+	if user.Rank == "" {
+		user.Rank = defaultRankName
 	}
 	if _, ok := s.balances[userID]; !ok {
 		s.balances[userID] = map[string]int64{defaultCurrency: defaultCashBalance}
@@ -805,6 +819,7 @@ func (s *MarketStore) ensureUserLocked(userID int64) models.User {
 	if _, ok := s.positions[userID]; !ok {
 		s.positions[userID] = make(map[int64]int64)
 	}
+	s.users[userID] = user
 	return user
 }
 
@@ -854,11 +869,40 @@ func (s *MarketStore) applyExecutionLocked(exec engine.Execution) bool {
 	if !ok {
 		return false
 	}
-	if s.balances[buyerID][defaultCurrency] < cashDelta {
+	takerUser := s.users[taker.UserID]
+	makerUser := s.users[maker.UserID]
+	takerRank := rankDefinitionForXP(takerUser.XP)
+	makerRank := rankDefinitionForXP(makerUser.XP)
+	if def, ok := rankDefinitionByName(takerUser.Rank); ok {
+		takerRank = def
+	}
+	if def, ok := rankDefinitionByName(makerUser.Rank); ok {
+		makerRank = def
+	}
+	takerFeeBps10 := takerRank.TakerFeeBps10
+	makerFeeBps10 := makerRank.MakerFeeBps10
+	takerFee, err := calculateFeeBps10(cashDelta, takerFeeBps10)
+	if err != nil {
 		return false
 	}
-	s.balances[buyerID][defaultCurrency] -= cashDelta
-	s.balances[sellerID][defaultCurrency] += cashDelta
+	makerFee, err := calculateFeeBps10(cashDelta, makerFeeBps10)
+	if err != nil {
+		return false
+	}
+	buyerFee := makerFee
+	sellerFee := takerFee
+	if taker.Side == engine.SideBuy {
+		buyerFee = takerFee
+		sellerFee = makerFee
+	}
+	totalCost := cashDelta + buyerFee
+	if s.balances[buyerID][defaultCurrency] < totalCost {
+		return false
+	}
+	s.balances[buyerID][defaultCurrency] -= totalCost
+	if cashDelta > sellerFee {
+		s.balances[sellerID][defaultCurrency] += cashDelta - sellerFee
+	}
 	s.positions[buyerID][exec.AssetID] += exec.Quantity
 	s.positions[sellerID][exec.AssetID] -= exec.Quantity
 	return true
@@ -936,6 +980,12 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 		return err
 	}
 	for _, user := range users {
+		user = normalizeUser(user, user.ID)
+		if user.XP == 0 {
+			if rankDef, ok := rankDefinitionByName(user.Rank); ok {
+				user.XP = rankDef.RequiredXP
+			}
+		}
 		s.users[user.ID] = user
 		if user.ID > s.nextUserID {
 			s.nextUserID = user.ID
@@ -1155,6 +1205,9 @@ func normalizeUser(user models.User, fallbackID int64) models.User {
 	}
 	if user.Role == "" {
 		user.Role = "player"
+	}
+	if user.Rank == "" {
+		user.Rank = defaultRankName
 	}
 	return user
 }
