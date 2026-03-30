@@ -7,7 +7,6 @@
 
 | 設計ドキュメント | 仕様の要点 | 現状のバックエンド実装 | 状態 |
 | --- | --- | --- | --- |
-| [FX_MARKET_MODEL.md](./design/FX_MARKET_MODEL.md) | 集中流動性・Tick・マルチホップ・Fee Tier 分割 | Tick 価格計算・集中流動性スワップ・Fee Tier 分割・ARCマルチホップを実装。`/pools/0/swap` でルーター選択が可能。 | 実装済み |
 | [AI_ECOSYSTEM.md](./design/AI_ECOSYSTEM.md) | 12種類のボット戦略 | `internal/bots/` と `cmd/bots/` にあるのは **Market Maker / News Reactor のみ**。他の戦略は未実装。 | 未実装 |
 | [ISOLATED_MARGIN_MODEL.md](./design/ISOLATED_MARGIN_MODEL.md) | 75%ロスカット・強制決済・監視Bot | `internal/api/liquidity.go` にマージンプールと金利計算はあるが、**ポジション単位の損失計算/ロスカット/強制決済処理が存在しない**。 | 未実装 |
 | [DUAL_LIQUIDITY_INVENTORY.md](./design/DUAL_LIQUIDITY_INVENTORY.md) | 利用率ベース金利・金利徴収サイクル・借入フロー | `marginRates` に利用率のキンク計算はあるが、**借入/返済フローや定期金利徴収の処理が未実装**。 | 部分実装 |
