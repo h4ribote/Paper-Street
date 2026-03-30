@@ -262,6 +262,7 @@ func (s *MarketStore) EnqueueOrder(order *engine.Order) {
 		return
 	}
 	s.mu.Lock()
+	// In-memory state is authoritative even if DB persistence fails.
 	s.ensureUserLocked(order.UserID)
 	s.ensureAssetLocked(order.AssetID)
 	cloned := cloneOrder(order)
@@ -279,6 +280,12 @@ func (s *MarketStore) EnqueueOrder(order *engine.Order) {
 
 func (s *MarketStore) EnqueueExecution(execution engine.Execution) {
 	s.mu.Lock()
+	takerOrder := s.orders[execution.TakerOrderID]
+	makerOrder := s.orders[execution.MakerOrderID]
+	if takerOrder == nil || makerOrder == nil {
+		s.mu.Unlock()
+		return
+	}
 	if !s.applyExecutionLocked(execution) {
 		s.mu.Unlock()
 		return
@@ -286,12 +293,6 @@ func (s *MarketStore) EnqueueExecution(execution engine.Execution) {
 	if execution.ID == 0 {
 		s.nextExecutionID++
 		execution.ID = s.nextExecutionID
-	}
-	takerOrder := s.orders[execution.TakerOrderID]
-	makerOrder := s.orders[execution.MakerOrderID]
-	if takerOrder == nil || makerOrder == nil {
-		s.mu.Unlock()
-		return
 	}
 	taker := cloneOrder(takerOrder)
 	maker := cloneOrder(makerOrder)
