@@ -895,6 +895,9 @@ func (s *MarketStore) applyExecutionLocked(exec engine.Execution) bool {
 		buyerFee = takerFee
 		sellerFee = makerFee
 	}
+	if sellerFee >= cashDelta {
+		return false
+	}
 	totalCost := cashDelta + buyerFee
 	if s.balances[buyerID][defaultCurrency] < totalCost {
 		return false
