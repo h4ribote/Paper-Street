@@ -273,8 +273,8 @@ func (s *MarketStore) EnqueueOrder(order *engine.Order) {
 
 func (s *MarketStore) EnqueueExecution(execution engine.Execution) {
 	s.mu.Lock()
-	taker := s.orders[execution.TakerOrderID]
-	maker := s.orders[execution.MakerOrderID]
+	taker := cloneOrder(s.orders[execution.TakerOrderID])
+	maker := cloneOrder(s.orders[execution.MakerOrderID])
 	if execution.ID == 0 {
 		s.nextExecutionID++
 		execution.ID = s.nextExecutionID
@@ -299,7 +299,24 @@ func (s *MarketStore) EnqueueExecution(execution engine.Execution) {
 	buyerUser := s.users[buyerID]
 	sellerUser := s.users[sellerID]
 	s.mu.Unlock()
-	s.persistExecution(execution, taker, asset, basePrice, buyerUser, sellerUser, buyerID, sellerID, buyerCash, sellerCash, buyerQty, sellerQty)
+	s.persistExecution(executionSnapshot{
+		Execution: execution,
+		Taker:     taker,
+		Asset:     asset,
+		BasePrice: basePrice,
+		Buyer: partySnapshot{
+			UserID:   buyerID,
+			User:     buyerUser,
+			Cash:     buyerCash,
+			Quantity: buyerQty,
+		},
+		Seller: partySnapshot{
+			UserID:   sellerID,
+			User:     sellerUser,
+			Cash:     sellerCash,
+			Quantity: sellerQty,
+		},
+	})
 }
 
 func (s *MarketStore) Shutdown(ctx context.Context) error {
@@ -1034,25 +1051,13 @@ func (s *MarketStore) persistOrder(order *engine.Order, user models.User, asset 
 		return
 	}
 	ctx := context.Background()
-	if user.ID == 0 {
-		user = models.User{ID: order.UserID, Username: fmt.Sprintf("user-%d", order.UserID), Role: "player"}
-	}
+	user = normalizeUser(user, order.UserID)
 	if err := s.queries.UpsertUser(ctx, user, time.Now().UTC()); err != nil {
 		log.Printf("db upsert user %d: %v", user.ID, err)
 		return
 	}
-	if asset.ID == 0 {
-		asset = models.Asset{
-			ID:     order.AssetID,
-			Symbol: fmt.Sprintf("ASSET-%d", order.AssetID),
-			Name:   fmt.Sprintf("Asset %d", order.AssetID),
-			Type:   "STOCK",
-			Sector: "GENERAL",
-		}
-	}
-	if basePrice == 0 {
-		basePrice = defaultAssetPrice
-	}
+	asset = normalizeAsset(asset, order.AssetID)
+	basePrice = normalizeBasePrice(basePrice)
 	if err := s.queries.UpsertAsset(ctx, asset, basePrice); err != nil {
 		log.Printf("db upsert asset %d: %v", asset.ID, err)
 		return
@@ -1062,58 +1067,99 @@ func (s *MarketStore) persistOrder(order *engine.Order, user models.User, asset 
 	}
 }
 
-func (s *MarketStore) persistExecution(exec engine.Execution, taker *engine.Order, asset models.Asset, basePrice int64, buyerUser models.User, sellerUser models.User, buyerID int64, sellerID int64, buyerCash int64, sellerCash int64, buyerQty int64, sellerQty int64) {
-	if s.queries == nil || taker == nil || buyerID == 0 || sellerID == 0 {
+type partySnapshot struct {
+	UserID   int64
+	User     models.User
+	Cash     int64
+	Quantity int64
+}
+
+type executionSnapshot struct {
+	Execution engine.Execution
+	Taker     *engine.Order
+	Asset     models.Asset
+	BasePrice int64
+	Buyer     partySnapshot
+	Seller    partySnapshot
+}
+
+func (s *MarketStore) persistExecution(snapshot executionSnapshot) {
+	if s.queries == nil || snapshot.Taker == nil || snapshot.Buyer.UserID == 0 || snapshot.Seller.UserID == 0 {
 		return
 	}
 	ctx := context.Background()
-	if buyerUser.ID == 0 {
-		buyerUser = models.User{ID: buyerID, Username: fmt.Sprintf("user-%d", buyerID), Role: "player"}
-	}
-	if sellerUser.ID == 0 {
-		sellerUser = models.User{ID: sellerID, Username: fmt.Sprintf("user-%d", sellerID), Role: "player"}
-	}
-	if err := s.queries.UpsertUser(ctx, buyerUser, time.Now().UTC()); err != nil {
-		log.Printf("db upsert user %d: %v", buyerUser.ID, err)
+	buyer := normalizeUser(snapshot.Buyer.User, snapshot.Buyer.UserID)
+	seller := normalizeUser(snapshot.Seller.User, snapshot.Seller.UserID)
+	if err := s.queries.UpsertUser(ctx, buyer, time.Now().UTC()); err != nil {
+		log.Printf("db upsert user %d: %v", buyer.ID, err)
 		return
 	}
-	if err := s.queries.UpsertUser(ctx, sellerUser, time.Now().UTC()); err != nil {
-		log.Printf("db upsert user %d: %v", sellerUser.ID, err)
+	if err := s.queries.UpsertUser(ctx, seller, time.Now().UTC()); err != nil {
+		log.Printf("db upsert user %d: %v", seller.ID, err)
 		return
 	}
-	if asset.ID == 0 {
-		asset = models.Asset{
-			ID:     exec.AssetID,
-			Symbol: fmt.Sprintf("ASSET-%d", exec.AssetID),
-			Name:   fmt.Sprintf("Asset %d", exec.AssetID),
-			Type:   "STOCK",
-			Sector: "GENERAL",
-		}
-	}
-	if basePrice == 0 {
-		basePrice = defaultAssetPrice
-	}
+	asset := normalizeAsset(snapshot.Asset, snapshot.Execution.AssetID)
+	basePrice := normalizeBasePrice(snapshot.BasePrice)
 	if err := s.queries.UpsertAsset(ctx, asset, basePrice); err != nil {
 		log.Printf("db upsert asset %d: %v", asset.ID, err)
 		return
 	}
-	if err := s.queries.InsertExecution(ctx, exec, taker.Side); err != nil {
-		log.Printf("db insert execution %d: %v", exec.ID, err)
+	if err := s.queries.InsertExecution(ctx, snapshot.Execution, snapshot.Taker.Side); err != nil {
+		log.Printf("db insert execution %d: %v", snapshot.Execution.ID, err)
 		return
 	}
 	currencyID := s.currencyIDs[defaultCurrency]
 	if currencyID != 0 {
-		if err := s.queries.SetCurrencyBalance(ctx, buyerID, currencyID, buyerCash); err != nil {
-			log.Printf("db set currency balance %d: %v", buyerID, err)
+		if err := s.queries.SetCurrencyBalance(ctx, snapshot.Buyer.UserID, currencyID, snapshot.Buyer.Cash); err != nil {
+			log.Printf("db set currency balance %d: %v", snapshot.Buyer.UserID, err)
 		}
-		if err := s.queries.SetCurrencyBalance(ctx, sellerID, currencyID, sellerCash); err != nil {
-			log.Printf("db set currency balance %d: %v", sellerID, err)
+		if err := s.queries.SetCurrencyBalance(ctx, snapshot.Seller.UserID, currencyID, snapshot.Seller.Cash); err != nil {
+			log.Printf("db set currency balance %d: %v", snapshot.Seller.UserID, err)
 		}
 	}
-	if err := s.queries.SetAssetBalance(ctx, buyerID, exec.AssetID, buyerQty); err != nil {
-		log.Printf("db set asset balance %d: %v", buyerID, err)
+	if err := s.queries.SetAssetBalance(ctx, snapshot.Buyer.UserID, snapshot.Execution.AssetID, snapshot.Buyer.Quantity); err != nil {
+		log.Printf("db set asset balance %d: %v", snapshot.Buyer.UserID, err)
 	}
-	if err := s.queries.SetAssetBalance(ctx, sellerID, exec.AssetID, sellerQty); err != nil {
-		log.Printf("db set asset balance %d: %v", sellerID, err)
+	if err := s.queries.SetAssetBalance(ctx, snapshot.Seller.UserID, snapshot.Execution.AssetID, snapshot.Seller.Quantity); err != nil {
+		log.Printf("db set asset balance %d: %v", snapshot.Seller.UserID, err)
 	}
+}
+
+func normalizeUser(user models.User, fallbackID int64) models.User {
+	if user.ID == 0 {
+		user.ID = fallbackID
+	}
+	if user.Username == "" && user.ID != 0 {
+		user.Username = fmt.Sprintf("user-%d", user.ID)
+	}
+	if user.Role == "" {
+		user.Role = "player"
+	}
+	return user
+}
+
+func normalizeAsset(asset models.Asset, fallbackID int64) models.Asset {
+	if asset.ID == 0 {
+		asset.ID = fallbackID
+	}
+	if asset.ID != 0 && asset.Symbol == "" {
+		asset.Symbol = fmt.Sprintf("ASSET-%d", asset.ID)
+	}
+	if asset.ID != 0 && asset.Name == "" {
+		asset.Name = fmt.Sprintf("Asset %d", asset.ID)
+	}
+	if asset.Type == "" {
+		asset.Type = "STOCK"
+	}
+	if asset.Sector == "" {
+		asset.Sector = "GENERAL"
+	}
+	return asset
+}
+
+func normalizeBasePrice(basePrice int64) int64 {
+	if basePrice == 0 {
+		return defaultAssetPrice
+	}
+	return basePrice
 }

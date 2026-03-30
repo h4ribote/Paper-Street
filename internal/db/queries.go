@@ -93,7 +93,11 @@ func (q *Queries) EnsureDefaultCurrency(ctx context.Context, code string) (int64
 	result, err := tx.ExecContext(ctx, "INSERT INTO currencies (country_id, code, name) VALUES (?, ?, ?)", countryID, code, defaultCurrencyName)
 	if err != nil {
 		_ = tx.Rollback()
-		return q.EnsureDefaultCurrency(ctx, code)
+		currencyID, lookupErr := q.lookupCurrencyID(ctx, code)
+		if lookupErr == nil {
+			return currencyID, nil
+		}
+		return 0, err
 	}
 	currencyID, err = result.LastInsertId()
 	if err != nil {
@@ -101,6 +105,15 @@ func (q *Queries) EnsureDefaultCurrency(ctx context.Context, code string) (int64
 		return 0, err
 	}
 	if err = tx.Commit(); err != nil {
+		return 0, err
+	}
+	return currencyID, nil
+}
+
+func (q *Queries) lookupCurrencyID(ctx context.Context, code string) (int64, error) {
+	var currencyID int64
+	err := q.Conn.DB.QueryRowContext(ctx, "SELECT currency_id FROM currencies WHERE code = ? LIMIT 1", code).Scan(&currencyID)
+	if err != nil {
 		return 0, err
 	}
 	return currencyID, nil
