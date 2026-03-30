@@ -12,7 +12,7 @@ const (
 	marginLossCutBps   = int64(7_500)
 	liquidationFeeBps  = int64(1_000)
 	marginLeverageMin  = int64(1)
-	millisPerDay       = int64(24 * time.Hour / time.Millisecond)
+	millisecondsPerDay = int64(24 * time.Hour / time.Millisecond)
 	marginPriceMissing = int64(0)
 )
 
@@ -204,7 +204,7 @@ func (s *MarketStore) accrueMarginFeesLocked(position MarginPosition, now int64)
 		position.lastFeeAt = now
 		return position
 	}
-	fee = fee / millisPerDay
+	fee = fee / millisecondsPerDay
 	if fee > 0 {
 		position.AccumulatedFees += fee
 	}
@@ -254,6 +254,7 @@ func (s *MarketStore) lossRatioBps(marginUsed, totalLoss int64) int64 {
 	}
 	numerator, ok := safeMultiplyInt64(totalLoss, bpsDenominator)
 	if !ok {
+		// Overflow implies the loss ratio exceeds 100%, so cap at the denominator.
 		return bpsDenominator
 	}
 	return numerator / marginUsed
@@ -363,7 +364,7 @@ func (s *MarketStore) checkMarginLiquidationsLocked(assetID int64) {
 		}
 		position = s.refreshMarginPositionLocked(position, now)
 		if position.LossRatioBps >= marginLossCutBps {
-			s.liquidateMarginPositionLocked(position)
+			s.liquidateMarginPositionLocked(position, now)
 			delete(s.marginPositions, id)
 			continue
 		}
@@ -371,7 +372,7 @@ func (s *MarketStore) checkMarginLiquidationsLocked(assetID int64) {
 	}
 }
 
-func (s *MarketStore) liquidateMarginPositionLocked(position MarginPosition) {
+func (s *MarketStore) liquidateMarginPositionLocked(position MarginPosition, now int64) {
 	totalLoss := position.UnrealizedLoss + position.AccumulatedFees
 	remaining := position.MarginUsed - totalLoss
 	if remaining < 0 {
@@ -405,7 +406,7 @@ func (s *MarketStore) liquidateMarginPositionLocked(position MarginPosition) {
 		LossRatioBps:    position.LossRatioBps,
 		LiquidationFee:  fee,
 		RemainingMargin: payout,
-		OccurredAt:      time.Now().UTC().UnixMilli(),
+		OccurredAt:      now,
 	}
 	s.marginLiquidations = append(s.marginLiquidations, event)
 }
