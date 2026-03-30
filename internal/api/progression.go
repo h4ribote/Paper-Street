@@ -466,6 +466,9 @@ func (s *MarketStore) refreshContractsLocked(now time.Time) {
 }
 
 func (s *MarketStore) syncContractIDLocked() {
+	if s.nextContractID != 0 {
+		return
+	}
 	for id := range s.contracts {
 		if id > s.nextContractID {
 			s.nextContractID = id
@@ -603,7 +606,7 @@ func contractTemplateForKind(kind contractKind, asset models.Asset) contractTemp
 		}
 	default:
 		title := fmt.Sprintf("OmniCorp: %s Capacity Expansion", asset.Name)
-		if stringsEqualFold(asset.Symbol, "AUR") {
+		if asset.ID == contractAssetAUR {
 			title = "OmniCorp: Server Farm Expansion (Alpha)"
 		}
 		return contractTemplate{
@@ -655,11 +658,22 @@ func (s *MarketStore) calculateContractPriceLocked(assetID int64, kind contractK
 	if !ok {
 		return base
 	}
-	price := (scaled + 9_999) / 10_000
+	price := roundUpDiv(scaled, 10_000)
 	if price <= 0 {
 		return base
 	}
 	return price
+}
+
+func roundUpDiv(value, denom int64) int64 {
+	if denom <= 0 {
+		return value
+	}
+	adjusted, ok := safeAddInt64(value, denom-1)
+	if !ok {
+		return value / denom
+	}
+	return adjusted / denom
 }
 
 func (s *MarketStore) contractPremiumBpsLocked(assetID int64, kind contractKind) int64 {
