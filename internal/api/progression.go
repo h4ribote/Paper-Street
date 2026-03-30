@@ -13,10 +13,22 @@ import (
 const (
 	defaultRankName       = "Shrimp"
 	secondsPerDay         = int64(24 * time.Hour / time.Second)
-	contractAssetOMNI     = int64(101)
+	contractAssetNYX      = int64(102)
 	contractAssetAUR      = int64(103)
 	contractDeadlineLong  = 72 * time.Hour
 	contractDeadlineShort = 48 * time.Hour
+	contractPremiumMinBps = int64(500)
+	contractPremiumMaxBps = int64(1000)
+	contractVolumeStep    = int64(1_000)
+	contractVWAPWindow    = 24 * time.Hour
+	contractCapexBaseQty  = int64(5_000)
+	contractGovBaseQty    = int64(2_000)
+	contractCapexXP       = int64(5)
+	contractGovXP         = int64(3)
+	contractCorpName      = "OmniCorp"
+	contractGovName       = "Boros Federation"
+	contractCapexMinRank  = "Shark"
+	contractGovMinRank    = defaultRankName
 )
 
 type RankDefinition struct {
@@ -94,6 +106,22 @@ type Contract struct {
 	MinRank       string `json:"min_rank"`
 	DeadlineAt    int64  `json:"deadline_at"`
 	XPPerUnit     int64  `json:"xp_per_unit"`
+}
+
+type contractKind string
+
+const (
+	contractKindCapex       contractKind = "CAPEX"
+	contractKindProcurement contractKind = "PROCUREMENT"
+)
+
+type contractTemplate struct {
+	title        string
+	assetID      int64
+	minRank      string
+	deadline     time.Duration
+	baseRequired int64
+	xpPerUnit    int64
 }
 
 type ContractStatus struct {
@@ -434,13 +462,297 @@ func (s *MarketStore) ensureMissionProgressLocked(userID int64, dateKey string) 
 	return progress
 }
 
+func (s *MarketStore) refreshContractsLocked(now time.Time) {
+	s.syncContractIDLocked()
+	s.pruneContractsLocked(now)
+	s.ensureContractKindLocked(now, contractKindCapex)
+	s.ensureContractKindLocked(now, contractKindProcurement)
+}
+
+func (s *MarketStore) syncContractIDLocked() {
+	if s.nextContractID != 0 {
+		return
+	}
+	for id := range s.contracts {
+		if id > s.nextContractID {
+			s.nextContractID = id
+		}
+	}
+}
+
+func (s *MarketStore) pruneContractsLocked(now time.Time) {
+	nowMillis := now.UTC().UnixMilli()
+	for id, contract := range s.contracts {
+		if contract == nil {
+			delete(s.contracts, id)
+			continue
+		}
+		if contract.Delivered >= contract.TotalRequired {
+			delete(s.contracts, id)
+			continue
+		}
+		if contract.DeadlineAt > 0 && nowMillis > contract.DeadlineAt {
+			delete(s.contracts, id)
+		}
+	}
+}
+
+func (s *MarketStore) ensureContractKindLocked(now time.Time, kind contractKind) {
+	for _, contract := range s.contracts {
+		if s.contractKindForAssetLocked(contract.AssetID) == kind {
+			return
+		}
+	}
+	contract := s.generateContractLocked(now, kind)
+	if contract != nil {
+		s.contracts[contract.ID] = contract
+	}
+}
+
+func (s *MarketStore) contractKindForAssetLocked(assetID int64) contractKind {
+	asset := s.assets[assetID]
+	if stringsEqualFold(asset.Sector, "ENERGY") {
+		return contractKindProcurement
+	}
+	if stringsEqualFold(asset.Type, "COMMODITY") {
+		return contractKindCapex
+	}
+	return contractKindCapex
+}
+
+func (s *MarketStore) generateContractLocked(now time.Time, kind contractKind) *Contract {
+	asset := s.pickContractAssetLocked(kind)
+	if asset.ID == 0 {
+		return nil
+	}
+	template := contractTemplateForKind(kind, asset)
+	totalRequired := s.scaleContractRequirementLocked(asset.ID, template.baseRequired)
+	pricePerUnit := s.calculateContractPriceLocked(asset.ID, kind, now)
+	if pricePerUnit <= 0 {
+		pricePerUnit = s.basePrices[asset.ID]
+	}
+	if pricePerUnit <= 0 {
+		pricePerUnit = defaultAssetPrice
+	}
+	s.nextContractID++
+	contract := &Contract{
+		ID:            s.nextContractID,
+		Title:         template.title,
+		AssetID:       asset.ID,
+		TotalRequired: totalRequired,
+		Delivered:     0,
+		PricePerUnit:  pricePerUnit,
+		MinRank:       template.minRank,
+		DeadlineAt:    now.Add(template.deadline).UnixMilli(),
+		XPPerUnit:     template.xpPerUnit,
+	}
+	return contract
+}
+
+func (s *MarketStore) pickContractAssetLocked(kind contractKind) models.Asset {
+	if kind == contractKindCapex {
+		if asset, ok := s.assets[contractAssetAUR]; ok {
+			return asset
+		}
+	}
+	if kind == contractKindProcurement {
+		if asset, ok := s.assets[contractAssetNYX]; ok {
+			return asset
+		}
+	}
+	assets := sortedAssets(s.assets)
+	var selected models.Asset
+	var bestScore int64
+	for _, asset := range assets {
+		switch kind {
+		case contractKindCapex:
+			if !stringsEqualFold(asset.Type, "COMMODITY") {
+				continue
+			}
+		case contractKindProcurement:
+			if !stringsEqualFold(asset.Sector, "ENERGY") {
+				continue
+			}
+		}
+		volume := s.volumes[asset.ID]
+		score := volume
+		if score == 0 {
+			score = s.basePrices[asset.ID]
+		}
+		if selected.ID == 0 || score > bestScore {
+			selected = asset
+			bestScore = score
+		}
+	}
+	if selected.ID != 0 {
+		return selected
+	}
+	if len(assets) > 0 {
+		return assets[0]
+	}
+	return models.Asset{}
+}
+
+func contractTemplateForKind(kind contractKind, asset models.Asset) contractTemplate {
+	switch kind {
+	case contractKindProcurement:
+		title := fmt.Sprintf("%s: %s Strategic Reserve", contractGovName, asset.Name)
+		if strings.TrimSpace(asset.Name) == "" {
+			title = fmt.Sprintf("%s: Strategic Reserve Procurement", contractGovName)
+		}
+		return contractTemplate{
+			title:        title,
+			assetID:      asset.ID,
+			minRank:      contractGovMinRank,
+			deadline:     contractDeadlineShort,
+			baseRequired: contractGovBaseQty,
+			xpPerUnit:    contractGovXP,
+		}
+	default:
+		title := fmt.Sprintf("%s: %s Capacity Expansion", contractCorpName, asset.Name)
+		if strings.TrimSpace(asset.Name) == "" {
+			title = fmt.Sprintf("%s: Capacity Expansion", contractCorpName)
+		}
+		if asset.ID == contractAssetAUR {
+			title = fmt.Sprintf("%s: Server Farm Expansion (Alpha)", contractCorpName)
+		}
+		return contractTemplate{
+			title:        title,
+			assetID:      asset.ID,
+			minRank:      contractCapexMinRank,
+			deadline:     contractDeadlineLong,
+			baseRequired: contractCapexBaseQty,
+			xpPerUnit:    contractCapexXP,
+		}
+	}
+}
+
+func (s *MarketStore) scaleContractRequirementLocked(assetID int64, base int64) int64 {
+	if base <= 0 {
+		return 0
+	}
+	volume := s.volumes[assetID]
+	multiplier := int64(1)
+	if volume > 0 {
+		multiplier = volume / contractVolumeStep
+		if multiplier < 1 {
+			multiplier = 1
+		}
+		if multiplier > 3 {
+			multiplier = 3
+		}
+	}
+	required, ok := safeMultiplyInt64(base, multiplier)
+	if !ok || required <= 0 {
+		return base
+	}
+	return required
+}
+
+func (s *MarketStore) calculateContractPriceLocked(assetID int64, kind contractKind, now time.Time) int64 {
+	base := s.contractVWAPLocked(assetID, now)
+	if base == 0 {
+		base = s.lastPrices[assetID]
+	}
+	if base == 0 {
+		base = s.basePrices[assetID]
+	}
+	if base == 0 {
+		base = defaultAssetPrice
+	}
+	premium := s.contractPremiumBpsLocked(assetID, kind)
+	scaled, ok := safeMultiplyInt64(base, 10_000+premium)
+	if !ok {
+		return base
+	}
+	price := roundUpDiv(scaled, 10_000)
+	if price <= 0 {
+		return base
+	}
+	return price
+}
+
+func roundUpDiv(value, denom int64) int64 {
+	if denom <= 0 {
+		return value
+	}
+	adjusted, ok := safeAddInt64(value, denom-1)
+	if !ok {
+		return value / denom
+	}
+	return adjusted / denom
+}
+
+func (s *MarketStore) contractPremiumBpsLocked(assetID int64, kind contractKind) int64 {
+	premium := contractPremiumMinBps
+	volume := s.volumes[assetID]
+	if volume > 0 {
+		bump := volume / contractVolumeStep
+		if bump > 3 {
+			bump = 3
+		}
+		premium += bump * 100
+	}
+	if s.lastPriceChange(assetID) > 0 {
+		premium += 100
+	}
+	if kind == contractKindCapex {
+		premium += 100
+	}
+	if premium < contractPremiumMinBps {
+		return contractPremiumMinBps
+	}
+	if premium > contractPremiumMaxBps {
+		return contractPremiumMaxBps
+	}
+	return premium
+}
+
+func (s *MarketStore) contractVWAPLocked(assetID int64, now time.Time) int64 {
+	if assetID == 0 {
+		return 0
+	}
+	cutoff := now.Add(-contractVWAPWindow)
+	var totalQty int64
+	var totalNotional int64
+	for _, exec := range s.executions {
+		if exec.AssetID != assetID {
+			continue
+		}
+		if exec.OccurredAtUTC.Before(cutoff) {
+			continue
+		}
+		if exec.Quantity <= 0 || exec.Price <= 0 {
+			continue
+		}
+		notional, ok := safeMultiplyInt64(exec.Price, exec.Quantity)
+		if !ok {
+			continue
+		}
+		totalNotional, ok = safeAddInt64(totalNotional, notional)
+		if !ok {
+			return 0
+		}
+		totalQty, ok = safeAddInt64(totalQty, exec.Quantity)
+		if !ok {
+			return 0
+		}
+	}
+	if totalQty == 0 {
+		return 0
+	}
+	return totalNotional / totalQty
+}
+
 func (s *MarketStore) Contracts(userID int64) []ContractStatus {
-	s.mu.RLock()
+	now := time.Now().UTC()
+	s.mu.Lock()
+	s.refreshContractsLocked(now)
 	contracts := make([]ContractStatus, 0, len(s.contracts))
 	for _, contract := range s.contracts {
 		contracts = append(contracts, s.contractStatusLocked(contract, userID))
 	}
-	s.mu.RUnlock()
+	s.mu.Unlock()
 	sort.Slice(contracts, func(i, j int) bool { return contracts[i].ID < contracts[j].ID })
 	return contracts
 }
@@ -449,14 +761,16 @@ func (s *MarketStore) Contract(contractID, userID int64) (ContractStatus, bool) 
 	if contractID == 0 {
 		return ContractStatus{}, false
 	}
-	s.mu.RLock()
+	now := time.Now().UTC()
+	s.mu.Lock()
+	s.refreshContractsLocked(now)
 	contract, ok := s.contracts[contractID]
 	if !ok {
-		s.mu.RUnlock()
+		s.mu.Unlock()
 		return ContractStatus{}, false
 	}
 	status := s.contractStatusLocked(contract, userID)
-	s.mu.RUnlock()
+	s.mu.Unlock()
 	return status, true
 }
 
@@ -567,32 +881,7 @@ func (s *MarketStore) contractStatusLocked(contract *Contract, userID int64) Con
 }
 
 func (s *MarketStore) seedContracts(now time.Time) {
-	contracts := []Contract{
-		{
-			ID:            1,
-			Title:         "OmniCorp: Server Farm Expansion (Alpha)",
-			AssetID:       contractAssetAUR,
-			TotalRequired: 5_000,
-			Delivered:     0,
-			PricePerUnit:  150,
-			MinRank:       "Shark",
-			DeadlineAt:    now.Add(contractDeadlineLong).UnixMilli(),
-			XPPerUnit:     5,
-		},
-		{
-			ID:            2,
-			Title:         "Arcadia: Infrastructure Reserve Stockpile",
-			AssetID:       contractAssetOMNI,
-			TotalRequired: 1_000,
-			Delivered:     0,
-			PricePerUnit:  120,
-			MinRank:       "Shrimp",
-			DeadlineAt:    now.Add(contractDeadlineShort).UnixMilli(),
-			XPPerUnit:     2,
-		},
-	}
-	for i := range contracts {
-		contract := contracts[i]
-		s.contracts[contract.ID] = &contract
-	}
+	s.mu.Lock()
+	s.refreshContractsLocked(now)
+	s.mu.Unlock()
 }
