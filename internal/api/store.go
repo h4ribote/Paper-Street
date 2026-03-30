@@ -267,8 +267,10 @@ func (s *MarketStore) EnqueueOrder(order *engine.Order) {
 	user := s.users[order.UserID]
 	asset := s.assets[order.AssetID]
 	basePrice := s.basePrices[order.AssetID]
+	userSnapshot := user
+	assetSnapshot := asset
 	s.mu.Unlock()
-	s.persistOrder(cloned, user, asset, basePrice)
+	s.persistOrder(cloned, userSnapshot, assetSnapshot, basePrice)
 }
 
 func (s *MarketStore) EnqueueExecution(execution engine.Execution) {
@@ -281,8 +283,14 @@ func (s *MarketStore) EnqueueExecution(execution engine.Execution) {
 		s.mu.Unlock()
 		return
 	}
-	taker := cloneOrder(s.orders[execution.TakerOrderID])
-	maker := cloneOrder(s.orders[execution.MakerOrderID])
+	takerOrder := s.orders[execution.TakerOrderID]
+	makerOrder := s.orders[execution.MakerOrderID]
+	if takerOrder == nil || makerOrder == nil {
+		s.mu.Unlock()
+		return
+	}
+	taker := cloneOrder(takerOrder)
+	maker := cloneOrder(makerOrder)
 	s.executions = append(s.executions, execution)
 	if last := s.lastPrices[execution.AssetID]; last != 0 {
 		s.prevPrices[execution.AssetID] = last
