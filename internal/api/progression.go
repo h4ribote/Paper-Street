@@ -606,6 +606,9 @@ func contractTemplateForKind(kind contractKind, asset models.Asset) contractTemp
 		}
 	default:
 		title := fmt.Sprintf("OmniCorp: %s Capacity Expansion", asset.Name)
+		if strings.TrimSpace(asset.Name) == "" {
+			title = "OmniCorp: Capacity Expansion"
+		}
 		if asset.ID == contractAssetAUR {
 			title = "OmniCorp: Server Farm Expansion (Alpha)"
 		}

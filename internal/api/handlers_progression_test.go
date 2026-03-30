@@ -153,7 +153,11 @@ func TestContractPriceUsesVWAPPremium(t *testing.T) {
 	store.mu.Unlock()
 
 	vwap := int64(150)
-	expected := (vwap*(10_000+premium) + 9_999) / 10_000
+	scaled, ok := safeMultiplyInt64(vwap, 10_000+premium)
+	if !ok {
+		t.Fatalf("price overflow")
+	}
+	expected := roundUpDiv(scaled, 10_000)
 	if price != expected {
 		t.Fatalf("expected price %d, got %d", expected, price)
 	}
