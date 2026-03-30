@@ -12,7 +12,9 @@ const (
 	marginLossCutBps   = int64(7_500)
 	liquidationFeeBps  = int64(1_000)
 	marginLeverageMin  = int64(1)
+	marginLeverageMax  = int64(5)
 	millisecondsPerDay = int64(24 * time.Hour / time.Millisecond)
+	marginInterestTick = int64(2 * time.Hour / time.Millisecond) // margin interest accrual period
 	marginPriceMissing = int64(0)
 )
 
@@ -175,40 +177,50 @@ func (s *MarketStore) accrueMarginFeesLocked(position MarginPosition, now int64)
 		return position
 	}
 	elapsed := now - position.lastFeeAt
+	// Accrue only full intervals; partial periods are carried forward.
+	accrualCount := elapsed / marginInterestTick
+	if accrualCount <= 0 {
+		return position
+	}
+	accrualMillis := accrualCount * marginInterestTick
 	rate := s.marginBorrowRateLocked(position)
-	if rate <= 0 || elapsed <= 0 {
-		position.lastFeeAt = now
+	if rate <= 0 || accrualMillis <= 0 {
+		position.lastFeeAt += accrualMillis
 		return position
 	}
 	borrowedValue := position.BorrowedAmount
+	assetBorrowed := int64(0)
 	if position.Side == engine.SideSell {
 		var ok bool
 		borrowedValue, ok = safeMultiplyInt64(position.BorrowedAmount, position.EntryPrice)
 		if !ok {
-			position.lastFeeAt = now
+			position.lastFeeAt += accrualMillis
 			return position
 		}
+		assetBorrowed = position.BorrowedAmount
 	}
-	dailyFee, ok := safeMultiplyInt64(borrowedValue, rate)
+	fee, ok := accruedMarginFee(borrowedValue, rate, accrualMillis)
 	if !ok {
-		position.lastFeeAt = now
+		position.lastFeeAt += accrualMillis
 		return position
 	}
-	dailyFee = dailyFee / bpsDenominator
-	if dailyFee <= 0 {
-		position.lastFeeAt = now
-		return position
-	}
-	fee, ok := safeMultiplyInt64(dailyFee, elapsed)
-	if !ok {
-		position.lastFeeAt = now
-		return position
-	}
-	fee = fee / millisecondsPerDay
 	if fee > 0 {
 		position.AccumulatedFees += fee
 	}
-	position.lastFeeAt = now
+	assetFee := int64(0)
+	poolCashFee := fee
+	if assetBorrowed > 0 {
+		assetFee, ok = accruedMarginFee(assetBorrowed, rate, accrualMillis)
+		if !ok {
+			position.lastFeeAt += accrualMillis
+			return position
+		}
+		poolCashFee = 0
+	}
+	if poolCashFee > 0 || assetFee > 0 {
+		s.applyMarginInterestLocked(position, poolCashFee, assetFee)
+	}
+	position.lastFeeAt += accrualMillis
 	return position
 }
 
@@ -267,6 +279,43 @@ func (s *MarketStore) marginPoolForAssetLocked(assetID int64) (MarginPool, bool)
 		}
 	}
 	return MarginPool{}, false
+}
+
+func (s *MarketStore) applyMarginInterestLocked(position MarginPosition, cashFee, assetFee int64) {
+	pool, ok := s.marginPoolForAssetLocked(position.AssetID)
+	if !ok {
+		return
+	}
+	if cashFee > 0 {
+		pool.TotalCash += cashFee
+	}
+	if assetFee > 0 {
+		pool.TotalAssets += assetFee
+	}
+	if cashFee > 0 || assetFee > 0 {
+		pool.CashRateBps, pool.AssetRateBps = marginRates(pool)
+		s.marginPools[pool.ID] = pool
+	}
+}
+
+func accruedMarginFee(amount, rate, elapsed int64) (int64, bool) {
+	if amount <= 0 || rate <= 0 || elapsed <= 0 {
+		return 0, true
+	}
+	dailyFee, ok := safeMultiplyInt64(amount, rate)
+	if !ok {
+		return 0, false
+	}
+	dailyFee = dailyFee / bpsDenominator
+	if dailyFee <= 0 {
+		return 0, true
+	}
+	fee, ok := safeMultiplyInt64(dailyFee, elapsed)
+	if !ok {
+		return 0, false
+	}
+	fee = fee / millisecondsPerDay
+	return fee, true
 }
 
 func (s *MarketStore) canBorrowMarginLocked(assetID int64, side engine.Side, amount int64) error {

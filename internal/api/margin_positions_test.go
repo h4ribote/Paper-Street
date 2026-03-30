@@ -126,3 +126,68 @@ func TestMarginLiquidationTriggered(t *testing.T) {
 		t.Fatalf("expected loss ratio above threshold, got %d", events[0].LossRatioBps)
 	}
 }
+
+func TestMarginInterestAccrualUpdatesPool(t *testing.T) {
+	store := NewMarketStore()
+	store.EnsureUser(1)
+	store.EnsureUser(2)
+	eng := engine.NewEngine(store)
+
+	submitEngineOrder(t, eng, &engine.Order{
+		AssetID:  101,
+		UserID:   1,
+		Side:     engine.SideBuy,
+		Type:     engine.OrderTypeLimit,
+		Quantity: 10_000,
+		Price:    100,
+		Leverage: 5,
+	})
+	submitEngineOrder(t, eng, &engine.Order{
+		AssetID:  101,
+		UserID:   2,
+		Side:     engine.SideSell,
+		Type:     engine.OrderTypeLimit,
+		Quantity: 10_000,
+		Price:    100,
+	})
+
+	positions := store.MarginPositions(1)
+	if len(positions) != 1 {
+		t.Fatalf("expected 1 margin position, got %d", len(positions))
+	}
+	position := positions[0]
+	pool := store.marginPools[1]
+	lastFeeAt := int64(1)
+	setMarginPositionLastFeeAt(store, position.ID, lastFeeAt)
+	poolBefore := pool.TotalCash
+
+	positions = store.MarginPositions(1)
+	if len(positions) != 1 {
+		t.Fatalf("expected 1 margin position, got %d", len(positions))
+	}
+	updated := positions[0]
+	elapsed := updated.UpdatedAt - lastFeeAt
+	accrualMillis := (elapsed / marginInterestTick) * marginInterestTick
+	expectedFee, ok := accruedMarginFee(position.BorrowedAmount, pool.CashRateBps, accrualMillis)
+	if !ok || expectedFee <= 0 {
+		t.Fatalf("expected positive fee, got %d", expectedFee)
+	}
+	poolAfter := store.marginPools[1]
+	if poolAfter.TotalCash != poolBefore+expectedFee {
+		t.Fatalf("expected pool cash %d, got %d", poolBefore+expectedFee, poolAfter.TotalCash)
+	}
+	if updated.AccumulatedFees != expectedFee {
+		t.Fatalf("expected accumulated fees %d, got %d", expectedFee, updated.AccumulatedFees)
+	}
+	if updated.lastFeeAt != lastFeeAt+accrualMillis {
+		t.Fatalf("expected lastFeeAt %d, got %d", lastFeeAt+accrualMillis, updated.lastFeeAt)
+	}
+}
+
+func setMarginPositionLastFeeAt(store *MarketStore, positionID, lastFeeAt int64) {
+	store.mu.Lock()
+	position := store.marginPositions[positionID]
+	position.lastFeeAt = lastFeeAt
+	store.marginPositions[positionID] = position
+	store.mu.Unlock()
+}

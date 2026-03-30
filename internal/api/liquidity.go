@@ -356,41 +356,67 @@ func (s *MarketStore) updateMarginPool(poolID, userID, cashAmount, assetAmount i
 		return MarginSupplyResult{}, errors.New("margin pool not found")
 	}
 	s.ensureUserLocked(userID)
-	prevCashTotal := pool.TotalCash
-	prevAssetTotal := pool.TotalAssets
+	pool = normalizeMarginPoolShares(pool)
+	positionKey := marginProviderKey{PoolID: poolID, UserID: userID}
+	var position MarginProviderPosition
+	currentCashTotal := pool.TotalCash
+	currentAssetTotal := pool.TotalAssets
+	var cashShares int64
+	var assetShares int64
 	if cashAmount > 0 {
-		if isSupply {
-			if s.balances[userID][defaultCurrency] < cashAmount {
-				return MarginSupplyResult{}, errors.New("insufficient cash balance")
-			}
-			s.balances[userID][defaultCurrency] -= cashAmount
-			pool.TotalCash += cashAmount
-		} else {
-			if pool.TotalCash-pool.BorrowedCash < cashAmount {
-				return MarginSupplyResult{}, errors.New("insufficient pool cash")
-			}
-			pool.TotalCash -= cashAmount
-			s.balances[userID][defaultCurrency] += cashAmount
+		var err error
+		cashShares, err = sharesForAmount(cashAmount, pool.TotalCashShares, currentCashTotal)
+		if err != nil {
+			return MarginSupplyResult{}, err
+		}
+		if cashShares <= 0 {
+			return MarginSupplyResult{}, errors.New("cash amount too small for shares")
 		}
 	}
 	if assetAmount > 0 {
-		if isSupply {
-			if s.positions[userID][pool.AssetID] < assetAmount {
-				return MarginSupplyResult{}, errors.New("insufficient asset balance")
+		var err error
+		assetShares, err = sharesForAmount(assetAmount, pool.TotalAssetShares, currentAssetTotal)
+		if err != nil {
+			return MarginSupplyResult{}, err
+		}
+		if assetShares <= 0 {
+			return MarginSupplyResult{}, errors.New("asset amount too small for shares")
+		}
+	}
+	if !isSupply {
+		position = s.marginProviders[positionKey]
+	}
+	if assetAmount > 0 {
+		if !isSupply {
+			if position.ID == 0 || position.AssetShares < assetShares {
+				return MarginSupplyResult{}, errors.New("insufficient asset shares")
 			}
-			s.positions[userID][pool.AssetID] -= assetAmount
-			pool.TotalAssets += assetAmount
-		} else {
 			if pool.TotalAssets-pool.BorrowedAssets < assetAmount {
 				return MarginSupplyResult{}, errors.New("insufficient pool assets")
 			}
-			pool.TotalAssets -= assetAmount
-			s.positions[userID][pool.AssetID] += assetAmount
+		} else if s.positions[userID][pool.AssetID] < assetAmount {
+			return MarginSupplyResult{}, errors.New("insufficient asset balance")
 		}
 	}
-	positionKey := marginProviderKey{PoolID: poolID, UserID: userID}
-	position := s.marginProviders[positionKey]
+	if cashAmount > 0 {
+		if !isSupply {
+			if position.ID == 0 || position.CashShares < cashShares {
+				return MarginSupplyResult{}, errors.New("insufficient cash shares")
+			}
+			if pool.TotalCash-pool.BorrowedCash < cashAmount {
+				return MarginSupplyResult{}, errors.New("insufficient pool cash")
+			}
+		} else if s.balances[userID][defaultCurrency] < cashAmount {
+			return MarginSupplyResult{}, errors.New("insufficient cash balance")
+		}
+	}
+	if isSupply {
+		position = s.marginProviders[positionKey]
+	}
 	if position.ID == 0 {
+		if !isSupply {
+			return MarginSupplyResult{}, errors.New("margin provider not found")
+		}
 		s.nextMarginPosID++
 		position = MarginProviderPosition{
 			ID:        s.nextMarginPosID,
@@ -400,29 +426,29 @@ func (s *MarketStore) updateMarginPool(poolID, userID, cashAmount, assetAmount i
 		}
 	}
 	if cashAmount > 0 {
-		shares, err := sharesForAmount(cashAmount, pool.TotalCashShares, prevCashTotal)
-		if err != nil {
-			return MarginSupplyResult{}, err
-		}
 		if isSupply {
-			position.CashShares += shares
-			pool.TotalCashShares += shares
-		} else if position.CashShares >= shares {
-			position.CashShares -= shares
-			pool.TotalCashShares -= shares
+			s.balances[userID][defaultCurrency] -= cashAmount
+			pool.TotalCash += cashAmount
+			position.CashShares += cashShares
+			pool.TotalCashShares += cashShares
+		} else {
+			pool.TotalCash -= cashAmount
+			s.balances[userID][defaultCurrency] += cashAmount
+			position.CashShares -= cashShares
+			pool.TotalCashShares -= cashShares
 		}
 	}
 	if assetAmount > 0 {
-		shares, err := sharesForAmount(assetAmount, pool.TotalAssetShares, prevAssetTotal)
-		if err != nil {
-			return MarginSupplyResult{}, err
-		}
 		if isSupply {
-			position.AssetShares += shares
-			pool.TotalAssetShares += shares
-		} else if position.AssetShares >= shares {
-			position.AssetShares -= shares
-			pool.TotalAssetShares -= shares
+			s.positions[userID][pool.AssetID] -= assetAmount
+			pool.TotalAssets += assetAmount
+			position.AssetShares += assetShares
+			pool.TotalAssetShares += assetShares
+		} else {
+			pool.TotalAssets -= assetAmount
+			s.positions[userID][pool.AssetID] += assetAmount
+			position.AssetShares -= assetShares
+			pool.TotalAssetShares -= assetShares
 		}
 	}
 	pool.CashRateBps, pool.AssetRateBps = marginRates(pool)
@@ -512,6 +538,7 @@ func (s *MarketStore) seedMarginPools() {
 		{ID: 2, AssetID: 102, TotalCash: 4_000_000, TotalAssets: 18_000, BorrowedCash: 800_000, BorrowedAssets: 3_000},
 	}
 	for _, pool := range pools {
+		pool = normalizeMarginPoolShares(pool)
 		pool.CashRateBps, pool.AssetRateBps = marginRates(pool)
 		s.marginPools[pool.ID] = pool
 	}
@@ -583,6 +610,16 @@ func marginRates(pool MarginPool) (cashRate int64, assetRate int64) {
 	cashRate = utilizationRate(pool.BorrowedCash, pool.TotalCash)
 	assetRate = utilizationRate(pool.BorrowedAssets, pool.TotalAssets)
 	return cashRate, assetRate
+}
+
+func normalizeMarginPoolShares(pool MarginPool) MarginPool {
+	if pool.TotalCashShares == 0 && pool.TotalCash > 0 {
+		pool.TotalCashShares = pool.TotalCash
+	}
+	if pool.TotalAssetShares == 0 && pool.TotalAssets > 0 {
+		pool.TotalAssetShares = pool.TotalAssets
+	}
+	return pool
 }
 
 // utilizationRate returns the daily rate in basis points using a kinked model:
