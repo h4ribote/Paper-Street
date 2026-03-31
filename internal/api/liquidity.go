@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"math/big"
 	"sort"
 	"strings"
 	"time"
@@ -244,6 +245,7 @@ func (s *MarketStore) SwapPool(poolID, userID int64, fromCurrency, toCurrency st
 			s.balances[userID][step.from] -= step.amountIn
 			s.balances[userID][step.to] += step.amountOut
 			s.pools[step.pool.ID] = step.updatedPool
+			s.distributePoolFeesLocked(step.updatedPool, step.from, step.feeAmount)
 		}
 		return PoolSwapResult{
 			PoolID:       0,
@@ -274,7 +276,104 @@ func (s *MarketStore) SwapPool(poolID, userID int64, fromCurrency, toCurrency st
 	s.balances[userID][from] -= amount
 	s.balances[userID][to] += result.AmountOut
 	s.pools[poolID] = updatedPool
+	s.distributePoolFeesLocked(updatedPool, from, result.FeeAmount)
 	return result, nil
+}
+
+func (s *MarketStore) distributePoolFeesLocked(pool LiquidityPool, feeCurrency string, feeAmount int64) {
+	if feeAmount <= 0 {
+		return
+	}
+	feeCurrency = strings.ToUpper(strings.TrimSpace(feeCurrency))
+	if feeCurrency == "" {
+		return
+	}
+	baseCurrency := strings.ToUpper(strings.TrimSpace(pool.BaseCurrency))
+	quoteCurrency := strings.ToUpper(strings.TrimSpace(pool.QuoteCurrency))
+	if feeCurrency != baseCurrency && feeCurrency != quoteCurrency {
+		return
+	}
+	type feeCandidate struct {
+		id        int64
+		liquidity int64
+		share     int64
+		remainder int64
+	}
+	candidates := make([]feeCandidate, 0)
+	var totalLiquidity int64
+	for _, position := range s.poolPositions {
+		if position.PoolID != pool.ID {
+			continue
+		}
+		if pool.CurrentTick < position.LowerTick || pool.CurrentTick >= position.UpperTick {
+			continue
+		}
+		liquidity := position.BaseAmount + position.QuoteAmount
+		if liquidity <= 0 {
+			continue
+		}
+		candidates = append(candidates, feeCandidate{id: position.ID, liquidity: liquidity})
+		totalLiquidity += liquidity
+	}
+	if totalLiquidity <= 0 {
+		return
+	}
+	var distributed int64
+	for i, candidate := range candidates {
+		if candidate.liquidity <= 0 {
+			continue
+		}
+		var share int64
+		var remainder int64
+		numerator, ok := safeMultiplyInt64(feeAmount, candidate.liquidity)
+		if ok {
+			share = numerator / totalLiquidity
+			remainder = numerator % totalLiquidity
+		} else {
+			bigNumerator := new(big.Int).Mul(big.NewInt(feeAmount), big.NewInt(candidate.liquidity))
+			bigTotal := big.NewInt(totalLiquidity)
+			bigShare := new(big.Int)
+			bigRemainder := new(big.Int)
+			bigShare.DivMod(bigNumerator, bigTotal, bigRemainder)
+			share = bigShare.Int64()
+			remainder = bigRemainder.Int64()
+		}
+		candidates[i].share = share
+		candidates[i].remainder = remainder
+		distributed += share
+	}
+	remainder := feeAmount - distributed
+	if remainder > 0 {
+		if len(candidates) == 1 {
+			candidates[0].share += remainder
+		} else {
+			sort.Slice(candidates, func(i, j int) bool {
+				if candidates[i].remainder == candidates[j].remainder {
+					return candidates[i].liquidity > candidates[j].liquidity
+				}
+				return candidates[i].remainder > candidates[j].remainder
+			})
+			limit := int(remainder)
+			if limit > len(candidates) {
+				limit = len(candidates)
+			}
+			for i := 0; i < limit; i++ {
+				candidates[i].share++
+			}
+		}
+	}
+	for _, candidate := range candidates {
+		if candidate.share <= 0 {
+			continue
+		}
+		position := s.poolPositions[candidate.id]
+		if feeCurrency == baseCurrency {
+			position.BaseAmount += candidate.share
+		} else {
+			position.QuoteAmount += candidate.share
+		}
+		s.poolPositions[candidate.id] = position
+	}
 }
 
 func (s *MarketStore) MarginPools() []MarginPool {
