@@ -1101,6 +1101,7 @@ func (s *MarketStore) ensureMacroQuarterTrackingLocked(quarterIndex int64) {
 		s.macroCPIIndexCurrent = make(map[string]float64)
 		s.macroGovSpending = make(map[string]int64)
 		s.macroGovQuarterIndex = quarterIndex
+		s.macroQuarterIndex = quarterIndex
 	}
 	if s.macroGovSpending == nil {
 		s.macroGovSpending = make(map[string]int64)
@@ -1373,9 +1374,6 @@ type macroIndexAccumulator struct {
 }
 
 func (acc *macroIndexAccumulator) add(price, base int64) {
-	if price <= 0 || base <= 0 {
-		return
-	}
 	acc.sumPrice += float64(price)
 	acc.sumBase += float64(base)
 }
