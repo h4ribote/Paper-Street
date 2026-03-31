@@ -22,6 +22,8 @@ var (
 	newsNames       = []string{"Alex Rivera", "Samira Chen", "Luca Moretti", "Priya Nandakumar"}
 )
 
+const randomChoiceAttempts = 5
+
 func (s *MarketStore) randomNewsItem(now time.Time, rng *rand.Rand) (NewsItem, bool) {
 	library, err := loadNewsPatterns()
 	if err != nil || library == nil {
@@ -252,7 +254,7 @@ func randomChoiceDifferent(rng *rand.Rand, values []string, exclude string) stri
 	if len(values) == 1 {
 		return values[0]
 	}
-	for i := 0; i < 5; i++ {
+	for i := 0; i < randomChoiceAttempts; i++ {
 		value := values[rng.Intn(len(values))]
 		if !stringsEqualFold(value, exclude) {
 			return value
