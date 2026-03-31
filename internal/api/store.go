@@ -403,6 +403,12 @@ type MarketStore struct {
 	theoreticalFXRates   []TheoreticalFXRate
 	macroQuarterIndex    int64
 	macroWeekIndex       int64
+	macroGDPPrevTotals   map[string]float64
+	macroGDPTotals       map[string]float64
+	macroCPIIndexPrev    map[string]float64
+	macroCPIIndexCurrent map[string]float64
+	macroGovSpending     map[string]int64
+	macroGovQuarterIndex int64
 	seasons              []Season
 	regions              []Region
 	worldEvents          []WorldEvent
@@ -426,39 +432,44 @@ func NewMarketStoreWithDB(ctx context.Context, queries *db.Queries) (*MarketStor
 func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, error) {
 	now := time.Now().UTC()
 	store := &MarketStore{
-		assets:             make(map[int64]models.Asset),
-		basePrices:         make(map[int64]int64),
-		users:              make(map[int64]models.User),
-		orders:             make(map[int64]*engine.Order),
-		balances:           make(map[int64]map[string]int64),
-		positions:          make(map[int64]map[int64]int64),
-		assetAcquiredAt:    make(map[int64]map[int64]int64),
-		apiKeyToUser:       make(map[string]int64),
-		lastPrices:         make(map[int64]int64),
-		prevPrices:         make(map[int64]int64),
-		volumes:            make(map[int64]int64),
-		currencies:         map[string]struct{}{defaultCurrency: {}},
-		pools:              make(map[int64]LiquidityPool),
-		poolPositions:      make(map[int64]PoolPosition),
-		marginPools:        make(map[int64]MarginPool),
-		marginProviders:    make(map[marginProviderKey]MarginProviderPosition),
-		marginPositions:    make(map[int64]MarginPosition),
-		marginLiquidations: make([]MarginLiquidation, 0),
-		indexes:            make(map[int64]IndexDefinition),
-		indexHoldings:      make(map[int64]map[int64]int64),
-		dailyMissions:      make(map[string][]DailyMission),
-		missionProgress:    make(map[int64]map[string]*DailyMissionProgress),
-		contracts:          make(map[int64]*Contract),
-		contractProgress:   make(map[int64]map[int64]int64),
-		companyStates:      make(map[int64]*companyState),
-		companyRecipes:     make(map[int64][]ProductionRecipe),
-		financialReports:   make(map[int64][]CompanyFinancialReport),
-		perpetualBonds:     make(map[int64]PerpetualBondDefinition),
-		bondCouponIndex:    make(map[int64]int64),
-		nextUserID:         userIDSeed,
-		nextNewsID:         0,
-		macroIndicators:    make([]MacroIndicator, 0),
-		theoreticalFXRates: make([]TheoreticalFXRate, 0),
+		assets:               make(map[int64]models.Asset),
+		basePrices:           make(map[int64]int64),
+		users:                make(map[int64]models.User),
+		orders:               make(map[int64]*engine.Order),
+		balances:             make(map[int64]map[string]int64),
+		positions:            make(map[int64]map[int64]int64),
+		assetAcquiredAt:      make(map[int64]map[int64]int64),
+		apiKeyToUser:         make(map[string]int64),
+		lastPrices:           make(map[int64]int64),
+		prevPrices:           make(map[int64]int64),
+		volumes:              make(map[int64]int64),
+		currencies:           map[string]struct{}{defaultCurrency: {}},
+		pools:                make(map[int64]LiquidityPool),
+		poolPositions:        make(map[int64]PoolPosition),
+		marginPools:          make(map[int64]MarginPool),
+		marginProviders:      make(map[marginProviderKey]MarginProviderPosition),
+		marginPositions:      make(map[int64]MarginPosition),
+		marginLiquidations:   make([]MarginLiquidation, 0),
+		indexes:              make(map[int64]IndexDefinition),
+		indexHoldings:        make(map[int64]map[int64]int64),
+		dailyMissions:        make(map[string][]DailyMission),
+		missionProgress:      make(map[int64]map[string]*DailyMissionProgress),
+		contracts:            make(map[int64]*Contract),
+		contractProgress:     make(map[int64]map[int64]int64),
+		companyStates:        make(map[int64]*companyState),
+		companyRecipes:       make(map[int64][]ProductionRecipe),
+		financialReports:     make(map[int64][]CompanyFinancialReport),
+		perpetualBonds:       make(map[int64]PerpetualBondDefinition),
+		bondCouponIndex:      make(map[int64]int64),
+		nextUserID:           userIDSeed,
+		nextNewsID:           0,
+		macroIndicators:      make([]MacroIndicator, 0),
+		theoreticalFXRates:   make([]TheoreticalFXRate, 0),
+		macroGDPPrevTotals:   make(map[string]float64),
+		macroGDPTotals:       make(map[string]float64),
+		macroCPIIndexPrev:    make(map[string]float64),
+		macroCPIIndexCurrent: make(map[string]float64),
+		macroGovSpending:     make(map[string]int64),
 		seasons: []Season{
 			{Name: "Season 1: The Great Resurgence", Theme: "RECOVERY", StartAt: now.Add(-7 * 24 * time.Hour).UnixMilli(), EndAt: now.Add(53 * 24 * time.Hour).UnixMilli()},
 		},
@@ -999,32 +1010,41 @@ func (s *MarketStore) buildMacroIndicatorsLocked(now time.Time) []MacroIndicator
 	weekStart := macroPeriodStart(now, macroWeekPeriod)
 	quarterIndex := macroPeriodIndex(now, macroQuarterPeriod)
 	weekIndex := macroPeriodIndex(now, macroWeekPeriod)
-	cycleValue := macroCycleValue(quarterIndex, macroCycleQuarters)
+	s.ensureMacroQuarterTrackingLocked(quarterIndex)
 	priceIndex := s.macroPriceIndexLocked()
+	economy := s.macroEconomySnapshotLocked()
 	indicators := make([]MacroIndicator, 0, len(macroProfiles)*5)
 	for _, profile := range macroProfiles {
 		weights := normalizeMacroWeights(profile.CPIWeights)
 		weightedIndex := weights.Food*priceIndex.Food + weights.Energy*priceIndex.Energy + weights.Goods*priceIndex.Goods + weights.Services*priceIndex.Services
-		sectorIndex := macroSectorIndex(profile.SectorFocus, priceIndex)
+		snapshot := economy[profile.Country]
+		gdpTotal := snapshot.consumption + snapshot.investment + snapshot.government + (snapshot.exports - snapshot.imports)
+		s.macroGDPTotals[profile.Country] = gdpTotal
 		gdpGrowth := profile.BaseGDP
-		gdpGrowth += profile.GDPAmplitude * cycleValue
-		gdpGrowth += (sectorIndex-1.0)*100.0*profile.GDPSectorWeight + (priceIndex.Overall-1.0)*100.0*profile.MarketSensitivity
-		gdpGrowth += macroNoise(profile.Country, quarterIndex, "gdp") * 0.4
+		if prev := s.macroGDPPrevTotals[profile.Country]; prev > 0 {
+			gdpGrowth = (gdpTotal - prev) / prev * 100.0
+		}
 		gdpGrowth += macroSeasonalBoost(profile, quarterIndex)
 		gdpGrowth = macroClamp(gdpGrowth, -5.0, 10.0)
 
+		cpiIndex := weightedIndex * 100.0
+		s.macroCPIIndexCurrent[profile.Country] = cpiIndex
 		cpi := profile.BaseCPI
-		cpi += profile.CPIAmplitude * cycleValue
-		cpi += (weightedIndex-1.0)*50.0 + macroNoise(profile.Country, quarterIndex, "cpi")*0.3
+		if prevIndex := s.macroCPIIndexPrev[profile.Country]; prevIndex > 0 {
+			cpi = (cpiIndex - prevIndex) / prevIndex * 100.0
+		}
 		cpi = macroClamp(cpi, -1.5, 12.0)
 
-		gdpGap := gdpGrowth - profile.PotentialGDP
-		unemployment := profile.NaturalUnemployment - profile.OkunBeta*gdpGap + macroNoise(profile.Country, quarterIndex, "unemp")*0.3
+		avgUtilization := 1.0
+		if snapshot.companyCount > 0 {
+			avgUtilization = snapshot.utilizationSum / float64(snapshot.companyCount)
+			avgUtilization = macroClamp(avgUtilization, 0.0, 1.0)
+		}
+		unemployment := profile.NaturalUnemployment + profile.OkunBeta*(1.0-avgUtilization)
 		unemployment = macroClamp(unemployment, 2.0, 20.0)
 
-		rate := profile.RealRate + cpi
-		rate += 0.5*(cpi-profile.InflationTarget) + 0.5*gdpGap
-		rate += profile.PolicyBias + macroNoise(profile.Country, weekIndex, "rate")*0.2
+		gdpGap := gdpGrowth - profile.PotentialGDP
+		rate := profile.RealRate + cpi + 0.5*(cpi-profile.InflationTarget) + 0.5*gdpGap
 		rate = macroClamp(rate, 0.0, 15.0)
 
 		cci := profile.CCIBase
@@ -1049,6 +1069,81 @@ type macroIndicatorValues struct {
 	rate  int64
 	cpi   int64
 	unemp int64
+}
+
+type macroEconomySnapshot struct {
+	consumption    float64
+	investment     float64
+	government     float64
+	exports        float64
+	imports        float64
+	utilizationSum float64
+	companyCount   int
+}
+
+func (s *MarketStore) ensureMacroQuarterTrackingLocked(quarterIndex int64) {
+	if s.macroGDPTotals == nil {
+		s.macroGDPTotals = make(map[string]float64)
+	}
+	if s.macroGDPPrevTotals == nil {
+		s.macroGDPPrevTotals = make(map[string]float64)
+	}
+	if s.macroCPIIndexCurrent == nil {
+		s.macroCPIIndexCurrent = make(map[string]float64)
+	}
+	if s.macroCPIIndexPrev == nil {
+		s.macroCPIIndexPrev = make(map[string]float64)
+	}
+	if quarterIndex != s.macroQuarterIndex {
+		s.macroGDPPrevTotals = s.macroGDPTotals
+		s.macroGDPTotals = make(map[string]float64)
+		s.macroCPIIndexPrev = s.macroCPIIndexCurrent
+		s.macroCPIIndexCurrent = make(map[string]float64)
+		s.macroGovSpending = make(map[string]int64)
+		s.macroGovQuarterIndex = quarterIndex
+	}
+	if s.macroGovSpending == nil {
+		s.macroGovSpending = make(map[string]int64)
+		s.macroGovQuarterIndex = quarterIndex
+	}
+}
+
+func (s *MarketStore) macroEconomySnapshotLocked() map[string]macroEconomySnapshot {
+	snapshots := make(map[string]macroEconomySnapshot)
+	for _, state := range s.companyStates {
+		if state == nil {
+			continue
+		}
+		country := stringOrDefault(state.Country, fxArcadiaCountry)
+		snapshot := snapshots[country]
+		snapshot.consumption += float64(state.LastB2CRevenue)
+		snapshot.government += float64(state.LastB2GRevenue)
+		snapshot.investment += float64(state.LastCapexCost) + float64(state.LastInventoryChange)
+		if state.UtilizationRate > 0 {
+			snapshot.utilizationSum += float64(state.UtilizationRate) / float64(bpsDenominator)
+		}
+		snapshot.companyCount++
+		snapshots[country] = snapshot
+	}
+	for country, amount := range s.macroGovSpending {
+		snapshot := snapshots[country]
+		snapshot.government += float64(amount)
+		snapshots[country] = snapshot
+	}
+	return snapshots
+}
+
+func (s *MarketStore) recordGovernmentSpendingLocked(country string, amount int64, now time.Time) {
+	if amount <= 0 {
+		return
+	}
+	quarterIndex := macroPeriodIndex(now, macroQuarterPeriod)
+	if s.macroGovSpending == nil || quarterIndex != s.macroGovQuarterIndex {
+		s.macroGovSpending = make(map[string]int64)
+		s.macroGovQuarterIndex = quarterIndex
+	}
+	country = stringOrDefault(country, fxArcadiaCountry)
+	s.macroGovSpending[country] += amount
 }
 
 func (s *MarketStore) macroIndicatorValuesLocked(country string) (macroIndicatorValues, bool) {
@@ -1248,46 +1343,48 @@ func (s *MarketStore) macroPriceIndexLocked() macroPriceIndex {
 		if price <= 0 {
 			price = base
 		}
-		ratio := float64(price) / float64(base)
-		overall.add(ratio)
+		overall.add(price, base)
 		switch strings.ToUpper(strings.TrimSpace(asset.Sector)) {
 		case "FOOD", "AGRI":
-			food.add(ratio)
+			food.add(price, base)
 		case "ENERGY":
-			energy.add(ratio)
+			energy.add(price, base)
 		case "METAL", "CONS", "DEF", "BASIC", "INDUSTRIAL":
-			goods.add(ratio)
+			goods.add(price, base)
 		case "TECH", "FIN", "LOG", "BIO", "SERVICES":
-			services.add(ratio)
+			services.add(price, base)
 		default:
-			goods.add(ratio)
+			goods.add(price, base)
 		}
 	}
-	overallIndex := overall.averageOrDefault(1.0)
+	overallIndex := overall.ratioOrDefault(1.0)
 	return macroPriceIndex{
-		Food:     food.averageOrDefault(overallIndex),
-		Energy:   energy.averageOrDefault(overallIndex),
-		Goods:    goods.averageOrDefault(overallIndex),
-		Services: services.averageOrDefault(overallIndex),
+		Food:     food.ratioOrDefault(overallIndex),
+		Energy:   energy.ratioOrDefault(overallIndex),
+		Goods:    goods.ratioOrDefault(overallIndex),
+		Services: services.ratioOrDefault(overallIndex),
 		Overall:  overallIndex,
 	}
 }
 
 type macroIndexAccumulator struct {
-	sum   float64
-	count int
+	sumPrice float64
+	sumBase  float64
 }
 
-func (acc *macroIndexAccumulator) add(value float64) {
-	acc.sum += value
-	acc.count++
+func (acc *macroIndexAccumulator) add(price, base int64) {
+	if price <= 0 || base <= 0 {
+		return
+	}
+	acc.sumPrice += float64(price)
+	acc.sumBase += float64(base)
 }
 
-func (acc *macroIndexAccumulator) averageOrDefault(fallback float64) float64 {
-	if acc.count == 0 {
+func (acc *macroIndexAccumulator) ratioOrDefault(fallback float64) float64 {
+	if acc.sumBase == 0 {
 		return fallback
 	}
-	return acc.sum / float64(acc.count)
+	return acc.sumPrice / acc.sumBase
 }
 
 func (s *MarketStore) Seasons() []Season {

@@ -46,6 +46,10 @@ type companyState struct {
 	LastSales             int64
 	LastDemand            int64
 	LastSalePrice         int64
+	LastB2CRevenue        int64
+	LastB2GRevenue        int64
+	LastCapexCost         int64
+	LastInventoryChange   int64
 	UtilizationRate       int64
 	InventoryCost         int64
 	COGSPerUnit           int64
@@ -464,12 +468,16 @@ func (s *MarketStore) runCompanyQuarterLocked(state *companyState, now time.Time
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
+	startInventory := state.CurrentInventory
 	demand := s.calculateCompanyDemandLocked(state)
 	result.Demand = demand
 
 	production := s.runCompanyProductionLocked(state, demand.Total, now)
 	sales, revenue, netIncome := s.runCompanySalesLocked(state, demand.Total, production)
 	capexCost := s.handleCapexLocked(state, demand.Total, now)
+	state.LastCapexCost = capexCost
+	state.LastB2CRevenue, state.LastB2GRevenue = splitDemandRevenue(revenue, demand)
+	state.LastInventoryChange = inventoryChangeValue(startInventory, state.CurrentInventory, state.COGSPerUnit, state.LastSalePrice)
 	if capexCost > 0 {
 		netIncome -= capexCost
 	}
@@ -483,6 +491,33 @@ func (s *MarketStore) runCompanyQuarterLocked(state *companyState, now time.Time
 
 	s.evaluateFinancingLocked(state, demand, now)
 	return result
+}
+
+func splitDemandRevenue(revenue int64, demand CompanyDemandBreakdown) (int64, int64) {
+	if revenue <= 0 || demand.Total <= 0 {
+		return 0, 0
+	}
+	if demand.B2C < 0 || demand.B2G < 0 {
+		return 0, 0
+	}
+	b2c := revenue * demand.B2C / demand.Total
+	b2g := revenue * demand.B2G / demand.Total
+	return b2c, b2g
+}
+
+func inventoryChangeValue(startInventory, endInventory, unitCost, fallbackPrice int64) int64 {
+	delta := endInventory - startInventory
+	if delta == 0 {
+		return 0
+	}
+	unit := unitCost
+	if unit <= 0 {
+		unit = fallbackPrice
+	}
+	if unit <= 0 {
+		unit = defaultAssetPrice
+	}
+	return delta * unit
 }
 
 func (s *MarketStore) calculateCompanyDemandLocked(state *companyState) CompanyDemandBreakdown {

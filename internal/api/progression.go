@@ -426,6 +426,7 @@ func (s *MarketStore) CompleteDailyMission(userID int64, missionID string, date 
 			}
 			if rewardValue.Cash > 0 {
 				s.balances[userID][defaultCurrency] += rewardValue.Cash
+				s.recordGovernmentSpendingLocked(fxArcadiaCountry, rewardValue.Cash, date)
 			}
 			reward = &rewardValue
 		}
@@ -832,6 +833,9 @@ func (s *MarketStore) DeliverContract(userID, contractID, quantity int64) (Contr
 		return ContractDeliveryResult{}, errors.New("xp reward overflow")
 	}
 	s.balances[userID][defaultCurrency] += cashReward
+	if cashReward > 0 && s.contractKindForAssetLocked(contract.AssetID) == contractKindProcurement {
+		s.recordGovernmentSpendingLocked(contractGovName, cashReward, time.UnixMilli(now))
+	}
 	if xpReward > 0 {
 		user.XP += xpReward
 		rank := rankDefinitionForXP(user.XP)
