@@ -40,6 +40,13 @@ type AssetBalance struct {
 	Quantity int64
 }
 
+type PerpetualBondRecord struct {
+	AssetID          int64
+	IssuerCountry    string
+	BaseCoupon       int64
+	PaymentFrequency string
+}
+
 type ExecutionRecord struct {
 	ID           int64
 	AssetID      int64
@@ -247,6 +254,66 @@ func (q *Queries) ListAssets(ctx context.Context) ([]AssetSnapshot, error) {
 		assets = append(assets, AssetSnapshot{Asset: asset, BasePrice: basePrice})
 	}
 	return assets, rows.Err()
+}
+
+func (q *Queries) ListPerpetualBonds(ctx context.Context) ([]PerpetualBondRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT pb.asset_id, c.name, pb.base_coupon, pb.payment_frequency
+		FROM perpetual_bonds pb
+		JOIN countries c ON c.country_id = pb.issuer_country_id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var bonds []PerpetualBondRecord
+	for rows.Next() {
+		var record PerpetualBondRecord
+		if err := rows.Scan(&record.AssetID, &record.IssuerCountry, &record.BaseCoupon, &record.PaymentFrequency); err != nil {
+			return nil, err
+		}
+		bonds = append(bonds, record)
+	}
+	return bonds, rows.Err()
+}
+
+func (q *Queries) UpsertPerpetualBond(ctx context.Context, record PerpetualBondRecord) error {
+	if record.AssetID == 0 {
+		return errors.New("asset id required")
+	}
+	if strings.TrimSpace(record.IssuerCountry) == "" {
+		return errors.New("issuer country required")
+	}
+	tx, err := q.Conn.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	regionID, err := ensureRegion(ctx, tx, defaultRegionName)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	countryID, err := ensureCountry(ctx, tx, record.IssuerCountry, regionID)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	frequency := strings.ToUpper(strings.TrimSpace(record.PaymentFrequency))
+	if frequency == "" {
+		frequency = "WEEKLY"
+	}
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO perpetual_bonds (asset_id, issuer_country_id, base_coupon, payment_frequency)
+		VALUES (?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE issuer_country_id = VALUES(issuer_country_id),
+			base_coupon = VALUES(base_coupon),
+			payment_frequency = VALUES(payment_frequency)
+	`, record.AssetID, countryID, record.BaseCoupon, frequency)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
 }
 
 func (q *Queries) UpsertOrder(ctx context.Context, order *engine.Order) error {

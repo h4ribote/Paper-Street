@@ -366,6 +366,7 @@ type MarketStore struct {
 	executions           []engine.Execution
 	balances             map[int64]map[string]int64
 	positions            map[int64]map[int64]int64
+	assetAcquiredAt      map[int64]map[int64]int64
 	apiKeyToUser         map[string]int64
 	lastPrices           map[int64]int64
 	prevPrices           map[int64]int64
@@ -386,6 +387,8 @@ type MarketStore struct {
 	companyStates        map[int64]*companyState
 	companyRecipes       map[int64][]ProductionRecipe
 	financialReports     map[int64][]CompanyFinancialReport
+	perpetualBonds       map[int64]PerpetualBondDefinition
+	bondCouponIndex      map[int64]int64
 	nextUserID           int64
 	nextExecutionID      int64
 	nextNewsID           int64
@@ -429,6 +432,7 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 		orders:             make(map[int64]*engine.Order),
 		balances:           make(map[int64]map[string]int64),
 		positions:          make(map[int64]map[int64]int64),
+		assetAcquiredAt:    make(map[int64]map[int64]int64),
 		apiKeyToUser:       make(map[string]int64),
 		lastPrices:         make(map[int64]int64),
 		prevPrices:         make(map[int64]int64),
@@ -449,6 +453,8 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 		companyStates:      make(map[int64]*companyState),
 		companyRecipes:     make(map[int64][]ProductionRecipe),
 		financialReports:   make(map[int64][]CompanyFinancialReport),
+		perpetualBonds:     make(map[int64]PerpetualBondDefinition),
+		bondCouponIndex:    make(map[int64]int64),
 		nextUserID:         userIDSeed,
 		nextNewsID:         0,
 		macroIndicators:    make([]MacroIndicator, 0),
@@ -470,6 +476,7 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 		store.seedAssets()
 		store.seedCompanies()
 		store.seedProductionRecipes()
+		store.seedPerpetualBonds(now)
 		store.mu.Lock()
 		store.refreshMacroIndicatorsLocked(now)
 		store.mu.Unlock()
@@ -975,6 +982,7 @@ func (s *MarketStore) TheoreticalFXRates() []TheoreticalFXRate {
 func (s *MarketStore) refreshMacroIndicatorsLocked(now time.Time) {
 	s.macroIndicators = s.buildMacroIndicatorsLocked(now)
 	s.refreshTheoreticalFXRatesLocked(now)
+	s.refreshPerpetualBondPricingLocked(now)
 	s.macroQuarterIndex = macroPeriodIndex(now, macroQuarterPeriod)
 	s.macroWeekIndex = macroPeriodIndex(now, macroWeekPeriod)
 }
@@ -1459,6 +1467,8 @@ func (s *MarketStore) applyExecutionLocked(exec engine.Execution) bool {
 	s.ensureUserLocked(buyerID)
 	s.ensureUserLocked(sellerID)
 	s.ensureAssetLocked(exec.AssetID)
+	oldBuyerQty := s.positions[buyerID][exec.AssetID]
+	oldSellerQty := s.positions[sellerID][exec.AssetID]
 	cashDelta, ok := safeMultiplyInt64(exec.Price, exec.Quantity)
 	if !ok {
 		return false
@@ -1561,18 +1571,28 @@ func (s *MarketStore) applyExecutionLocked(exec engine.Execution) bool {
 	if !sellerIsMargin {
 		s.positions[sellerID][exec.AssetID] -= exec.Quantity
 	}
-	now := time.Now().UTC().UnixMilli()
+	now := exec.OccurredAtUTC
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	nowMillis := now.UnixMilli()
+	if !buyerIsMargin {
+		s.updateAssetAcquiredAtLocked(buyerID, exec.AssetID, oldBuyerQty, exec.Quantity, nowMillis)
+	}
+	if !sellerIsMargin {
+		s.updateAssetAcquiredAtLocked(sellerID, exec.AssetID, oldSellerQty, -exec.Quantity, nowMillis)
+	}
 	if buyerIsMargin {
 		if err := s.applyMarginBorrowLocked(exec.AssetID, engine.SideBuy, buyerBorrowed); err != nil {
 			return false
 		}
-		s.openMarginPositionLocked(buyerID, exec.AssetID, engine.SideBuy, exec.Quantity, exec.Price, buyerMarginUsed, buyerLeverage, buyerBorrowed, now)
+		s.openMarginPositionLocked(buyerID, exec.AssetID, engine.SideBuy, exec.Quantity, exec.Price, buyerMarginUsed, buyerLeverage, buyerBorrowed, nowMillis)
 	}
 	if sellerIsMargin {
 		if err := s.applyMarginBorrowLocked(exec.AssetID, engine.SideSell, sellerBorrowed); err != nil {
 			return false
 		}
-		s.openMarginPositionLocked(sellerID, exec.AssetID, engine.SideSell, exec.Quantity, exec.Price, sellerMarginUsed, sellerLeverage, sellerBorrowed, now)
+		s.openMarginPositionLocked(sellerID, exec.AssetID, engine.SideSell, exec.Quantity, exec.Price, sellerMarginUsed, sellerLeverage, sellerBorrowed, nowMillis)
 	}
 	return true
 }
@@ -1642,6 +1662,9 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 			}
 			s.basePrices[snapshot.Asset.ID] = basePrice
 		}
+	}
+	if err := s.loadPerpetualBondsFromDB(ctx); err != nil {
+		return err
 	}
 
 	if err := s.loadCompaniesFromDB(ctx); err != nil {
@@ -1745,6 +1768,51 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 		s.ensureUserLocked(userID)
 	}
 	s.refreshMarketStatsLocked()
+	return nil
+}
+
+func (s *MarketStore) loadPerpetualBondsFromDB(ctx context.Context) error {
+	if s.queries == nil {
+		return nil
+	}
+	records, err := s.queries.ListPerpetualBonds(ctx)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	if len(records) == 0 {
+		s.seedPerpetualBonds(now)
+		for _, bond := range s.perpetualBonds {
+			if asset, ok := s.assets[bond.AssetID]; ok {
+				basePrice := s.basePrices[bond.AssetID]
+				if basePrice == 0 {
+					basePrice = defaultAssetPrice
+				}
+				if err := s.queries.UpsertAsset(ctx, asset, basePrice); err != nil {
+					return err
+				}
+			}
+			record := db.PerpetualBondRecord{
+				AssetID:          bond.AssetID,
+				IssuerCountry:    bond.IssuerCountry,
+				BaseCoupon:       bond.BaseCoupon,
+				PaymentFrequency: bond.PaymentFrequency,
+			}
+			if err := s.queries.UpsertPerpetualBond(ctx, record); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for _, record := range records {
+		def := PerpetualBondDefinition{
+			AssetID:          record.AssetID,
+			IssuerCountry:    record.IssuerCountry,
+			BaseCoupon:       record.BaseCoupon,
+			PaymentFrequency: record.PaymentFrequency,
+		}
+		s.registerPerpetualBondLocked(def, now)
+	}
 	return nil
 }
 

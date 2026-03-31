@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/h4ribote/Paper-Street/internal/auth"
+	"github.com/h4ribote/Paper-Street/internal/engine"
 )
 
 type authResponse struct {
@@ -50,6 +52,12 @@ type marginTopUpRequest struct {
 type indexActionRequest struct {
 	UserID   int64 `json:"user_id"`
 	Quantity int64 `json:"quantity"`
+}
+
+type bondOperationRequest struct {
+	Quantity    int64 `json:"quantity"`
+	PremiumBps  int64 `json:"premium_bps"`
+	DiscountBps int64 `json:"discount_bps"`
 }
 
 func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
@@ -170,6 +178,143 @@ func (s *Server) handleAssetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondJSON(w, http.StatusOK, asset)
+}
+
+func (s *Server) handleBonds(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if s.Store == nil {
+		respondJSON(w, http.StatusOK, []PerpetualBondInfo{})
+		return
+	}
+	respondJSON(w, http.StatusOK, s.Store.PerpetualBonds())
+}
+
+func (s *Server) handleBondOperations(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/bonds/")
+	segments := strings.Split(strings.Trim(path, "/"), "/")
+	if len(segments) < 1 || strings.TrimSpace(segments[0]) == "" {
+		respondError(w, http.StatusBadRequest, "bond id required")
+		return
+	}
+	assetID, err := parseID(segments[0])
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid bond id")
+		return
+	}
+	if s.Store == nil {
+		respondError(w, http.StatusInternalServerError, "store unavailable")
+		return
+	}
+	if len(segments) == 1 {
+		if r.Method != http.MethodGet {
+			respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		info, ok := s.Store.PerpetualBond(assetID)
+		if !ok {
+			respondError(w, http.StatusNotFound, "bond not found")
+			return
+		}
+		respondJSON(w, http.StatusOK, info)
+		return
+	}
+	action := segments[1]
+	switch action {
+	case "issue", "buyback":
+		if r.Method != http.MethodPost {
+			respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		var payload bondOperationRequest
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+			respondError(w, http.StatusBadRequest, "invalid json body")
+			return
+		}
+		quantity := payload.Quantity
+		if quantity <= 0 {
+			if action == "issue" {
+				quantity = bondDefaultIssueQty
+			} else {
+				quantity = bondDefaultBuybackQty
+			}
+		}
+		premiumBps := payload.PremiumBps
+		discountBps := payload.DiscountBps
+		if action == "issue" {
+			premiumBps = 0
+			if discountBps <= 0 {
+				discountBps = bondIssueDiscountBps
+			}
+		} else {
+			discountBps = 0
+			if premiumBps <= 0 {
+				premiumBps = bondBuybackPremiumBps
+			}
+		}
+		s.Store.mu.Lock()
+		def, ok := s.Store.perpetualBonds[assetID]
+		if !ok {
+			s.Store.mu.Unlock()
+			respondError(w, http.StatusNotFound, "bond not found")
+			return
+		}
+		issuerID := s.Store.ensureBondIssuerLocked(def)
+		price, targetYield := s.Store.bondOperationPriceLocked(def, premiumBps, discountBps)
+		s.Store.mu.Unlock()
+		if price <= 0 {
+			respondError(w, http.StatusBadRequest, "unable to compute bond price")
+			return
+		}
+		side := engine.SideSell
+		if action == "buyback" {
+			side = engine.SideBuy
+		}
+		order := &engine.Order{
+			UserID:   issuerID,
+			AssetID:  assetID,
+			Side:     side,
+			Type:     engine.OrderTypeLimit,
+			Quantity: quantity,
+			Price:    price,
+			Leverage: 1,
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		result, err := s.Engine.SubmitOrder(ctx, order)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		s.Store.mu.Lock()
+		s.Store.bondOperationNewsLocked(def, action, quantity, price, time.Now().UTC())
+		s.Store.mu.Unlock()
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"asset_id":         assetID,
+			"action":           action,
+			"quantity":         quantity,
+			"price":            price,
+			"target_yield_bps": targetYield,
+			"result":           result,
+		})
+	case "coupons":
+		if r.Method != http.MethodPost {
+			respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		payments := s.Store.TriggerPerpetualBondCoupons(time.Now().UTC())
+		filtered := make([]BondCouponPayment, 0, len(payments))
+		for _, payment := range payments {
+			if payment.AssetID == assetID {
+				filtered = append(filtered, payment)
+			}
+		}
+		respondJSON(w, http.StatusOK, filtered)
+	default:
+		respondError(w, http.StatusNotFound, "unknown bond action")
+	}
 }
 
 func (s *Server) handleTrades(w http.ResponseWriter, r *http.Request) {
