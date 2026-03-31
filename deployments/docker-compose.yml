@@ -1,3 +1,15 @@
+x-bot-env: &bot-env
+  API_BASE_URL: http://server:8000
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD environment variable is required}
+  API_KEY_FILE: ${API_KEY_FILE:-}
+
+x-bot-base: &bot-base
+  build:
+    context: ..
+    dockerfile: deployments/docker/Dockerfile.bot
+  depends_on:
+    - server
+
 services:
   db:
     image: mysql:8.0
@@ -29,35 +41,12 @@ services:
       db:
         condition: service_healthy
 
-  market_maker:
-    build:
-      context: ..
-      dockerfile: deployments/docker/Dockerfile.bot
-    command: ["./market_maker"]
-    environment:
-      API_BASE_URL: http://server:8000
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD environment variable is required}
-      BOT_ROLE: market_maker
-    depends_on:
-      - server
+  bots:
+    <<: *bot-base
     profiles:
       - bots
-
-  news_reactor:
-    build:
-      context: ..
-      dockerfile: deployments/docker/Dockerfile.bot
-    command: ["./news_reactor"]
     environment:
-      API_BASE_URL: http://server:8000
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD environment variable is required}
-      BOT_ROLE: news_reactor
-    depends_on:
-      - server
-    profiles:
-      - bots
-    stdin_open: true
-    tty: true
+      <<: *bot-env
 
 volumes:
   db_data:

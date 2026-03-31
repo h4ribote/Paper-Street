@@ -66,8 +66,8 @@ cd deployments
 docker compose --profile bots up --build
 ```
 
-ボット用には `ADMIN_PASSWORD` と `BOT_ROLE` を設定してください。`API_KEY_FILE` を指定すると取得したAPIキーをファイルに保存します。
-例: `market_maker`, `news_reactor`, `momentum_chaser_a`, `national_ai_arcadia`, `whale_northern` など。
+ボット用には `ADMIN_PASSWORD` を設定してください。全ボットは 1 つのコンテナ内で起動し、役割ごとの `BOT_ROLE` は内部で付与されます。
+`API_KEY_FILE` を指定すると取得した API キーをファイルに保存します。
 
 ## ドキュメント
 プロジェクトの詳細な仕様については [GAME_DESIGN.md](./docs/GAME_DESIGN.md) を参照してください。
