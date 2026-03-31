@@ -2,6 +2,7 @@ package api
 
 import (
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -107,10 +108,16 @@ func TestPoolPositionCollectsFeesOnClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create pool position failed: %v", err)
 	}
+	if len(store.PoolPositions(0)) != 1 {
+		t.Fatalf("expected exactly one pool position, got %d", len(store.PoolPositions(0)))
+	}
 
 	result, err := store.SwapPool(pool.ID, 2, pool.BaseCurrency, pool.QuoteCurrency, 10_000)
 	if err != nil {
 		t.Fatalf("swap failed: %v", err)
+	}
+	if !strings.EqualFold(result.FromCurrency, pool.BaseCurrency) {
+		t.Fatalf("expected fee currency to match base currency, got %s", result.FromCurrency)
 	}
 	if result.FeeAmount <= 0 {
 		t.Fatalf("expected positive fee amount, got %d", result.FeeAmount)

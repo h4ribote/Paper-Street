@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"math/big"
 	"sort"
 	"strings"
 	"time"
@@ -287,7 +288,9 @@ func (s *MarketStore) distributePoolFeesLocked(pool LiquidityPool, feeCurrency s
 	if feeCurrency == "" {
 		return
 	}
-	if !stringsEqualFold(feeCurrency, pool.BaseCurrency) && !stringsEqualFold(feeCurrency, pool.QuoteCurrency) {
+	baseCurrency := strings.ToUpper(strings.TrimSpace(pool.BaseCurrency))
+	quoteCurrency := strings.ToUpper(strings.TrimSpace(pool.QuoteCurrency))
+	if feeCurrency != baseCurrency && feeCurrency != quoteCurrency {
 		return
 	}
 	type feeCandidate struct {
@@ -320,12 +323,21 @@ func (s *MarketStore) distributePoolFeesLocked(pool LiquidityPool, feeCurrency s
 		if candidate.liquidity <= 0 {
 			continue
 		}
+		var share int64
+		var remainder int64
 		numerator, ok := safeMultiplyInt64(feeAmount, candidate.liquidity)
-		if !ok {
-			numerator = (feeAmount / totalLiquidity) * candidate.liquidity
+		if ok {
+			share = numerator / totalLiquidity
+			remainder = numerator % totalLiquidity
+		} else {
+			bigNumerator := new(big.Int).Mul(big.NewInt(feeAmount), big.NewInt(candidate.liquidity))
+			bigTotal := big.NewInt(totalLiquidity)
+			bigShare := new(big.Int)
+			bigRemainder := new(big.Int)
+			bigShare.DivMod(bigNumerator, bigTotal, bigRemainder)
+			share = bigShare.Int64()
+			remainder = bigRemainder.Int64()
 		}
-		share := numerator / totalLiquidity
-		remainder := numerator % totalLiquidity
 		candidates[i].share = share
 		candidates[i].remainder = remainder
 		distributed += share
@@ -351,7 +363,7 @@ func (s *MarketStore) distributePoolFeesLocked(pool LiquidityPool, feeCurrency s
 			continue
 		}
 		position := s.poolPositions[candidate.id]
-		if stringsEqualFold(feeCurrency, pool.BaseCurrency) {
+		if feeCurrency == baseCurrency {
 			position.BaseAmount += candidate.share
 		} else {
 			position.QuoteAmount += candidate.share
