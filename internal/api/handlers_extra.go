@@ -160,10 +160,7 @@ func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadGateway, "invalid discord user id")
 		return
 	}
-	displayName := strings.TrimSpace(discordUser.GlobalName)
-	if displayName == "" {
-		displayName = strings.TrimSpace(discordUser.Username)
-	}
+	displayName := discordDisplayName(discordUser, userID)
 	user := s.Store.EnsureUserWithName(userID, displayName)
 	apiKey, ok := s.Store.APIKeyForUser(userID)
 	if !ok || apiKey == "" {
@@ -1081,4 +1078,15 @@ func readLimitedBody(reader io.Reader) string {
 		return ""
 	}
 	return strings.TrimSpace(string(body))
+}
+
+func discordDisplayName(user discordUserResponse, userID int64) string {
+	displayName := strings.TrimSpace(user.GlobalName)
+	if displayName == "" {
+		displayName = strings.TrimSpace(user.Username)
+	}
+	if displayName == "" && userID != 0 {
+		displayName = fmt.Sprintf("user-%d", userID)
+	}
+	return displayName
 }
