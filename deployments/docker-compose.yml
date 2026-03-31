@@ -1,6 +1,7 @@
 x-bot-env: &bot-env
   API_BASE_URL: http://server:8000
   ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD environment variable is required}
+  API_KEY_FILE: ${API_KEY_FILE:-}
 
 x-bot-base: &bot-base
   build:
