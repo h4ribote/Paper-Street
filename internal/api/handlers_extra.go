@@ -253,6 +253,18 @@ func (s *Server) handleMacroIndicators(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, s.Store.MacroIndicators())
 }
 
+func (s *Server) handleTheoreticalFXRates(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if s.Store == nil {
+		respondJSON(w, http.StatusOK, []TheoreticalFXRate{})
+		return
+	}
+	respondJSON(w, http.StatusOK, s.Store.TheoreticalFXRates())
+}
+
 func (s *Server) handlePortfolioBalances(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		respondError(w, http.StatusMethodNotAllowed, "method not allowed")

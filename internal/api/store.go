@@ -32,6 +32,12 @@ const (
 	macroTypeUnemp     = "UNEMPLOYMENT"
 	macroTypeInterest  = "INTEREST_RATE"
 	macroTypeCCI       = "CONSUMER_CONFIDENCE"
+	fxTheoreticalBase  = 1.0
+	fxTheoreticalGDP   = 0.2
+	fxTheoreticalRate  = 10.0
+	fxTheoreticalCPI   = 5.0
+	fxTheoreticalScale = int64(100)
+	fxArcadiaCountry   = "Arcadia"
 )
 
 func stringsEqualFold(a, b string) bool {
@@ -121,6 +127,13 @@ type MacroIndicator struct {
 	Type        string `json:"type"`
 	Value       int64  `json:"value"`
 	PublishedAt int64  `json:"published_at"`
+}
+
+type TheoreticalFXRate struct {
+	BaseCurrency  string `json:"base_currency"`
+	QuoteCurrency string `json:"quote_currency"`
+	Rate          int64  `json:"rate"`
+	UpdatedAt     int64  `json:"updated_at"`
 }
 
 type macroCPIWeights struct {
@@ -379,6 +392,7 @@ type MarketStore struct {
 	nextLiquidationID    int64
 	news                 []NewsItem
 	macroIndicators      []MacroIndicator
+	theoreticalFXRates   []TheoreticalFXRate
 	macroQuarterIndex    int64
 	macroWeekIndex       int64
 	seasons              []Season
@@ -429,6 +443,7 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 		nextUserID:         userIDSeed,
 		nextNewsID:         0,
 		macroIndicators:    make([]MacroIndicator, 0),
+		theoreticalFXRates: make([]TheoreticalFXRate, 0),
 		seasons: []Season{
 			{Name: "Season 1: The Great Resurgence", Theme: "RECOVERY", StartAt: now.Add(-7 * 24 * time.Hour).UnixMilli(), EndAt: now.Add(53 * 24 * time.Hour).UnixMilli()},
 		},
@@ -923,10 +938,38 @@ func (s *MarketStore) MacroIndicators() []MacroIndicator {
 	return indicators
 }
 
+func (s *MarketStore) TheoreticalFXRates() []TheoreticalFXRate {
+	now := time.Now().UTC()
+	quarterIndex := macroPeriodIndex(now, macroQuarterPeriod)
+	weekIndex := macroPeriodIndex(now, macroWeekPeriod)
+	s.mu.RLock()
+	if s.macroQuarterIndex == quarterIndex && s.macroWeekIndex == weekIndex && len(s.theoreticalFXRates) > 0 {
+		rates := make([]TheoreticalFXRate, len(s.theoreticalFXRates))
+		copy(rates, s.theoreticalFXRates)
+		s.mu.RUnlock()
+		return rates
+	}
+	s.mu.RUnlock()
+
+	s.mu.Lock()
+	if s.macroQuarterIndex != quarterIndex || s.macroWeekIndex != weekIndex || len(s.theoreticalFXRates) == 0 {
+		s.refreshMacroIndicatorsLocked(now)
+	}
+	rates := make([]TheoreticalFXRate, len(s.theoreticalFXRates))
+	copy(rates, s.theoreticalFXRates)
+	s.mu.Unlock()
+	return rates
+}
+
 func (s *MarketStore) refreshMacroIndicatorsLocked(now time.Time) {
 	s.macroIndicators = s.buildMacroIndicatorsLocked(now)
+	s.refreshTheoreticalFXRatesLocked(now)
 	s.macroQuarterIndex = macroPeriodIndex(now, macroQuarterPeriod)
 	s.macroWeekIndex = macroPeriodIndex(now, macroWeekPeriod)
+}
+
+func (s *MarketStore) refreshTheoreticalFXRatesLocked(now time.Time) {
+	s.theoreticalFXRates = s.buildTheoreticalFXRatesLocked(now)
 }
 
 func (s *MarketStore) buildMacroIndicatorsLocked(now time.Time) []MacroIndicator {
@@ -980,6 +1023,94 @@ func (s *MarketStore) buildMacroIndicatorsLocked(now time.Time) []MacroIndicator
 		)
 	}
 	return indicators
+}
+
+type macroIndicatorValues struct {
+	gdp  int64
+	rate int64
+	cpi  int64
+}
+
+func (s *MarketStore) macroIndicatorValuesLocked(country string) (macroIndicatorValues, bool) {
+	var values macroIndicatorValues
+	hasGDP := false
+	hasRate := false
+	hasCPI := false
+	for _, indicator := range s.macroIndicators {
+		if !stringsEqualFold(indicator.Country, country) {
+			continue
+		}
+		switch indicator.Type {
+		case macroTypeGDPGrowth:
+			values.gdp = indicator.Value
+			hasGDP = true
+		case macroTypeInterest:
+			values.rate = indicator.Value
+			hasRate = true
+		case macroTypeCPI:
+			values.cpi = indicator.Value
+			hasCPI = true
+		}
+	}
+	return values, hasGDP && hasRate && hasCPI
+}
+
+func computeTheoreticalFXScore(gdpTarget, gdpArc, rateTarget, rateArc, cpiTarget, cpiArc int64) float64 {
+	gdpTargetPct := float64(gdpTarget) / 100.0
+	gdpArcPct := float64(gdpArc) / 100.0
+	gdpFactor := 1.0
+	if gdpArcPct != 0 {
+		gdpFactor = gdpTargetPct / gdpArcPct
+	}
+	rateTargetPct := float64(rateTarget) / 10000.0
+	rateArcPct := float64(rateArc) / 10000.0
+	cpiTargetPct := float64(cpiTarget) / 10000.0
+	cpiArcPct := float64(cpiArc) / 10000.0
+	return fxTheoreticalBase * (1 + fxTheoreticalGDP*gdpFactor + fxTheoreticalRate*(rateTargetPct-rateArcPct) + fxTheoreticalCPI*(cpiArcPct-cpiTargetPct))
+}
+
+func (s *MarketStore) buildTheoreticalFXRatesLocked(now time.Time) []TheoreticalFXRate {
+	if len(s.macroIndicators) == 0 {
+		return nil
+	}
+	arcadiaIndicators, ok := s.macroIndicatorValuesLocked(fxArcadiaCountry)
+	if !ok {
+		return nil
+	}
+	rates := make([]TheoreticalFXRate, 0, len(macroProfiles))
+	for _, profile := range macroProfiles {
+		if stringsEqualFold(profile.Country, fxArcadiaCountry) {
+			continue
+		}
+		indicatorValues, ok := s.macroIndicatorValuesLocked(profile.Country)
+		if !ok {
+			continue
+		}
+		currency := currencyForCountry(profile.Country, "")
+		if currency == "" || stringsEqualFold(currency, fxBaseCurrency) {
+			continue
+		}
+		score := computeTheoreticalFXScore(
+			indicatorValues.gdp,
+			arcadiaIndicators.gdp,
+			indicatorValues.rate,
+			arcadiaIndicators.rate,
+			indicatorValues.cpi,
+			arcadiaIndicators.cpi,
+		)
+		if score <= 0 {
+			continue
+		}
+		rate := int64(math.Round(score * float64(fxTheoreticalScale)))
+		rates = append(rates, TheoreticalFXRate{
+			BaseCurrency:  currency,
+			QuoteCurrency: fxBaseCurrency,
+			Rate:          rate,
+			UpdatedAt:     now.UnixMilli(),
+		})
+	}
+	sort.Slice(rates, func(i, j int) bool { return rates[i].BaseCurrency < rates[j].BaseCurrency })
+	return rates
 }
 
 func macroPeriodIndex(now time.Time, period time.Duration) int64 {

@@ -304,6 +304,8 @@ func (h *wsHub) snapshotForTopic(client *wsClient, topic string) (interface{}, b
 		return h.store.Tickers(), true
 	case topic == "news":
 		return h.store.News(wsNewsLimit), true
+	case topic == "fx.theoretical":
+		return h.store.TheoreticalFXRates(), true
 	case topic == "user.orders":
 		if client.userID == 0 {
 			return nil, false
