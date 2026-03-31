@@ -3,6 +3,9 @@ package api
 import (
 	"log"
 	"strings"
+	"time"
+
+	"github.com/h4ribote/Paper-Street/internal/db"
 )
 
 func (s *MarketStore) ensureCurrencyID(currency string) int64 {
@@ -50,5 +53,22 @@ func (s *MarketStore) persistAssetBalance(userID, assetID, quantity int64) {
 	defer cancel()
 	if err := s.queries.SetAssetBalance(ctx, userID, assetID, quantity); err != nil {
 		log.Printf("db set asset balance %d/%d: %v", userID, assetID, err)
+	}
+}
+
+func (s *MarketStore) persistAPIKey(role, key string, userID int64) {
+	if s == nil || s.queries == nil || userID == 0 {
+		return
+	}
+	role = strings.TrimSpace(role)
+	key = strings.TrimSpace(key)
+	if role == "" || key == "" {
+		return
+	}
+	ctx, cancel := s.dbContext()
+	defer cancel()
+	record := db.APIKeyRecord{Key: key, UserID: userID, Role: role}
+	if err := s.queries.UpsertAPIKey(ctx, record, time.Now().UTC()); err != nil {
+		log.Printf("db upsert api key %s: %v", role, err)
 	}
 }

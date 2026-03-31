@@ -363,6 +363,7 @@ func (s *MarketStore) applyRoleSeedLocked(seed roleSeed) seededUser {
 		} else {
 			s.roleToAPIKey[role] = key
 			s.apiKeyToUser[key] = userID
+			s.persistAPIKey(role, key, userID)
 		}
 	}
 	return seededUser{

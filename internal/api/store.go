@@ -1866,6 +1866,9 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 			s.nextUserID = user.ID
 		}
 	}
+	if err := s.loadAPIKeysFromDB(ctx); err != nil {
+		return err
+	}
 
 	currencyBalances, err := s.queries.ListCurrencyBalances(ctx)
 	if err != nil {
@@ -1961,6 +1964,29 @@ func (s *MarketStore) loadNewsFromDB(ctx context.Context) error {
 	s.news = items
 	if maxID > s.nextNewsID {
 		s.nextNewsID = maxID
+	}
+	return nil
+}
+
+func (s *MarketStore) loadAPIKeysFromDB(ctx context.Context) error {
+	if s.queries == nil {
+		return nil
+	}
+	records, err := s.queries.ListAPIKeys(ctx)
+	if err != nil {
+		return err
+	}
+	for _, record := range records {
+		key := strings.TrimSpace(record.Key)
+		if key == "" || record.UserID == 0 {
+			continue
+		}
+		s.apiKeyToUser[key] = record.UserID
+		role := normalizeRole(record.Role)
+		if role != "" {
+			s.roleToUserID[role] = record.UserID
+			s.roleToAPIKey[role] = key
+		}
 	}
 	return nil
 }
