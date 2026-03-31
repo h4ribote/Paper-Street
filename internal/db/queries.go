@@ -51,6 +51,49 @@ type ExecutionRecord struct {
 	IsTakerBuyer bool
 }
 
+type CompanyRecord struct {
+	CompanyID             int64
+	Name                  string
+	Symbol                string
+	Sector                string
+	Country               string
+	UserID                sql.NullInt64
+	MaxProductionCapacity int64
+	CurrentInventory      int64
+	LastCapexAt           int64
+	SharesIssued          int64
+	SharesOutstanding     int64
+	TreasuryStock         int64
+}
+
+type ProductionRecipeRecord struct {
+	ID             int64
+	CompanyID      int64
+	OutputAssetID  int64
+	OutputQuantity int64
+}
+
+type ProductionInputRecord struct {
+	ID            int64
+	RecipeID      int64
+	InputAssetID  int64
+	InputQuantity int64
+}
+
+type FinancialReportRecord struct {
+	CompanyID       int64
+	FiscalYear      int
+	FiscalQuarter   int
+	Revenue         int64
+	NetIncome       int64
+	EPS             int64
+	Capex           int64
+	UtilizationRate int64
+	InventoryLevel  int64
+	Guidance        string
+	PublishedAt     int64
+}
+
 func NewQueries(conn *Connection) *Queries {
 	return &Queries{Conn: conn}
 }
@@ -421,4 +464,183 @@ func ensureCountry(ctx context.Context, tx *sql.Tx, name string, regionID int64)
 		return 0, err
 	}
 	return result.LastInsertId()
+}
+
+func (q *Queries) ListCompanies(ctx context.Context) ([]CompanyRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT c.company_id, c.name, c.ticker_symbol,
+		       COALESCE(s.name, ''), COALESCE(co.name, ''),
+		       c.user_id, c.max_production_capacity, c.current_inventory, c.last_capex_at,
+		       c.shares_issued, c.shares_outstanding, c.treasury_stock
+		FROM companies c
+		LEFT JOIN sectors s ON c.sector_id = s.sector_id
+		LEFT JOIN countries co ON c.country_id = co.country_id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []CompanyRecord
+	for rows.Next() {
+		var record CompanyRecord
+		if err := rows.Scan(
+			&record.CompanyID,
+			&record.Name,
+			&record.Symbol,
+			&record.Sector,
+			&record.Country,
+			&record.UserID,
+			&record.MaxProductionCapacity,
+			&record.CurrentInventory,
+			&record.LastCapexAt,
+			&record.SharesIssued,
+			&record.SharesOutstanding,
+			&record.TreasuryStock,
+		); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) UpsertCompany(ctx context.Context, record CompanyRecord) error {
+	if record.CompanyID == 0 {
+		return errors.New("company id required")
+	}
+	args := []interface{}{
+		record.CompanyID,
+		strings.TrimSpace(record.Name),
+		strings.TrimSpace(record.Symbol),
+		record.UserID,
+		record.MaxProductionCapacity,
+		record.CurrentInventory,
+		record.LastCapexAt,
+		record.SharesIssued,
+		record.SharesOutstanding,
+		record.TreasuryStock,
+	}
+	_, err := q.Conn.DB.ExecContext(ctx, `
+		INSERT INTO companies (
+			company_id, country_id, sector_id, name, ticker_symbol, description, user_id,
+			max_production_capacity, current_inventory, last_capex_at, shares_issued, shares_outstanding, treasury_stock
+		) VALUES (?, NULL, NULL, ?, ?, '', ?, ?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+			name = VALUES(name),
+			ticker_symbol = VALUES(ticker_symbol),
+			user_id = VALUES(user_id),
+			max_production_capacity = VALUES(max_production_capacity),
+			current_inventory = VALUES(current_inventory),
+			last_capex_at = VALUES(last_capex_at),
+			shares_issued = VALUES(shares_issued),
+			shares_outstanding = VALUES(shares_outstanding),
+			treasury_stock = VALUES(treasury_stock)
+	`, args...)
+	return err
+}
+
+func (q *Queries) ListProductionRecipes(ctx context.Context) ([]ProductionRecipeRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT recipe_id, company_id, output_asset_id, output_quantity
+		FROM production_recipes
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []ProductionRecipeRecord
+	for rows.Next() {
+		var record ProductionRecipeRecord
+		if err := rows.Scan(&record.ID, &record.CompanyID, &record.OutputAssetID, &record.OutputQuantity); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) ListProductionInputs(ctx context.Context) ([]ProductionInputRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT input_id, recipe_id, input_asset_id, input_quantity
+		FROM production_inputs
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []ProductionInputRecord
+	for rows.Next() {
+		var record ProductionInputRecord
+		if err := rows.Scan(&record.ID, &record.RecipeID, &record.InputAssetID, &record.InputQuantity); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) ListFinancialReports(ctx context.Context) ([]FinancialReportRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT company_id, fiscal_year, fiscal_quarter, revenue, net_income, eps, capex, utilization_rate, inventory_level, guidance, published_at
+		FROM financial_reports
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []FinancialReportRecord
+	for rows.Next() {
+		var record FinancialReportRecord
+		if err := rows.Scan(
+			&record.CompanyID,
+			&record.FiscalYear,
+			&record.FiscalQuarter,
+			&record.Revenue,
+			&record.NetIncome,
+			&record.EPS,
+			&record.Capex,
+			&record.UtilizationRate,
+			&record.InventoryLevel,
+			&record.Guidance,
+			&record.PublishedAt,
+		); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) UpsertFinancialReport(ctx context.Context, report FinancialReportRecord) error {
+	if report.CompanyID == 0 {
+		return errors.New("company id required")
+	}
+	args := []interface{}{
+		report.CompanyID,
+		report.FiscalYear,
+		report.FiscalQuarter,
+		report.Revenue,
+		report.NetIncome,
+		report.EPS,
+		report.Capex,
+		report.UtilizationRate,
+		report.InventoryLevel,
+		report.Guidance,
+		report.PublishedAt,
+	}
+	_, err := q.Conn.DB.ExecContext(ctx, `
+		INSERT INTO financial_reports (
+			company_id, fiscal_year, fiscal_quarter, revenue, net_income, eps, capex, utilization_rate, inventory_level, guidance, published_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+			revenue = VALUES(revenue),
+			net_income = VALUES(net_income),
+			eps = VALUES(eps),
+			capex = VALUES(capex),
+			utilization_rate = VALUES(utilization_rate),
+			inventory_level = VALUES(inventory_level),
+			guidance = VALUES(guidance),
+			published_at = VALUES(published_at)
+	`, args...)
+	return err
 }
