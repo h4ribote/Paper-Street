@@ -62,7 +62,7 @@ services:
     environment:
       <<: *bot-env
       BOT_ROLE: momentum_chaser_a
-      ASSET_IDS: "101"
+      ASSET_ID: "101"
 
   momentum_chaser_b:
     <<: *bot-base
@@ -70,7 +70,7 @@ services:
     environment:
       <<: *bot-env
       BOT_ROLE: momentum_chaser_b
-      ASSET_IDS: "102"
+      ASSET_ID: "102"
 
   momentum_chaser_c:
     <<: *bot-base
@@ -78,7 +78,7 @@ services:
     environment:
       <<: *bot-env
       BOT_ROLE: momentum_chaser_c
-      ASSET_IDS: "103"
+      ASSET_ID: "103"
 
   dip_buyer_a:
     <<: *bot-base
@@ -86,7 +86,7 @@ services:
     environment:
       <<: *bot-env
       BOT_ROLE: dip_buyer_a
-      ASSET_IDS: "101"
+      ASSET_ID: "101"
 
   dip_buyer_b:
     <<: *bot-base
@@ -94,7 +94,7 @@ services:
     environment:
       <<: *bot-env
       BOT_ROLE: dip_buyer_b
-      ASSET_IDS: "102"
+      ASSET_ID: "102"
 
   dip_buyer_c:
     <<: *bot-base
@@ -102,7 +102,7 @@ services:
     environment:
       <<: *bot-env
       BOT_ROLE: dip_buyer_c
-      ASSET_IDS: "103"
+      ASSET_ID: "103"
 
   reversal_sniper_a:
     <<: *bot-base
@@ -110,7 +110,7 @@ services:
     environment:
       <<: *bot-env
       BOT_ROLE: reversal_sniper_a
-      ASSET_IDS: "101"
+      ASSET_ID: "101"
 
   reversal_sniper_b:
     <<: *bot-base
@@ -118,7 +118,7 @@ services:
     environment:
       <<: *bot-env
       BOT_ROLE: reversal_sniper_b
-      ASSET_IDS: "102"
+      ASSET_ID: "102"
 
   reversal_sniper_c:
     <<: *bot-base
@@ -126,7 +126,7 @@ services:
     environment:
       <<: *bot-env
       BOT_ROLE: reversal_sniper_c
-      ASSET_IDS: "103"
+      ASSET_ID: "103"
 
   grid_trader_a:
     <<: *bot-base
@@ -134,7 +134,7 @@ services:
     environment:
       <<: *bot-env
       BOT_ROLE: grid_trader_a
-      ASSET_IDS: "101"
+      ASSET_ID: "101"
 
   grid_trader_b:
     <<: *bot-base
@@ -142,7 +142,7 @@ services:
     environment:
       <<: *bot-env
       BOT_ROLE: grid_trader_b
-      ASSET_IDS: "102"
+      ASSET_ID: "102"
 
   grid_trader_c:
     <<: *bot-base
@@ -150,7 +150,7 @@ services:
     environment:
       <<: *bot-env
       BOT_ROLE: grid_trader_c
-      ASSET_IDS: "103"
+      ASSET_ID: "103"
 
   whale_northern:
     <<: *bot-base
