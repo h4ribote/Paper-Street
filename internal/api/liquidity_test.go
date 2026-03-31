@@ -108,8 +108,8 @@ func TestPoolPositionCollectsFeesOnClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create pool position failed: %v", err)
 	}
-	if len(store.PoolPositions(0)) != 1 {
-		t.Fatalf("expected exactly one pool position, got %d", len(store.PoolPositions(0)))
+	if len(store.PoolPositions(1)) != 1 {
+		t.Fatalf("expected exactly one pool position, got %d", len(store.PoolPositions(1)))
 	}
 
 	result, err := store.SwapPool(pool.ID, 2, pool.BaseCurrency, pool.QuoteCurrency, 10_000)
