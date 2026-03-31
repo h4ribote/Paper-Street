@@ -29,4 +29,6 @@ COPY --from=builder /out/national_ai ./national_ai
 COPY --from=builder /out/arbitrageur ./arbitrageur
 COPY --from=builder /out/yield_hunter ./yield_hunter
 COPY --from=builder /out/public_consumer ./public_consumer
-CMD ["./market_maker"]
+COPY deployments/docker/run-bots.sh ./run-bots.sh
+RUN chmod +x /app/run-bots.sh
+CMD ["/app/run-bots.sh"]
