@@ -14,6 +14,7 @@ const (
 	poolFeeLowBps      = int64(4)
 	poolFeeStandardBps = int64(20)
 	indexFeeBps        = int64(10)
+	indexArbBandBps    = int64(20)
 	bpsDenominator     = int64(10_000)
 	// Margin rate model parameters (basis points per day).
 	marginBaseRateBps  = int64(10)  // base rate at 0% utilization
@@ -479,6 +480,12 @@ func (s *MarketStore) updateIndexHoldings(userID, assetID, quantity int64, isCre
 	defer s.mu.Unlock()
 	definition := s.ensureIndexLocked(assetID)
 	unitPrice := s.indexUnitPriceLocked(definition)
+	if unitPrice <= 0 {
+		return IndexActionResult{}, errors.New("index price unavailable")
+	}
+	if err := s.ensureIndexArbitrageLocked(assetID, unitPrice, isCreate); err != nil {
+		return IndexActionResult{}, err
+	}
 	amount, ok := safeMultiplyInt64(unitPrice, quantity)
 	if !ok {
 		return IndexActionResult{}, errors.New("amount overflow")
@@ -487,20 +494,44 @@ func (s *MarketStore) updateIndexHoldings(userID, assetID, quantity int64, isCre
 	if err != nil {
 		return IndexActionResult{}, err
 	}
-	total := amount + fee
 	s.ensureUserLocked(userID)
+	inventory := s.ensureIndexInventoryLocked(assetID)
 	if isCreate {
-		if s.balances[userID][defaultCurrency] < total {
-			return IndexActionResult{}, errors.New("insufficient cash balance")
+		if s.balances[userID][defaultCurrency] < fee {
+			return IndexActionResult{}, errors.New("insufficient cash balance for fee")
 		}
-		s.balances[userID][defaultCurrency] -= total
+		for _, componentID := range definition.Components {
+			if s.positions[userID][componentID] < quantity {
+				return IndexActionResult{}, errors.New("insufficient component holdings")
+			}
+		}
+		s.balances[userID][defaultCurrency] -= fee
+		for _, componentID := range definition.Components {
+			s.positions[userID][componentID] -= quantity
+			inventory[componentID] += quantity
+		}
 		s.positions[userID][assetID] += quantity
 	} else {
 		if s.positions[userID][assetID] < quantity {
 			return IndexActionResult{}, errors.New("insufficient index holdings")
 		}
+		if s.balances[userID][defaultCurrency] < fee {
+			return IndexActionResult{}, errors.New("insufficient cash balance for fee")
+		}
+		for _, componentID := range definition.Components {
+			if inventory[componentID] < quantity {
+				return IndexActionResult{}, errors.New("insufficient index inventory")
+			}
+		}
 		s.positions[userID][assetID] -= quantity
-		s.balances[userID][defaultCurrency] += amount - fee
+		s.balances[userID][defaultCurrency] -= fee
+		for _, componentID := range definition.Components {
+			inventory[componentID] -= quantity
+			s.positions[userID][componentID] += quantity
+		}
+	}
+	total := amount + fee
+	if !isCreate {
 		total = amount - fee
 	}
 	action := "create"
@@ -591,14 +622,86 @@ func (s *MarketStore) ensureIndexLocked(assetID int64) IndexDefinition {
 	return definition
 }
 
+func (s *MarketStore) ensureIndexInventoryLocked(assetID int64) map[int64]int64 {
+	inventory, ok := s.indexHoldings[assetID]
+	if !ok {
+		inventory = make(map[int64]int64)
+		s.indexHoldings[assetID] = inventory
+	}
+	return inventory
+}
+
+func (s *MarketStore) ensureIndexArbitrageLocked(assetID, unitPrice int64, isCreate bool) error {
+	band, err := calculateFeeBps(unitPrice, indexArbBandBps)
+	if err != nil {
+		return err
+	}
+	upper, ok := safeAddInt64(unitPrice, band)
+	if !ok {
+		return errors.New("arbitrage band overflow")
+	}
+	lower, ok := safeAddInt64(unitPrice, -band)
+	if !ok {
+		return errors.New("arbitrage band overflow")
+	}
+	marketPrice := s.marketPriceLocked(assetID)
+	if isCreate {
+		if marketPrice <= upper {
+			return errors.New("index price not above arbitrage band")
+		}
+		return nil
+	}
+	if marketPrice >= lower {
+		return errors.New("index price not below arbitrage band")
+	}
+	return nil
+}
+
+func (s *MarketStore) assetCurrencyLocked(assetID int64) string {
+	if state := s.companyStates[assetID]; state != nil {
+		return currencyForCountry(state.Country, fxBaseCurrency)
+	}
+	if asset, ok := s.assets[assetID]; ok {
+		if asset.Sector != "" {
+			country := s.defaultCountryForSector(asset.Sector)
+			return currencyForCountry(country, fxBaseCurrency)
+		}
+	}
+	return fxBaseCurrency
+}
+
 func (s *MarketStore) indexUnitPriceLocked(definition IndexDefinition) int64 {
+	rateByCurrency := make(map[string]int64, len(s.theoreticalFXRates))
+	for _, rate := range s.theoreticalFXRates {
+		if rate.Rate <= 0 || !stringsEqualFold(rate.QuoteCurrency, fxBaseCurrency) {
+			continue
+		}
+		key := strings.ToUpper(strings.TrimSpace(rate.BaseCurrency))
+		if key == "" {
+			continue
+		}
+		rateByCurrency[key] = rate.Rate
+	}
 	var total int64
 	for _, assetID := range definition.Components {
-		price := s.lastPrices[assetID]
-		if price == 0 {
-			price = s.basePrices[assetID]
+		price := s.marketPriceLocked(assetID)
+		converted := price
+		currency := s.assetCurrencyLocked(assetID)
+		if currency != "" && !stringsEqualFold(currency, fxBaseCurrency) {
+			rate := rateByCurrency[strings.ToUpper(strings.TrimSpace(currency))]
+			if rate == 0 {
+				rate = fxTheoreticalScale
+			}
+			product, ok := safeMultiplyInt64(price, rate)
+			if ok {
+				converted = product / fxTheoreticalScale
+			}
 		}
-		total += price
+		next, ok := safeAddInt64(total, converted)
+		if !ok {
+			return defaultAssetPrice
+		}
+		total = next
 	}
 	if total == 0 {
 		total = defaultAssetPrice
