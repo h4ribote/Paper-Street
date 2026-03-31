@@ -7,7 +7,8 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - ${INIT_SQL_PATH:?INIT_SQL_PATH environment variable is required}:/docker-entrypoint-initdb.d/init.sql:ro
+      - ../init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - db_data:/var/lib/mysql
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -p$$MYSQL_ROOT_PASSWORD"]
       interval: 10s
@@ -55,3 +56,6 @@ services:
       - bots
     stdin_open: true
     tty: true
+
+volumes:
+  db_data:
