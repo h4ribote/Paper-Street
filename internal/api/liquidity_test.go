@@ -83,3 +83,47 @@ func TestSwapPoolRouterMultiHop(t *testing.T) {
 		t.Fatalf("expected ARC balance to be unchanged, got %d", store.balances[1]["ARC"])
 	}
 }
+
+func TestPoolPositionCollectsFeesOnClose(t *testing.T) {
+	store := NewMarketStore()
+	store.EnsureUser(1)
+	store.EnsureUser(2)
+
+	pool := store.pools[1]
+	spacing := tickSpacingForFee(pool.FeeBps)
+	lower := pool.CurrentTick - spacing*2
+	upper := pool.CurrentTick + spacing*2
+
+	store.mu.Lock()
+	store.balances[1][pool.BaseCurrency] = 20_000
+	store.balances[1][pool.QuoteCurrency] = 20_000
+	store.balances[2][pool.BaseCurrency] = 20_000
+	store.mu.Unlock()
+
+	startBase := store.balances[1][pool.BaseCurrency]
+	startQuote := store.balances[1][pool.QuoteCurrency]
+
+	position, err := store.CreatePoolPosition(pool.ID, 1, 5_000, 5_000, lower, upper)
+	if err != nil {
+		t.Fatalf("create pool position failed: %v", err)
+	}
+
+	result, err := store.SwapPool(pool.ID, 2, pool.BaseCurrency, pool.QuoteCurrency, 10_000)
+	if err != nil {
+		t.Fatalf("swap failed: %v", err)
+	}
+	if result.FeeAmount <= 0 {
+		t.Fatalf("expected positive fee amount, got %d", result.FeeAmount)
+	}
+
+	if _, err := store.ClosePoolPosition(1, position.ID); err != nil {
+		t.Fatalf("close pool position failed: %v", err)
+	}
+
+	if store.balances[1][pool.BaseCurrency] != startBase+result.FeeAmount {
+		t.Fatalf("expected base balance to include fees, got %d", store.balances[1][pool.BaseCurrency])
+	}
+	if store.balances[1][pool.QuoteCurrency] != startQuote {
+		t.Fatalf("expected quote balance to return to original amount, got %d", store.balances[1][pool.QuoteCurrency])
+	}
+}

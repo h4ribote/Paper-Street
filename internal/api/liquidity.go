@@ -244,6 +244,7 @@ func (s *MarketStore) SwapPool(poolID, userID int64, fromCurrency, toCurrency st
 			s.balances[userID][step.from] -= step.amountIn
 			s.balances[userID][step.to] += step.amountOut
 			s.pools[step.pool.ID] = step.updatedPool
+			s.distributePoolFeesLocked(step.updatedPool, step.from, step.feeAmount)
 		}
 		return PoolSwapResult{
 			PoolID:       0,
@@ -274,7 +275,61 @@ func (s *MarketStore) SwapPool(poolID, userID int64, fromCurrency, toCurrency st
 	s.balances[userID][from] -= amount
 	s.balances[userID][to] += result.AmountOut
 	s.pools[poolID] = updatedPool
+	s.distributePoolFeesLocked(updatedPool, from, result.FeeAmount)
 	return result, nil
+}
+
+func (s *MarketStore) distributePoolFeesLocked(pool LiquidityPool, feeCurrency string, feeAmount int64) {
+	if feeAmount <= 0 {
+		return
+	}
+	feeCurrency = strings.ToUpper(strings.TrimSpace(feeCurrency))
+	if feeCurrency == "" {
+		return
+	}
+	if !stringsEqualFold(feeCurrency, pool.BaseCurrency) && !stringsEqualFold(feeCurrency, pool.QuoteCurrency) {
+		return
+	}
+	candidates := make([]PoolPosition, 0)
+	var totalLiquidity int64
+	for _, position := range s.poolPositions {
+		if position.PoolID != pool.ID {
+			continue
+		}
+		if pool.CurrentTick < position.LowerTick || pool.CurrentTick >= position.UpperTick {
+			continue
+		}
+		liquidity := position.BaseAmount + position.QuoteAmount
+		if liquidity <= 0 {
+			continue
+		}
+		candidates = append(candidates, position)
+		totalLiquidity += liquidity
+	}
+	if totalLiquidity <= 0 {
+		return
+	}
+	remaining := feeAmount
+	for i, position := range candidates {
+		liquidity := position.BaseAmount + position.QuoteAmount
+		if liquidity <= 0 {
+			continue
+		}
+		share := feeAmount * liquidity / totalLiquidity
+		if i == len(candidates)-1 {
+			share = remaining
+		}
+		if share <= 0 {
+			continue
+		}
+		remaining -= share
+		if stringsEqualFold(feeCurrency, pool.BaseCurrency) {
+			position.BaseAmount += share
+		} else {
+			position.QuoteAmount += share
+		}
+		s.poolPositions[position.ID] = position
+	}
 }
 
 func (s *MarketStore) MarginPools() []MarginPool {
