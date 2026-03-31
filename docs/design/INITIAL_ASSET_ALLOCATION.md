@@ -30,7 +30,7 @@
 これにより、特定の経済圏内での大規模な実需取引や裁定取引を担当します。
 
 | Entity Name | Focus Region | Currencies | Initial Assets (Each) |
-| :--- | :--- | :--- | :--- | :--- |
+| :--- | :--- | :--- | :--- |
 | **Whale 1** | Northern / Eastern | **ARC, BRB, DRL** | **5,000,000** |
 | **Whale 2** | Oceanic / Southern | **VND, VDP** | **7,500,000** |
 | **Whale 3** | Energy / Industrial | **ZMR, RVD** | **7,500,000** |
