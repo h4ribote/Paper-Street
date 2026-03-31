@@ -335,9 +335,6 @@ func (s *MarketStore) distributePoolFeesLocked(pool LiquidityPool, feeCurrency s
 			bigShare := new(big.Int)
 			bigRemainder := new(big.Int)
 			bigShare.DivMod(bigNumerator, bigTotal, bigRemainder)
-			if !bigShare.IsInt64() || !bigRemainder.IsInt64() {
-				return
-			}
 			share = bigShare.Int64()
 			remainder = bigRemainder.Int64()
 		}
@@ -356,7 +353,11 @@ func (s *MarketStore) distributePoolFeesLocked(pool LiquidityPool, feeCurrency s
 				}
 				return candidates[i].remainder > candidates[j].remainder
 			})
-			for i := int64(0); i < remainder && i < int64(len(candidates)); i++ {
+			limit := int(remainder)
+			if limit > len(candidates) {
+				limit = len(candidates)
+			}
+			for i := 0; i < limit; i++ {
 				candidates[i].share++
 			}
 		}
