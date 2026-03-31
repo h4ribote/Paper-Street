@@ -21,6 +21,7 @@ const (
 	newsOrderTimeout         = 2 * time.Second
 	newsReactorUserID        = int64(900001)
 	newsLiquidityUserID      = int64(900002)
+	newsCashBufferMultiplier = int64(2)
 )
 
 type NewsEngineConfig struct {
@@ -202,7 +203,7 @@ func (s *MarketStore) ensureNewsBalancesLocked(assetID, quantity, price int64, b
 	if !ok {
 		requiredCash = price
 	}
-	cashBuffer, ok := safeMultiplyInt64(requiredCash, 2)
+	cashBuffer, ok := safeMultiplyInt64(requiredCash, newsCashBufferMultiplier)
 	if !ok {
 		cashBuffer = requiredCash
 	}

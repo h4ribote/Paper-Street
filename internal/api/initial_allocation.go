@@ -9,7 +9,10 @@ import (
 )
 
 const (
-	initialRoleUserIDStart = int64(1000)
+	initialRoleUserIDStart   = int64(1000)
+	marketMakerSharePercent  = int64(20)
+	liquiditySharePercent    = int64(30)
+	initialCurrencySeedValue = int64(20_000_000)
 )
 
 type roleSeed struct {
@@ -201,8 +204,8 @@ func (s *MarketStore) applyRoleSeedsLocked(companies []*companyState) []seededUs
 		if issued <= 0 {
 			continue
 		}
-		marketMakerPositions[assetID] = issued * 20 / 100
-		liquidityPositions[assetID] = issued * 30 / 100
+		marketMakerPositions[assetID] = issued * marketMakerSharePercent / 100
+		liquidityPositions[assetID] = issued * liquiditySharePercent / 100
 	}
 	seeded = append(seeded, s.applyRoleSeedLocked(roleSeed{
 		Role:      "market_maker",
@@ -213,8 +216,8 @@ func (s *MarketStore) applyRoleSeedsLocked(companies []*companyState) []seededUs
 	}))
 	liquidityBalances := map[string]int64{"ARC": 20_000_000}
 	for _, currency := range []string{"BRB", "DRL", "VND", "VDP", "ZMR", "RVD"} {
-		liquidityBalances[currency] = liquidityBalances[currency] + 20_000_000
-		liquidityBalances["ARC"] = liquidityBalances["ARC"] + 10_000_000
+		liquidityBalances[currency] += initialCurrencySeedValue
+		liquidityBalances["ARC"] += 10_000_000
 	}
 	seeded = append(seeded, s.applyRoleSeedLocked(roleSeed{
 		Role:      "liquidity_provider",

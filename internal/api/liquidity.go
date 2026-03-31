@@ -11,11 +11,12 @@ import (
 )
 
 const (
-	poolFeeLowBps      = int64(4)
-	poolFeeStandardBps = int64(20)
-	indexFeeBps        = int64(10)
-	indexArbBandBps    = int64(20)
-	bpsDenominator     = int64(10_000)
+	poolFeeLowBps        = int64(4)
+	poolFeeStandardBps   = int64(20)
+	indexFeeBps          = int64(10)
+	indexArbBandBps      = int64(20)
+	bpsDenominator       = int64(10_000)
+	defaultPoolLiquidity = int64(15_000_000)
 	// Margin rate model parameters (basis points per day).
 	marginBaseRateBps  = int64(10)  // base rate at 0% utilization
 	marginSlopeBps     = int64(40)  // slope until the kink point
@@ -564,8 +565,8 @@ func (s *MarketStore) seedPools() {
 	poolID := int64(1)
 	for _, pair := range pairs {
 		pools := []LiquidityPool{
-			{ID: poolID, BaseCurrency: "ARC", QuoteCurrency: pair.quote, FeeBps: poolFeeLowBps, Liquidity: 15_000_000, CurrentTick: pair.tick},
-			{ID: poolID + 1, BaseCurrency: "ARC", QuoteCurrency: pair.quote, FeeBps: poolFeeStandardBps, Liquidity: 15_000_000, CurrentTick: pair.tick},
+			{ID: poolID, BaseCurrency: "ARC", QuoteCurrency: pair.quote, FeeBps: poolFeeLowBps, Liquidity: defaultPoolLiquidity, CurrentTick: pair.tick},
+			{ID: poolID + 1, BaseCurrency: "ARC", QuoteCurrency: pair.quote, FeeBps: poolFeeStandardBps, Liquidity: defaultPoolLiquidity, CurrentTick: pair.tick},
 		}
 		poolID += 2
 		for _, pool := range pools {
