@@ -1121,9 +1121,7 @@ func (s *MarketStore) macroEconomySnapshotLocked() map[string]macroEconomySnapsh
 		snapshot.consumption += float64(state.LastB2CRevenue)
 		snapshot.government += float64(state.LastB2GRevenue)
 		snapshot.investment += float64(state.LastCapexCost) + float64(state.LastInventoryChange)
-		if state.UtilizationRate > 0 {
-			snapshot.utilizationSum += float64(state.UtilizationRate) / float64(bpsDenominator)
-		}
+		snapshot.utilizationSum += float64(state.UtilizationRate) / float64(bpsDenominator)
 		snapshot.companyCount++
 		snapshots[country] = snapshot
 	}
