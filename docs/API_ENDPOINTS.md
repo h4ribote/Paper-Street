@@ -39,6 +39,8 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
     *   ニュースフィードを取得します。
 *   `GET /macro/indicators`
     *   各国のマクロ経済指標を取得します。
+*   `GET /fx/theoretical`
+    *   マクロ指標に基づく理論FXレート（Local/ARC）を取得します。
 
 ## 3. Trading & Orders (取引・注文)
 *   `POST /orders`

@@ -8,7 +8,6 @@
 | 設計ドキュメント | 仕様の要点 | 現状のバックエンド実装 | 状態 |
 | --- | --- | --- | --- |
 | [AI_ECOSYSTEM.md](./design/AI_ECOSYSTEM.md) | 12種類のボット戦略 | `internal/bots/` と `cmd/bots/` にあるのは **Market Maker / News Reactor のみ**。他の戦略は未実装。 | 未実装 |
-| [THEORETICAL_FX_RATE.md](./design/THEORETICAL_FX_RATE.md) | マクロ指標から理論FXレート算出 | 該当する計算・保存・配信処理は見当たらない。 | 未実装 |
 | [INDICES.md](./design/INDICES.md) | バスケット連動のCreation/Redemption・FX換算 | `internal/api/liquidity.go` に **単純合計価格の指数**とCreate/Redeemはあるが、**構成銘柄バスケットの受渡・FX換算・裁定バンド**は未実装。 | 部分実装 |
 | [EQUITY_FINANCING.md](./design/EQUITY_FINANCING.md) | 企業の資金調達・自社株買い（Treasury Stock Sale / New Issuance / Buyback） | 企業の株式発行数・自己株式・買い戻しに関するDB/ロジック/APIが見当たらない。 | 未実装 |
 | [ECONOMIC_SIMULATION_DETAILS.md](./design/ECONOMIC_SIMULATION_DETAILS.md) | 企業Botの生産・調達・在庫・価格サイクル | `production_recipes` / `production_inputs` を使った生産・調達・販売処理がバックエンドに存在しない。 | 未実装 |
