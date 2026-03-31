@@ -293,11 +293,11 @@ func (s *MarketStore) distributePoolFeesLocked(pool LiquidityPool, feeCurrency s
 	type feeCandidate struct {
 		id        int64
 		liquidity int64
+		share     int64
+		remainder int64
 	}
 	candidates := make([]feeCandidate, 0)
 	var totalLiquidity int64
-	var maxLiquidity int64
-	maxIndex := -1
 	for _, position := range s.poolPositions {
 		if position.PoolID != pool.ID {
 			continue
@@ -311,43 +311,53 @@ func (s *MarketStore) distributePoolFeesLocked(pool LiquidityPool, feeCurrency s
 		}
 		candidates = append(candidates, feeCandidate{id: position.ID, liquidity: liquidity})
 		totalLiquidity += liquidity
-		if liquidity > maxLiquidity {
-			maxLiquidity = liquidity
-			maxIndex = len(candidates) - 1
-		}
 	}
 	if totalLiquidity <= 0 {
 		return
 	}
 	var distributed int64
-	for _, candidate := range candidates {
+	for i, candidate := range candidates {
 		if candidate.liquidity <= 0 {
 			continue
 		}
-		share := feeAmount * candidate.liquidity / totalLiquidity
-		if share <= 0 {
+		numerator, ok := safeMultiplyInt64(feeAmount, candidate.liquidity)
+		if !ok {
+			numerator = (feeAmount / totalLiquidity) * candidate.liquidity
+		}
+		share := numerator / totalLiquidity
+		remainder := numerator % totalLiquidity
+		candidates[i].share = share
+		candidates[i].remainder = remainder
+		distributed += share
+	}
+	remainder := feeAmount - distributed
+	if remainder > 0 {
+		if len(candidates) == 1 {
+			candidates[0].share += remainder
+		} else {
+			sort.Slice(candidates, func(i, j int) bool {
+				if candidates[i].remainder == candidates[j].remainder {
+					return candidates[i].liquidity > candidates[j].liquidity
+				}
+				return candidates[i].remainder > candidates[j].remainder
+			})
+			for i := int64(0); i < remainder && i < int64(len(candidates)); i++ {
+				candidates[i].share++
+			}
+		}
+	}
+	for _, candidate := range candidates {
+		if candidate.share <= 0 {
 			continue
 		}
 		position := s.poolPositions[candidate.id]
 		if stringsEqualFold(feeCurrency, pool.BaseCurrency) {
-			position.BaseAmount += share
+			position.BaseAmount += candidate.share
 		} else {
-			position.QuoteAmount += share
+			position.QuoteAmount += candidate.share
 		}
 		s.poolPositions[candidate.id] = position
-		distributed += share
 	}
-	remainder := feeAmount - distributed
-	if remainder <= 0 || maxIndex < 0 {
-		return
-	}
-	position := s.poolPositions[candidates[maxIndex].id]
-	if stringsEqualFold(feeCurrency, pool.BaseCurrency) {
-		position.BaseAmount += remainder
-	} else {
-		position.QuoteAmount += remainder
-	}
-	s.poolPositions[candidates[maxIndex].id] = position
 }
 
 func (s *MarketStore) MarginPools() []MarginPool {
