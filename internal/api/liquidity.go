@@ -647,12 +647,12 @@ func (s *MarketStore) ensureIndexArbitrageLocked(assetID, unitPrice int64, isCre
 	marketPrice := s.marketPriceLocked(assetID)
 	if isCreate {
 		if marketPrice <= upper {
-			return errors.New("index price not above arbitrage band")
+			return errors.New("index price must exceed arbitrage band for creation")
 		}
 		return nil
 	}
 	if marketPrice >= lower {
-		return errors.New("index price not below arbitrage band")
+		return errors.New("index price must fall below arbitrage band for redemption")
 	}
 	return nil
 }
@@ -668,6 +668,17 @@ func (s *MarketStore) assetCurrencyLocked(assetID int64) string {
 		}
 	}
 	return fxBaseCurrency
+}
+
+func (s *MarketStore) indexFXRateLocked(currency string, rateByCurrency map[string]int64) int64 {
+	if currency == "" || stringsEqualFold(currency, fxBaseCurrency) {
+		return fxTheoreticalScale
+	}
+	rate := rateByCurrency[strings.ToUpper(strings.TrimSpace(currency))]
+	if rate == 0 {
+		return fxTheoreticalScale
+	}
+	return rate
 }
 
 func (s *MarketStore) indexUnitPriceLocked(definition IndexDefinition) int64 {
@@ -688,10 +699,7 @@ func (s *MarketStore) indexUnitPriceLocked(definition IndexDefinition) int64 {
 		converted := price
 		currency := s.assetCurrencyLocked(assetID)
 		if currency != "" && !stringsEqualFold(currency, fxBaseCurrency) {
-			rate := rateByCurrency[strings.ToUpper(strings.TrimSpace(currency))]
-			if rate == 0 {
-				rate = fxTheoreticalScale
-			}
+			rate := s.indexFXRateLocked(currency, rateByCurrency)
 			product, ok := safeMultiplyInt64(price, rate)
 			if ok {
 				converted = product / fxTheoreticalScale
