@@ -5,10 +5,28 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /out/market_maker ./cmd/bots/market_maker
 RUN CGO_ENABLED=0 GOOS=linux go build -o /out/news_reactor ./cmd/bots/news_reactor
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/momentum_chaser ./cmd/bots/momentum_chaser
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/dip_buyer ./cmd/bots/dip_buyer
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/reversal_sniper ./cmd/bots/reversal_sniper
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/grid_trader ./cmd/bots/grid_trader
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/whale ./cmd/bots/whale
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/national_ai ./cmd/bots/national_ai
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/arbitrageur ./cmd/bots/arbitrageur
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/yield_hunter ./cmd/bots/yield_hunter
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/public_consumer ./cmd/bots/public_consumer
 
 FROM alpine:3.19.1
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=builder /out/market_maker ./market_maker
 COPY --from=builder /out/news_reactor ./news_reactor
+COPY --from=builder /out/momentum_chaser ./momentum_chaser
+COPY --from=builder /out/dip_buyer ./dip_buyer
+COPY --from=builder /out/reversal_sniper ./reversal_sniper
+COPY --from=builder /out/grid_trader ./grid_trader
+COPY --from=builder /out/whale ./whale
+COPY --from=builder /out/national_ai ./national_ai
+COPY --from=builder /out/arbitrageur ./arbitrageur
+COPY --from=builder /out/yield_hunter ./yield_hunter
+COPY --from=builder /out/public_consumer ./public_consumer
 CMD ["./market_maker"]

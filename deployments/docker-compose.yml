@@ -1,3 +1,14 @@
+x-bot-env: &bot-env
+  API_BASE_URL: http://server:8000
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD environment variable is required}
+
+x-bot-base: &bot-base
+  build:
+    context: ..
+    dockerfile: deployments/docker/Dockerfile.bot
+  depends_on:
+    - server
+
 services:
   db:
     image: mysql:8.0
@@ -30,34 +41,213 @@ services:
         condition: service_healthy
 
   market_maker:
-    build:
-      context: ..
-      dockerfile: deployments/docker/Dockerfile.bot
+    <<: *bot-base
     command: ["./market_maker"]
     environment:
-      API_BASE_URL: http://server:8000
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD environment variable is required}
+      <<: *bot-env
       BOT_ROLE: market_maker
-    depends_on:
-      - server
-    profiles:
-      - bots
 
   news_reactor:
-    build:
-      context: ..
-      dockerfile: deployments/docker/Dockerfile.bot
+    <<: *bot-base
     command: ["./news_reactor"]
     environment:
-      API_BASE_URL: http://server:8000
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD environment variable is required}
+      <<: *bot-env
       BOT_ROLE: news_reactor
-    depends_on:
-      - server
-    profiles:
-      - bots
     stdin_open: true
     tty: true
+
+  momentum_chaser_a:
+    <<: *bot-base
+    command: ["./momentum_chaser"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: momentum_chaser_a
+      ASSET_IDS: "101"
+
+  momentum_chaser_b:
+    <<: *bot-base
+    command: ["./momentum_chaser"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: momentum_chaser_b
+      ASSET_IDS: "102"
+
+  momentum_chaser_c:
+    <<: *bot-base
+    command: ["./momentum_chaser"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: momentum_chaser_c
+      ASSET_IDS: "103"
+
+  dip_buyer_a:
+    <<: *bot-base
+    command: ["./dip_buyer"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: dip_buyer_a
+      ASSET_IDS: "101"
+
+  dip_buyer_b:
+    <<: *bot-base
+    command: ["./dip_buyer"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: dip_buyer_b
+      ASSET_IDS: "102"
+
+  dip_buyer_c:
+    <<: *bot-base
+    command: ["./dip_buyer"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: dip_buyer_c
+      ASSET_IDS: "103"
+
+  reversal_sniper_a:
+    <<: *bot-base
+    command: ["./reversal_sniper"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: reversal_sniper_a
+      ASSET_IDS: "101"
+
+  reversal_sniper_b:
+    <<: *bot-base
+    command: ["./reversal_sniper"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: reversal_sniper_b
+      ASSET_IDS: "102"
+
+  reversal_sniper_c:
+    <<: *bot-base
+    command: ["./reversal_sniper"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: reversal_sniper_c
+      ASSET_IDS: "103"
+
+  grid_trader_a:
+    <<: *bot-base
+    command: ["./grid_trader"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: grid_trader_a
+      ASSET_IDS: "101"
+
+  grid_trader_b:
+    <<: *bot-base
+    command: ["./grid_trader"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: grid_trader_b
+      ASSET_IDS: "102"
+
+  grid_trader_c:
+    <<: *bot-base
+    command: ["./grid_trader"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: grid_trader_c
+      ASSET_IDS: "103"
+
+  whale_northern:
+    <<: *bot-base
+    command: ["./whale"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: whale_northern
+      ASSET_ID: "101"
+
+  whale_oceanic:
+    <<: *bot-base
+    command: ["./whale"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: whale_oceanic
+      ASSET_ID: "102"
+
+  whale_energy:
+    <<: *bot-base
+    command: ["./whale"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: whale_energy
+      ASSET_ID: "103"
+
+  national_ai_arcadia:
+    <<: *bot-base
+    command: ["./national_ai"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: national_ai_arcadia
+
+  national_ai_boros:
+    <<: *bot-base
+    command: ["./national_ai"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: national_ai_boros
+
+  national_ai_el_dorado:
+    <<: *bot-base
+    command: ["./national_ai"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: national_ai_el_dorado
+
+  national_ai_neo_venice:
+    <<: *bot-base
+    command: ["./national_ai"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: national_ai_neo_venice
+
+  national_ai_san_verde:
+    <<: *bot-base
+    command: ["./national_ai"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: national_ai_san_verde
+
+  national_ai_novaya_zemlya:
+    <<: *bot-base
+    command: ["./national_ai"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: national_ai_novaya_zemlya
+
+  national_ai_pearl_river:
+    <<: *bot-base
+    command: ["./national_ai"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: national_ai_pearl_river
+
+  arbitrageur:
+    <<: *bot-base
+    command: ["./arbitrageur"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: arbitrageur
+      INDEX_ASSET_ID: "201"
+      COMPONENT_ASSET_IDS: "101,102,103"
+      ENABLE_FX_ARB: "true"
+
+  yield_hunter:
+    <<: *bot-base
+    command: ["./yield_hunter"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: yield_hunter
+
+  public_consumer:
+    <<: *bot-base
+    command: ["./public_consumer"]
+    environment:
+      <<: *bot-env
+      BOT_ROLE: public_consumer
 
 volumes:
   db_data:
