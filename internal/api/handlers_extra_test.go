@@ -75,6 +75,23 @@ func TestIndexCreateRedeem(t *testing.T) {
 	}
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
 	store.EnsureUser(1)
+	store.mu.Lock()
+	store.positions[1][101] = 2
+	store.positions[1][102] = 2
+	store.positions[1][103] = 2
+	store.theoreticalFXRates = []TheoreticalFXRate{
+		{BaseCurrency: "BRB", QuoteCurrency: fxBaseCurrency, Rate: fxTheoreticalScale},
+		{BaseCurrency: "DRL", QuoteCurrency: fxBaseCurrency, Rate: fxTheoreticalScale},
+	}
+	definition := store.ensureIndexLocked(201)
+	nav := store.indexUnitPriceLocked(definition)
+	band, err := calculateFeeBps(nav, indexArbBandBps)
+	if err != nil {
+		store.mu.Unlock()
+		t.Fatalf("failed to calculate arbitrage band: %v", err)
+	}
+	store.lastPrices[201] = nav + band + 1
+	store.mu.Unlock()
 	eng := engine.NewEngine(store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store))
 	defer server.Close()
@@ -84,6 +101,16 @@ func TestIndexCreateRedeem(t *testing.T) {
 	if createResult.AssetID != 201 || createResult.Quantity != 2 {
 		t.Fatalf("unexpected create response: %+v", createResult)
 	}
+	store.mu.RLock()
+	if store.positions[1][201] != 2 {
+		store.mu.RUnlock()
+		t.Fatalf("expected index holdings 2, got %d", store.positions[1][201])
+	}
+	if store.positions[1][101] != 0 || store.positions[1][102] != 0 || store.positions[1][103] != 0 {
+		store.mu.RUnlock()
+		t.Fatalf("expected component holdings to be delivered, got %+v", store.positions[1])
+	}
+	store.mu.RUnlock()
 
 	var assets []PortfolioAsset
 	getJSON(t, server.URL+"/portfolio/assets?user_id=1", testAPIKeyUser1, &assets)
@@ -98,10 +125,47 @@ func TestIndexCreateRedeem(t *testing.T) {
 		t.Fatalf("expected index holdings in assets: %+v", assets)
 	}
 
+	store.mu.Lock()
+	store.lastPrices[201] = nav - band - 1
+	store.mu.Unlock()
+
 	var redeemResult IndexActionResult
 	postJSON(t, server.URL+"/indices/201/redeem", testAPIKeyUser1, indexActionRequest{UserID: 1, Quantity: 1}, &redeemResult)
 	if redeemResult.Quantity != 1 {
 		t.Fatalf("unexpected redeem response: %+v", redeemResult)
+	}
+	store.mu.RLock()
+	if store.positions[1][201] != 1 {
+		store.mu.RUnlock()
+		t.Fatalf("expected index holdings 1, got %d", store.positions[1][201])
+	}
+	if store.positions[1][101] != 1 || store.positions[1][102] != 1 || store.positions[1][103] != 1 {
+		store.mu.RUnlock()
+		t.Fatalf("expected component holdings returned, got %+v", store.positions[1])
+	}
+	store.mu.RUnlock()
+}
+
+func TestIndexUnitPriceUsesFXRates(t *testing.T) {
+	store := NewMarketStore()
+	store.mu.Lock()
+	store.theoreticalFXRates = []TheoreticalFXRate{
+		{BaseCurrency: "BRB", QuoteCurrency: fxBaseCurrency, Rate: 150},
+		{BaseCurrency: "DRL", QuoteCurrency: fxBaseCurrency, Rate: 200},
+	}
+	definition := store.ensureIndexLocked(201)
+	price := store.indexUnitPriceLocked(definition)
+	base101 := store.basePrices[101]
+	base102 := store.basePrices[102]
+	base103 := store.basePrices[103]
+	expected := int64(0)
+	expected += base101
+	expected += (base102 * 150) / fxTheoreticalScale
+	expected += (base103 * 200) / fxTheoreticalScale
+	store.mu.Unlock()
+
+	if price != expected {
+		t.Fatalf("expected index price %d, got %d", expected, price)
 	}
 }
 

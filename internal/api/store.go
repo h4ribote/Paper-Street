@@ -378,6 +378,7 @@ type MarketStore struct {
 	marginPositions      map[int64]MarginPosition
 	marginLiquidations   []MarginLiquidation
 	indexes              map[int64]IndexDefinition
+	indexHoldings        map[int64]map[int64]int64
 	dailyMissions        map[string][]DailyMission
 	missionProgress      map[int64]map[string]*DailyMissionProgress
 	contracts            map[int64]*Contract
@@ -440,6 +441,7 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 		marginPositions:    make(map[int64]MarginPosition),
 		marginLiquidations: make([]MarginLiquidation, 0),
 		indexes:            make(map[int64]IndexDefinition),
+		indexHoldings:      make(map[int64]map[int64]int64),
 		dailyMissions:      make(map[string][]DailyMission),
 		missionProgress:    make(map[int64]map[string]*DailyMissionProgress),
 		contracts:          make(map[int64]*Contract),
