@@ -1095,16 +1095,17 @@ func (s *MarketStore) ensureMacroQuarterTrackingLocked(quarterIndex int64) {
 	if s.macroCPIIndexPrev == nil {
 		s.macroCPIIndexPrev = make(map[string]float64)
 	}
+	if s.macroGovSpending == nil {
+		s.macroGovSpending = make(map[string]int64)
+	}
+	if s.macroGovQuarterIndex == 0 {
+		s.macroGovQuarterIndex = quarterIndex
+	}
 	if quarterIndex != s.macroQuarterIndex {
 		s.macroGDPPrevTotals = s.macroGDPTotals
 		s.macroGDPTotals = make(map[string]float64)
 		s.macroCPIIndexPrev = s.macroCPIIndexCurrent
 		s.macroCPIIndexCurrent = make(map[string]float64)
-		s.macroGovSpending = make(map[string]int64)
-		s.macroGovQuarterIndex = quarterIndex
-		s.macroQuarterIndex = quarterIndex
-	}
-	if s.macroGovSpending == nil {
 		s.macroGovSpending = make(map[string]int64)
 		s.macroGovQuarterIndex = quarterIndex
 	}

@@ -475,9 +475,7 @@ func (s *MarketStore) runCompanyQuarterLocked(state *companyState, now time.Time
 	production := s.runCompanyProductionLocked(state, demand.Total, now)
 	sales, revenue, netIncome := s.runCompanySalesLocked(state, demand.Total, production)
 	capexCost := s.handleCapexLocked(state, demand.Total, now)
-	state.LastCapexCost = capexCost
-	state.LastB2CRevenue, state.LastB2GRevenue = splitDemandRevenue(revenue, demand)
-	state.LastInventoryChange = inventoryChangeValue(startInventory, state.CurrentInventory, state.COGSPerUnit, state.LastSalePrice)
+	updateMacroQuarterTracking(state, revenue, demand, capexCost, startInventory)
 	if capexCost > 0 {
 		netIncome -= capexCost
 	}
@@ -500,9 +498,25 @@ func splitDemandRevenue(revenue int64, demand CompanyDemandBreakdown) (int64, in
 	if demand.B2C < 0 || demand.B2G < 0 {
 		return 0, 0
 	}
-	b2c := revenue * demand.B2C / demand.Total
-	b2g := revenue * demand.B2G / demand.Total
+	denominator := demand.Total
+	if demand.B2C+demand.B2G > demand.Total {
+		denominator = demand.B2C + demand.B2G
+		if denominator <= 0 {
+			return 0, 0
+		}
+	}
+	b2c := revenue * demand.B2C / denominator
+	b2g := revenue * demand.B2G / denominator
 	return b2c, b2g
+}
+
+func updateMacroQuarterTracking(state *companyState, revenue int64, demand CompanyDemandBreakdown, capexCost int64, startInventory int64) {
+	if state == nil {
+		return
+	}
+	state.LastCapexCost = capexCost
+	state.LastB2CRevenue, state.LastB2GRevenue = splitDemandRevenue(revenue, demand)
+	state.LastInventoryChange = inventoryChangeValue(startInventory, state.CurrentInventory, state.COGSPerUnit, state.LastSalePrice)
 }
 
 func inventoryChangeValue(startInventory, endInventory, unitCost, fallbackPrice int64) int64 {
