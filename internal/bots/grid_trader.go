@@ -11,7 +11,7 @@ func GridLevels(mid int64, stepBps int64, levels int) []GridLevel {
 	if mid <= 0 || stepBps <= 0 || levels <= 0 {
 		return nil
 	}
-	step := int64(math.Round(float64(mid) * float64(stepBps) / float64(bpsDivisor)))
+	step := int64(math.Round(float64(mid) * float64(stepBps) / 10000.0))
 	if step < 1 {
 		step = 1
 	}

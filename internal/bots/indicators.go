@@ -65,16 +65,13 @@ func Bollinger(values []int64, period int, sigma float64) (mid, upper, lower flo
 }
 
 func RSI(values []int64, period int) float64 {
-	if period <= 0 || len(values) <= period {
+	if period <= 0 || len(values) < period+1 {
 		return 0
 	}
 	var gains float64
 	var losses float64
 	start := len(values) - period
 	for i := start; i < len(values); i++ {
-		if i == 0 {
-			continue
-		}
 		diff := float64(values[i] - values[i-1])
 		if diff > 0 {
 			gains += diff
@@ -98,15 +95,12 @@ func RSI(values []int64, period int) float64 {
 }
 
 func ATR(candles []Candle, period int) float64 {
-	if period <= 0 || len(candles) <= period {
+	if period <= 0 || len(candles) < period+1 {
 		return 0
 	}
 	var sum float64
 	start := len(candles) - period
 	for i := start; i < len(candles); i++ {
-		if i == 0 {
-			continue
-		}
 		high := float64(candles[i].High)
 		low := float64(candles[i].Low)
 		prevClose := float64(candles[i-1].Close)
