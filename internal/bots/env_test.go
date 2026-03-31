@@ -23,3 +23,20 @@ func TestFirstAPIKey(t *testing.T) {
 		})
 	}
 }
+
+func TestParseInt64List(t *testing.T) {
+	values, err := ParseInt64List("1, 2,3")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(values) != 3 || values[0] != 1 || values[1] != 2 || values[2] != 3 {
+		t.Fatalf("unexpected values: %#v", values)
+	}
+	values, err = ParseInt64List(" , ")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(values) != 0 {
+		t.Fatalf("expected empty list, got %#v", values)
+	}
+}
