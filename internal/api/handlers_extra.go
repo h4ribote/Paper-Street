@@ -229,7 +229,7 @@ func (s *Server) handleBondOperations(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var payload bondOperationRequest
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil && err != io.EOF {
 			respondError(w, http.StatusBadRequest, "invalid json body")
 			return
 		}

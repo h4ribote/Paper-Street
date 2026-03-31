@@ -229,8 +229,8 @@ func (s *MarketStore) processPerpetualBondCouponsLocked(now time.Time) []BondCou
 			if qty <= 0 {
 				continue
 			}
-			acquiredAt := s.assetAcquiredAt[userID][bond.AssetID]
-			if acquiredAt == 0 || acquiredAt > cutoff {
+			acquiredAt, ok := s.assetAcquiredAt[userID][bond.AssetID]
+			if !ok || acquiredAt == 0 || acquiredAt > cutoff {
 				continue
 			}
 			amount, ok := safeMultiplyInt64(qty, bond.BaseCoupon)

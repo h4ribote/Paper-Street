@@ -1571,11 +1571,11 @@ func (s *MarketStore) applyExecutionLocked(exec engine.Execution) bool {
 	if !sellerIsMargin {
 		s.positions[sellerID][exec.AssetID] -= exec.Quantity
 	}
-	now := exec.OccurredAtUTC
-	if now.IsZero() {
-		now = time.Now().UTC()
+	execTime := exec.OccurredAtUTC
+	if execTime.IsZero() {
+		execTime = time.Now().UTC()
 	}
-	nowMillis := now.UnixMilli()
+	nowMillis := execTime.UnixMilli()
 	if !buyerIsMargin {
 		s.updateAssetAcquiredAtLocked(buyerID, exec.AssetID, oldBuyerQty, exec.Quantity, nowMillis)
 	}
