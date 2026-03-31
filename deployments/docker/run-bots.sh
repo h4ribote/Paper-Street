@@ -27,7 +27,7 @@ terminate() {
   if [ -n "$pids" ]; then
     echo "Stopping bots..."
     for pid in $pids; do
-      kill "$pid" 2>/dev/null || true
+      kill -TERM "$pid" 2>/dev/null || true
     done
     for pid in $pids; do
       wait "$pid" || true
