@@ -22,6 +22,12 @@ const (
 	financingDiscountEmergencyBps = int64(1_500)
 	buybackLimitBps               = int64(2_500)
 	buybackPremiumBps             = int64(500)
+	capacityPressureBps           = int64(11_000)
+	treasuryRetentionBps          = int64(6_000)
+	overvaluationPriceBps         = int64(15_000)
+	overvaluationPERatioBps       = int64(50) * bpsDenominator
+	undervaluationPriceBps        = int64(8_000)
+	excessCashWeeks               = int64(5)
 )
 
 type companyState struct {
@@ -713,7 +719,7 @@ func (s *MarketStore) handleCapexLocked(state *companyState, demandTotal int64, 
 	if state.MaxProductionCapacity == 0 {
 		return 0
 	}
-	if demandTotal > state.MaxProductionCapacity*110/100 {
+	if demandTotal > state.MaxProductionCapacity*capacityPressureBps/bpsDenominator {
 		state.CapacityPressureCount++
 	} else {
 		state.CapacityPressureCount = 0
@@ -821,11 +827,11 @@ func (s *MarketStore) evaluateFinancingLocked(state *companyState, demand Compan
 		_, _ = s.initiateEquityFinancingLocked(state, CompanyFinancingRequest{Reason: "SAFETY_MARGIN"})
 		return
 	}
-	if ma > 0 && price > ma*3/2 && pe > 50*bpsDenominator {
+	if ma > 0 && price > ma*overvaluationPriceBps/bpsDenominator && pe > overvaluationPERatioBps {
 		_, _ = s.initiateEquityFinancingLocked(state, CompanyFinancingRequest{Reason: "OVERVALUATION"})
 		return
 	}
-	if cash > weeklyCost*5 && (ma == 0 || price < ma*8/10) {
+	if cash > weeklyCost*excessCashWeeks && (ma == 0 || price < ma*undervaluationPriceBps/bpsDenominator) {
 		_, _ = s.authorizeShareBuybackLocked(state, CompanyBuybackRequest{})
 	}
 }
@@ -946,7 +952,7 @@ func (s *MarketStore) authorizeShareBuybackLocked(state *companyState, req Compa
 	state.SharesOutstanding -= maxShares
 	state.TreasuryShares += maxShares
 	retired := int64(0)
-	treasuryLimit := state.SharesIssued * 60 / 100
+	treasuryLimit := state.SharesIssued * treasuryRetentionBps / bpsDenominator
 	if state.TreasuryShares > treasuryLimit {
 		retired = state.TreasuryShares - treasuryLimit
 		state.TreasuryShares -= retired

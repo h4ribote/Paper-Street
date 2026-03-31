@@ -508,6 +508,18 @@ func (q *Queries) UpsertCompany(ctx context.Context, record CompanyRecord) error
 	if record.CompanyID == 0 {
 		return errors.New("company id required")
 	}
+	args := []interface{}{
+		record.CompanyID,
+		strings.TrimSpace(record.Name),
+		strings.TrimSpace(record.Symbol),
+		record.UserID,
+		record.MaxProductionCapacity,
+		record.CurrentInventory,
+		record.LastCapexAt,
+		record.SharesIssued,
+		record.SharesOutstanding,
+		record.TreasuryStock,
+	}
 	_, err := q.Conn.DB.ExecContext(ctx, `
 		INSERT INTO companies (
 			company_id, country_id, sector_id, name, ticker_symbol, description, user_id,
@@ -523,7 +535,7 @@ func (q *Queries) UpsertCompany(ctx context.Context, record CompanyRecord) error
 			shares_issued = VALUES(shares_issued),
 			shares_outstanding = VALUES(shares_outstanding),
 			treasury_stock = VALUES(treasury_stock)
-	`, record.CompanyID, strings.TrimSpace(record.Name), strings.TrimSpace(record.Symbol), record.UserID, record.MaxProductionCapacity, record.CurrentInventory, record.LastCapexAt, record.SharesIssued, record.SharesOutstanding, record.TreasuryStock)
+	`, args...)
 	return err
 }
 
@@ -603,6 +615,19 @@ func (q *Queries) UpsertFinancialReport(ctx context.Context, report FinancialRep
 	if report.CompanyID == 0 {
 		return errors.New("company id required")
 	}
+	args := []interface{}{
+		report.CompanyID,
+		report.FiscalYear,
+		report.FiscalQuarter,
+		report.Revenue,
+		report.NetIncome,
+		report.EPS,
+		report.Capex,
+		report.UtilizationRate,
+		report.InventoryLevel,
+		report.Guidance,
+		report.PublishedAt,
+	}
 	_, err := q.Conn.DB.ExecContext(ctx, `
 		INSERT INTO financial_reports (
 			company_id, fiscal_year, fiscal_quarter, revenue, net_income, eps, capex, utilization_rate, inventory_level, guidance, published_at
@@ -616,6 +641,6 @@ func (q *Queries) UpsertFinancialReport(ctx context.Context, report FinancialRep
 			inventory_level = VALUES(inventory_level),
 			guidance = VALUES(guidance),
 			published_at = VALUES(published_at)
-	`, report.CompanyID, report.FiscalYear, report.FiscalQuarter, report.Revenue, report.NetIncome, report.EPS, report.Capex, report.UtilizationRate, report.InventoryLevel, report.Guidance, report.PublishedAt)
+	`, args...)
 	return err
 }
