@@ -55,6 +55,31 @@ func EnvDuration(key string, fallback time.Duration) (time.Duration, error) {
 	return parsed, nil
 }
 
+func EnvInt64List(key string, fallback []int64) ([]int64, error) {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback, nil
+	}
+	return ParseInt64List(raw)
+}
+
+func ParseInt64List(raw string) ([]int64, error) {
+	entries := strings.Split(raw, ",")
+	values := make([]int64, 0, len(entries))
+	for _, entry := range entries {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		parsed, err := strconv.ParseInt(entry, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, parsed)
+	}
+	return values, nil
+}
+
 func FirstAPIKey(raw string) string {
 	for _, value := range strings.Split(raw, ",") {
 		value = strings.TrimSpace(value)
