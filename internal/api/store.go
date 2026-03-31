@@ -1528,9 +1528,9 @@ func (s *MarketStore) seedNews(now time.Time) {
 			{Headline: "Aurora Metals signs a new long-term export agreement.", Impact: "POSITIVE", AssetID: 103},
 		}
 	}
-	for idx, item := range headlines {
-		item.PublishedAt = now.Add(-time.Duration(idx+1) * time.Hour).UnixMilli()
-		s.publishNewsItem(now, item)
+	for idx := range headlines {
+		headlines[idx].PublishedAt = now.Add(-time.Duration(idx+1) * time.Hour).UnixMilli()
+		s.publishNewsItem(now, headlines[idx])
 	}
 }
 
