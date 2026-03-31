@@ -382,10 +382,14 @@ type MarketStore struct {
 	missionProgress      map[int64]map[string]*DailyMissionProgress
 	contracts            map[int64]*Contract
 	contractProgress     map[int64]map[int64]int64
+	companyStates        map[int64]*companyState
+	companyRecipes       map[int64][]ProductionRecipe
+	financialReports     map[int64][]CompanyFinancialReport
 	nextUserID           int64
 	nextExecutionID      int64
 	nextNewsID           int64
 	nextContractID       int64
+	nextRecipeID         int64
 	nextPoolPosID        int64
 	nextMarginPosID      int64
 	nextMarginPositionID int64
@@ -440,6 +444,9 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 		missionProgress:    make(map[int64]map[string]*DailyMissionProgress),
 		contracts:          make(map[int64]*Contract),
 		contractProgress:   make(map[int64]map[int64]int64),
+		companyStates:      make(map[int64]*companyState),
+		companyRecipes:     make(map[int64][]ProductionRecipe),
+		financialReports:   make(map[int64][]CompanyFinancialReport),
 		nextUserID:         userIDSeed,
 		nextNewsID:         0,
 		macroIndicators:    make([]MacroIndicator, 0),
@@ -459,6 +466,8 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 	}
 	if queries == nil {
 		store.seedAssets()
+		store.seedCompanies()
+		store.seedProductionRecipes()
 		store.mu.Lock()
 		store.refreshMacroIndicatorsLocked(now)
 		store.mu.Unlock()
@@ -1026,9 +1035,10 @@ func (s *MarketStore) buildMacroIndicatorsLocked(now time.Time) []MacroIndicator
 }
 
 type macroIndicatorValues struct {
-	gdp  int64
-	rate int64
-	cpi  int64
+	gdp   int64
+	rate  int64
+	cpi   int64
+	unemp int64
 }
 
 func (s *MarketStore) macroIndicatorValuesLocked(country string) (macroIndicatorValues, bool) {
@@ -1050,6 +1060,8 @@ func (s *MarketStore) macroIndicatorValuesLocked(country string) (macroIndicator
 		case macroTypeCPI:
 			values.cpi = indicator.Value
 			hasCPI = true
+		case macroTypeUnemp:
+			values.unemp = indicator.Value
 		}
 	}
 	return values, hasGDP && hasRate && hasCPI
@@ -1286,14 +1298,20 @@ func (s *MarketStore) Regions() []Region {
 
 func (s *MarketStore) Companies() []Company {
 	s.mu.RLock()
-	companies := make([]Company, 0, len(s.assets))
-	for _, asset := range s.assets {
-		companies = append(companies, Company{
-			ID:     asset.ID,
-			Name:   asset.Name,
-			Symbol: asset.Symbol,
-			Sector: asset.Sector,
-		})
+	companies := make([]Company, 0, len(s.companyStates))
+	if len(s.companyStates) == 0 {
+		for _, asset := range s.assets {
+			companies = append(companies, Company{
+				ID:     asset.ID,
+				Name:   asset.Name,
+				Symbol: asset.Symbol,
+				Sector: asset.Sector,
+			})
+		}
+	} else {
+		for _, state := range s.companyStates {
+			companies = append(companies, state.Company)
+		}
 	}
 	s.mu.RUnlock()
 	sort.Slice(companies, func(i, j int) bool { return companies[i].ID < companies[j].ID })
@@ -1622,6 +1640,22 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 			}
 			s.basePrices[snapshot.Asset.ID] = basePrice
 		}
+	}
+
+	if err := s.loadCompaniesFromDB(ctx); err != nil {
+		return err
+	}
+	if len(s.companyStates) == 0 {
+		s.seedCompanies()
+	}
+	if err := s.loadProductionRecipesFromDB(ctx); err != nil {
+		return err
+	}
+	if len(s.companyRecipes) == 0 {
+		s.seedProductionRecipes()
+	}
+	if err := s.loadFinancialReportsFromDB(ctx); err != nil {
+		return err
 	}
 
 	users, err := s.queries.ListUsers(ctx)

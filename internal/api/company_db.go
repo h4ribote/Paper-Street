@@ -1,0 +1,172 @@
+package api
+
+import (
+	"context"
+	"database/sql"
+	"log"
+
+	"github.com/h4ribote/Paper-Street/internal/db"
+	"github.com/h4ribote/Paper-Street/internal/models"
+)
+
+func (s *MarketStore) loadCompaniesFromDB(ctx context.Context) error {
+	if s.queries == nil {
+		return nil
+	}
+	records, err := s.queries.ListCompanies(ctx)
+	if err != nil {
+		return err
+	}
+	if len(records) == 0 {
+		return nil
+	}
+	commodityID := s.firstCommodityAssetID()
+	for _, record := range records {
+		asset, ok := s.assets[record.CompanyID]
+		if !ok {
+			asset = models.Asset{ID: record.CompanyID, Symbol: record.Symbol, Name: record.Name, Type: "STOCK", Sector: record.Sector}
+			s.assets[asset.ID] = asset
+		}
+		state := &companyState{
+			Company: Company{
+				ID:     record.CompanyID,
+				Name:   record.Name,
+				Symbol: record.Symbol,
+				Sector: record.Sector,
+			},
+			UserID:                record.UserID.Int64,
+			Country:               record.Country,
+			OutputAssetID:         commodityID,
+			MaxProductionCapacity: record.MaxProductionCapacity,
+			CurrentInventory:      record.CurrentInventory,
+			LastCapexAt:           record.LastCapexAt,
+			SharesIssued:          record.SharesIssued,
+			SharesOutstanding:     record.SharesOutstanding,
+			TreasuryShares:        record.TreasuryStock,
+		}
+		if state.UserID == 0 {
+			state.UserID = asset.ID
+		}
+		if state.MaxProductionCapacity == 0 {
+			state.MaxProductionCapacity = defaultMaxCapacity
+		}
+		if state.SharesIssued == 0 {
+			state.SharesIssued = defaultSharesIssued
+		}
+		if state.SharesOutstanding == 0 && state.TreasuryShares == 0 {
+			state.TreasuryShares = state.SharesIssued * defaultTreasuryBps / bpsDenominator
+			state.SharesOutstanding = state.SharesIssued - state.TreasuryShares
+		}
+		s.companyStates[state.Company.ID] = state
+		user := s.ensureUserLocked(state.UserID)
+		if user.Role != "bot" {
+			user.Role = "bot"
+			s.users[state.UserID] = user
+		}
+	}
+	return nil
+}
+
+func (s *MarketStore) loadProductionRecipesFromDB(ctx context.Context) error {
+	if s.queries == nil {
+		return nil
+	}
+	recipes, err := s.queries.ListProductionRecipes(ctx)
+	if err != nil {
+		return err
+	}
+	inputs, err := s.queries.ListProductionInputs(ctx)
+	if err != nil {
+		return err
+	}
+	inputMap := make(map[int64][]ProductionInput)
+	for _, input := range inputs {
+		inputMap[input.RecipeID] = append(inputMap[input.RecipeID], ProductionInput{
+			AssetID:  input.InputAssetID,
+			Quantity: input.InputQuantity,
+		})
+	}
+	for _, recipe := range recipes {
+		s.companyRecipes[recipe.CompanyID] = append(s.companyRecipes[recipe.CompanyID], ProductionRecipe{
+			ID:             recipe.ID,
+			CompanyID:      recipe.CompanyID,
+			OutputAssetID:  recipe.OutputAssetID,
+			OutputQuantity: recipe.OutputQuantity,
+			Inputs:         inputMap[recipe.ID],
+		})
+	}
+	return nil
+}
+
+func (s *MarketStore) loadFinancialReportsFromDB(ctx context.Context) error {
+	if s.queries == nil {
+		return nil
+	}
+	reports, err := s.queries.ListFinancialReports(ctx)
+	if err != nil {
+		return err
+	}
+	for _, report := range reports {
+		s.storeFinancialReportLocked(report.CompanyID, CompanyFinancialReport{
+			CompanyID:       report.CompanyID,
+			FiscalYear:      report.FiscalYear,
+			FiscalQuarter:   report.FiscalQuarter,
+			Revenue:         report.Revenue,
+			NetIncome:       report.NetIncome,
+			EPS:             report.EPS,
+			Capex:           report.Capex,
+			UtilizationRate: report.UtilizationRate,
+			InventoryLevel:  report.InventoryLevel,
+			Guidance:        report.Guidance,
+			PublishedAt:     report.PublishedAt,
+		})
+	}
+	return nil
+}
+
+func (s *MarketStore) persistCompanyState(state *companyState) {
+	if s.queries == nil || state == nil {
+		return
+	}
+	ctx, cancel := s.dbContext()
+	defer cancel()
+	record := db.CompanyRecord{
+		CompanyID:             state.Company.ID,
+		Name:                  state.Company.Name,
+		Symbol:                state.Company.Symbol,
+		UserID:                sql.NullInt64{Int64: state.UserID, Valid: state.UserID != 0},
+		MaxProductionCapacity: state.MaxProductionCapacity,
+		CurrentInventory:      state.CurrentInventory,
+		LastCapexAt:           state.LastCapexAt,
+		SharesIssued:          state.SharesIssued,
+		SharesOutstanding:     state.SharesOutstanding,
+		TreasuryStock:         state.TreasuryShares,
+	}
+	if err := s.queries.UpsertCompany(ctx, record); err != nil {
+		log.Printf("db upsert company %d: %v", state.Company.ID, err)
+	}
+}
+
+func (s *MarketStore) persistFinancialReport(report CompanyFinancialReport) {
+	if s.queries == nil || report.CompanyID == 0 {
+		return
+	}
+	ctx, cancel := s.dbContext()
+	defer cancel()
+	record := db.FinancialReportRecord{
+		CompanyID:       report.CompanyID,
+		FiscalYear:      report.FiscalYear,
+		FiscalQuarter:   report.FiscalQuarter,
+		Revenue:         report.Revenue,
+		NetIncome:       report.NetIncome,
+		EPS:             report.EPS,
+		Capex:           report.Capex,
+		UtilizationRate: report.UtilizationRate,
+		InventoryLevel:  report.InventoryLevel,
+		Guidance:        report.Guidance,
+		PublishedAt:     report.PublishedAt,
+	}
+	if err := s.queries.UpsertFinancialReport(ctx, record); err != nil {
+		log.Printf("db upsert financial report %d: %v", report.CompanyID, err)
+	}
+}

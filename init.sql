@@ -80,6 +80,11 @@ CREATE TABLE IF NOT EXISTS companies (
     current_inventory BIGINT DEFAULT 0 COMMENT 'Current units in stock',
     last_capex_at BIGINT DEFAULT 0 COMMENT 'Timestamp of last expansion',
 
+    -- Equity Financing State
+    shares_issued BIGINT DEFAULT 1000000 COMMENT 'Total shares issued',
+    shares_outstanding BIGINT DEFAULT 500000 COMMENT 'Shares outstanding',
+    treasury_stock BIGINT DEFAULT 500000 COMMENT 'Treasury shares',
+
     FOREIGN KEY (country_id) REFERENCES countries(country_id),
     FOREIGN KEY (sector_id) REFERENCES sectors(sector_id),
     FOREIGN KEY (user_id) REFERENCES users(user_id)

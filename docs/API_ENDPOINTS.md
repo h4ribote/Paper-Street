@@ -134,6 +134,22 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
 *   `GET /world/events`
     *   予定されているイベントや過去のイベントログを取得します。
 
+## 9.1 Corporate Finance & Simulation (企業ファイナンス/シミュレーション)
+*   `GET /companies/{company_id}/capital-structure`
+    *   企業の発行済株式数・流通株式数・自己株式数と時価総額を取得します。
+*   `POST /companies/{company_id}/financing/initiate`
+    *   資金調達を開始します。Body: `target_amount` (任意), `reason` (任意)。
+*   `POST /companies/{company_id}/buyback/authorize`
+    *   自社株買いを実行します。Body: `budget` (任意)。
+*   `GET /companies/{company_id}/production-status`
+    *   生産能力・在庫・稼働率などの生産状況を取得します。
+*   `GET /companies/{company_id}/supply-chain`
+    *   生産レシピと原材料の構成を取得します。
+*   `GET /companies/{company_id}/financials`
+    *   企業の四半期決算データを取得します。`limit` で件数を指定できます。
+*   `POST /companies/{company_id}/simulate`
+    *   企業の四半期シミュレーションを実行します。Body: `quarters` (任意、デフォルト1)。
+
 ## 10. Leaderboard (ランキング)
 *   `GET /leaderboard`
     *   資産ランキングを取得します。`limit` で件数を指定できます（デフォルト20）。
