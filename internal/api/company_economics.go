@@ -1033,6 +1033,7 @@ func (s *MarketStore) addNewsLocked(headline string, assetID int64, category str
 		PublishedAt: time.Now().UTC().UnixMilli(),
 	}
 	s.news = append([]NewsItem{item}, s.news...)
+	s.persistNewsItem(item)
 	return item.ID
 }
 

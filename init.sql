@@ -301,6 +301,9 @@ CREATE TABLE IF NOT EXISTS news_feed (
     source VARCHAR(50) DEFAULT 'Paper Street Wire',
     
     sentiment_score BIGINT DEFAULT 0 COMMENT 'Scaled: 100 = 1.00',
+    category VARCHAR(50) DEFAULT '',
+    impact VARCHAR(20) DEFAULT '',
+    impact_scope TEXT,
     related_asset_id INT,
     related_sector_id INT,
     related_country_id INT

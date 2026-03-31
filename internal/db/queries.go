@@ -58,6 +58,19 @@ type ExecutionRecord struct {
 	IsTakerBuyer bool
 }
 
+type NewsRecord struct {
+	ID             int64
+	Headline       string
+	Body           string
+	PublishedAt    int64
+	Source         string
+	SentimentScore int64
+	AssetID        int64
+	Category       string
+	Impact         string
+	ImpactScope    string
+}
+
 type CompanyRecord struct {
 	CompanyID             int64
 	Name                  string
@@ -437,6 +450,78 @@ func (q *Queries) ListExecutions(ctx context.Context) ([]ExecutionRecord, error)
 		executions = append(executions, record)
 	}
 	return executions, rows.Err()
+}
+
+func (q *Queries) UpsertNewsFeed(ctx context.Context, record NewsRecord) error {
+	if record.ID == 0 {
+		return errors.New("news id required")
+	}
+	assetID := interface{}(record.AssetID)
+	if record.AssetID == 0 {
+		assetID = nil
+	}
+	_, err := q.Conn.DB.ExecContext(ctx, `
+		INSERT INTO news_feed (news_id, headline, body, published_at, source, sentiment_score, related_asset_id, category, impact, impact_scope)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE headline = VALUES(headline),
+			body = VALUES(body),
+			published_at = VALUES(published_at),
+			source = VALUES(source),
+			sentiment_score = VALUES(sentiment_score),
+			related_asset_id = VALUES(related_asset_id),
+			category = VALUES(category),
+			impact = VALUES(impact),
+			impact_scope = VALUES(impact_scope)
+	`, record.ID, record.Headline, record.Body, record.PublishedAt, record.Source, record.SentimentScore, assetID, record.Category, record.Impact, record.ImpactScope)
+	return err
+}
+
+func (q *Queries) ListNewsFeed(ctx context.Context) ([]NewsRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT news_id, headline, body, published_at, source, sentiment_score, related_asset_id, category, impact, impact_scope
+		FROM news_feed
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []NewsRecord
+	for rows.Next() {
+		var record NewsRecord
+		var body sql.NullString
+		var source sql.NullString
+		var sentiment sql.NullInt64
+		var assetID sql.NullInt64
+		var category sql.NullString
+		var impact sql.NullString
+		var impactScope sql.NullString
+		if err := rows.Scan(&record.ID, &record.Headline, &body, &record.PublishedAt, &source, &sentiment, &assetID, &category, &impact, &impactScope); err != nil {
+			return nil, err
+		}
+		if body.Valid {
+			record.Body = body.String
+		}
+		if source.Valid {
+			record.Source = source.String
+		}
+		if sentiment.Valid {
+			record.SentimentScore = sentiment.Int64
+		}
+		if assetID.Valid {
+			record.AssetID = assetID.Int64
+		}
+		if category.Valid {
+			record.Category = category.String
+		}
+		if impact.Valid {
+			record.Impact = impact.String
+		}
+		if impactScope.Valid {
+			record.ImpactScope = impactScope.String
+		}
+		items = append(items, record)
+	}
+	return items, rows.Err()
 }
 
 func (q *Queries) SetCurrencyBalance(ctx context.Context, userID, currencyID, amount int64) error {
