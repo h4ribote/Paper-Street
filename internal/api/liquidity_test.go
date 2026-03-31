@@ -99,6 +99,7 @@ func TestPoolPositionCollectsFeesOnClose(t *testing.T) {
 	store.balances[1][pool.BaseCurrency] = 20_000
 	store.balances[1][pool.QuoteCurrency] = 20_000
 	store.balances[2][pool.BaseCurrency] = 20_000
+	store.balances[2][pool.QuoteCurrency] = 20_000
 	startBase := store.balances[1][pool.BaseCurrency]
 	startQuote := store.balances[1][pool.QuoteCurrency]
 	store.mu.Unlock()

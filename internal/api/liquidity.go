@@ -335,14 +335,11 @@ func (s *MarketStore) distributePoolFeesLocked(pool LiquidityPool, feeCurrency s
 			bigShare := new(big.Int)
 			bigRemainder := new(big.Int)
 			bigShare.DivMod(bigNumerator, bigTotal, bigRemainder)
-			if bigShare.IsInt64() {
-				share = bigShare.Int64()
-			} else {
-				share = feeAmount
+			if !bigShare.IsInt64() || !bigRemainder.IsInt64() {
+				return
 			}
-			if bigRemainder.IsInt64() {
-				remainder = bigRemainder.Int64()
-			}
+			share = bigShare.Int64()
+			remainder = bigRemainder.Int64()
 		}
 		candidates[i].share = share
 		candidates[i].remainder = remainder
