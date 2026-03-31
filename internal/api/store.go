@@ -1043,14 +1043,14 @@ func (s *MarketStore) buildMacroIndicatorsLocked(now time.Time) []MacroIndicator
 		unemployment := profile.NaturalUnemployment + profile.OkunBeta*(1.0-avgUtilization)
 		unemployment = macroClamp(unemployment, 2.0, 20.0)
 
-		outputGap := gdpGrowth - profile.PotentialGDP
+		gdpGap := gdpGrowth - profile.PotentialGDP
 		inflationGap := cpi - profile.InflationTarget
-		rate := profile.RealRate + cpi + 0.5*inflationGap + 0.5*outputGap
+		rate := profile.RealRate + cpi + 0.5*inflationGap + 0.5*gdpGap
 		rate = macroClamp(rate, 0.0, 15.0)
 
 		cci := profile.CCIBase
 		cci += profile.CCIAmplitude * macroCycleValue(weekIndex, macroCycleQuarters*2)
-		cci += outputGap*4.0 - inflationGap*2.0 - (unemployment-profile.NaturalUnemployment)*3.0
+		cci += gdpGap*4.0 - inflationGap*2.0 - (unemployment-profile.NaturalUnemployment)*3.0
 		cci += macroNoise(profile.Country, weekIndex, "cci") * 4.0
 		cci = macroClamp(cci, 60.0, 140.0)
 
