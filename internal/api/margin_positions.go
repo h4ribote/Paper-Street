@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"sort"
 	"time"
@@ -9,13 +10,14 @@ import (
 )
 
 const (
-	marginLossCutBps   = int64(7_500)
-	liquidationFeeBps  = int64(1_000)
-	marginLeverageMin  = int64(1)
-	marginLeverageMax  = int64(5)
-	millisecondsPerDay = int64(24 * time.Hour / time.Millisecond)
-	marginInterestTick = int64(2 * time.Hour / time.Millisecond) // margin interest accrual period
-	marginPriceMissing = int64(0)
+	marginLossCutBps                 = int64(7_500)
+	liquidationFeeBps                = int64(1_000)
+	marginLeverageMin                = int64(1)
+	marginLeverageMax                = int64(5)
+	millisecondsPerDay               = int64(24 * time.Hour / time.Millisecond)
+	marginInterestTick               = int64(2 * time.Hour / time.Millisecond) // margin interest accrual period
+	marginPriceMissing               = int64(0)
+	defaultMarginMaintenanceInterval = time.Duration(marginInterestTick) * time.Millisecond
 )
 
 type MarginPosition struct {
@@ -80,18 +82,46 @@ func requiredMargin(notional, leverage int64) (int64, error) {
 func (s *MarketStore) MarginPositions(userID int64) []MarginPosition {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	now := time.Now().UTC().UnixMilli()
+	s.checkMarginLiquidationsLocked(0)
 	positions := make([]MarginPosition, 0, len(s.marginPositions))
-	for id, position := range s.marginPositions {
+	for _, position := range s.marginPositions {
 		if userID != 0 && position.UserID != userID {
 			continue
 		}
-		position = s.refreshMarginPositionLocked(position, now)
-		s.marginPositions[id] = position
 		positions = append(positions, position)
 	}
 	sort.Slice(positions, func(i, j int) bool { return positions[i].ID < positions[j].ID })
 	return positions
+}
+
+func StartMarginMaintenance(ctx context.Context, store *MarketStore, interval time.Duration) {
+	if store == nil || ctx == nil {
+		return
+	}
+	if interval <= 0 {
+		interval = defaultMarginMaintenanceInterval
+	}
+	ticker := time.NewTicker(interval)
+	go func() {
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				store.runMarginMaintenance()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
+func (s *MarketStore) runMarginMaintenance() {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.checkMarginLiquidationsLocked(0)
 }
 
 func (s *MarketStore) MarginLiquidations(userID int64) []MarginLiquidation {

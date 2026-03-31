@@ -2,6 +2,7 @@ package api
 
 import (
 	"testing"
+	"time"
 
 	"github.com/h4ribote/Paper-Street/internal/engine"
 )
@@ -157,7 +158,7 @@ func TestMarginInterestAccrualUpdatesPool(t *testing.T) {
 	}
 	position := positions[0]
 	pool := store.marginPools[1]
-	lastFeeAt := int64(1)
+	lastFeeAt := time.Now().UTC().Add(-time.Duration(marginInterestTick) * time.Millisecond).UnixMilli()
 	setMarginPositionLastFeeAt(store, position.ID, lastFeeAt)
 	poolBefore := pool.TotalCash
 
@@ -188,6 +189,63 @@ func setMarginPositionLastFeeAt(store *MarketStore, positionID, lastFeeAt int64)
 	store.mu.Lock()
 	position := store.marginPositions[positionID]
 	position.lastFeeAt = lastFeeAt
+	store.marginPositions[positionID] = position
+	store.mu.Unlock()
+}
+
+func TestMarginMaintenanceLiquidatesOnFees(t *testing.T) {
+	store := NewMarketStore()
+	store.EnsureUser(1)
+	store.EnsureUser(2)
+	eng := engine.NewEngine(store)
+
+	submitEngineOrder(t, eng, &engine.Order{
+		AssetID:  101,
+		UserID:   1,
+		Side:     engine.SideBuy,
+		Type:     engine.OrderTypeLimit,
+		Quantity: 10,
+		Price:    100,
+		Leverage: 5,
+	})
+	submitEngineOrder(t, eng, &engine.Order{
+		AssetID:  101,
+		UserID:   2,
+		Side:     engine.SideSell,
+		Type:     engine.OrderTypeLimit,
+		Quantity: 10,
+		Price:    100,
+	})
+
+	positions := store.MarginPositions(1)
+	if len(positions) != 1 {
+		t.Fatalf("expected 1 margin position, got %d", len(positions))
+	}
+	position := positions[0]
+	threshold := position.MarginUsed * marginLossCutBps / bpsDenominator
+	setMarginPositionAccumulatedFees(store, position.ID, threshold+1)
+
+	store.runMarginMaintenance()
+
+	store.mu.RLock()
+	_, exists := store.marginPositions[position.ID]
+	store.mu.RUnlock()
+	if exists {
+		t.Fatalf("expected margin position to be liquidated")
+	}
+	events := store.MarginLiquidations(1)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 liquidation event, got %d", len(events))
+	}
+	if events[0].PositionID != position.ID {
+		t.Fatalf("unexpected liquidation position id: %d", events[0].PositionID)
+	}
+}
+
+func setMarginPositionAccumulatedFees(store *MarketStore, positionID, fees int64) {
+	store.mu.Lock()
+	position := store.marginPositions[positionID]
+	position.AccumulatedFees = fees
 	store.marginPositions[positionID] = position
 	store.mu.Unlock()
 }

@@ -35,6 +35,8 @@ func main() {
 	newsConfig.ImpactFactor = envFloat64("NEWS_IMPACT_FACTOR", newsConfig.ImpactFactor)
 	newsConfig.ImpactJitter = envFloat64("NEWS_IMPACT_JITTER", newsConfig.ImpactJitter)
 	api.StartNewsEngine(newsCtx, store, engine, newsConfig)
+	marginCtx, marginCancel := context.WithCancel(context.Background())
+	api.StartMarginMaintenance(marginCtx, store, 0)
 	server := &http.Server{
 		Addr:         ":" + port,
 		Handler:      handler,
@@ -52,6 +54,7 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	newsCancel()
+	marginCancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
