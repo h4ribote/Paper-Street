@@ -12,6 +12,9 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
 *   `POST /auth/login` / `POST /auth/bot`
     *   管理者用パスワードとボットの役割からAPIキーを取得します。
     *   Body: `{ "role": "market_maker", "admin_password": "..." }`
+*   `GET /auth/callback`
+    *   Discord OAuthの`code`を受け取り、DiscordユーザーIDに紐づくAPIキーを取得または発行します。
+    *   Query: `code`
 *   `GET /users/me`
     *   現在のユーザー情報を取得します。`user_id` を指定した場合はそのユーザーを返します。
 

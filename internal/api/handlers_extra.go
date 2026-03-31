@@ -6,8 +6,12 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,6 +27,17 @@ type authResponse struct {
 type botAuthRequest struct {
 	Role          string `json:"role"`
 	AdminPassword string `json:"admin_password"`
+}
+
+type discordTokenResponse struct {
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type"`
+}
+
+type discordUserResponse struct {
+	ID         string `json:"id"`
+	Username   string `json:"username"`
+	GlobalName string `json:"global_name"`
 }
 
 type statusResponse struct {
@@ -101,6 +116,72 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	respondJSON(w, http.StatusOK, authResponse{APIKey: key, User: user})
+}
+
+func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if s.Store == nil || s.APIKeys == nil {
+		respondError(w, http.StatusInternalServerError, "auth store unavailable")
+		return
+	}
+	if errParam := strings.TrimSpace(r.URL.Query().Get("error")); errParam != "" {
+		respondError(w, http.StatusBadRequest, "discord oauth error: "+errParam)
+		return
+	}
+	code := strings.TrimSpace(r.URL.Query().Get("code"))
+	if code == "" {
+		respondError(w, http.StatusBadRequest, "code required")
+		return
+	}
+	clientID := strings.TrimSpace(os.Getenv("DISCORD_CLIENT_ID"))
+	clientSecret := strings.TrimSpace(os.Getenv("DISCORD_CLIENT_SECRET"))
+	redirectURI := strings.TrimSpace(os.Getenv("DISCORD_REDIRECT_URI"))
+	if clientID == "" || clientSecret == "" || redirectURI == "" {
+		respondError(w, http.StatusInternalServerError, "discord oauth not configured")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	accessToken, err := exchangeDiscordToken(ctx, code, clientID, clientSecret, redirectURI)
+	if err != nil {
+		respondError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	discordUser, err := fetchDiscordUser(ctx, accessToken)
+	if err != nil {
+		respondError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	userID, err := strconv.ParseInt(strings.TrimSpace(discordUser.ID), 10, 64)
+	if err != nil || userID == 0 {
+		respondError(w, http.StatusBadGateway, "invalid discord user id")
+		return
+	}
+	displayName := strings.TrimSpace(discordUser.GlobalName)
+	if displayName == "" {
+		displayName = strings.TrimSpace(discordUser.Username)
+	}
+	user := s.Store.EnsureUserWithName(userID, displayName)
+	apiKey, ok := s.Store.APIKeyForUser(userID)
+	if !ok || apiKey == "" {
+		apiKey, err = generateAPIKeyHex()
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "failed to generate api key")
+			return
+		}
+		s.Store.RegisterAPIKey(apiKey, userID)
+		s.Store.persistAPIKey(discordRoleForUser(userID), apiKey, userID)
+	}
+	if !s.APIKeys.ContainsHex(apiKey) {
+		if err := s.APIKeys.AddHex(apiKey); err != nil {
+			respondError(w, http.StatusInternalServerError, "failed to register api key")
+			return
+		}
+	}
+	respondJSON(w, http.StatusOK, authResponse{APIKey: apiKey, User: user})
 }
 
 func (s *Server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
@@ -924,4 +1005,80 @@ func generateAPIKeyHex() (string, error) {
 		return "", err
 	}
 	return key.String(), nil
+}
+
+func discordAPIBaseURL() string {
+	base := strings.TrimSpace(os.Getenv("DISCORD_API_BASE_URL"))
+	if base == "" {
+		return "https://discord.com/api"
+	}
+	return strings.TrimRight(base, "/")
+}
+
+func exchangeDiscordToken(ctx context.Context, code, clientID, clientSecret, redirectURI string) (string, error) {
+	form := url.Values{}
+	form.Set("client_id", clientID)
+	form.Set("client_secret", clientSecret)
+	form.Set("grant_type", "authorization_code")
+	form.Set("code", code)
+	form.Set("redirect_uri", redirectURI)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, discordAPIBaseURL()+"/oauth2/token", strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		message := readLimitedBody(resp.Body)
+		if message == "" {
+			message = resp.Status
+		}
+		return "", fmt.Errorf("discord token exchange failed: %s", message)
+	}
+	var payload discordTokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(payload.AccessToken) == "" {
+		return "", errors.New("discord access token missing")
+	}
+	return strings.TrimSpace(payload.AccessToken), nil
+}
+
+func fetchDiscordUser(ctx context.Context, accessToken string) (discordUserResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, discordAPIBaseURL()+"/users/@me", nil)
+	if err != nil {
+		return discordUserResponse{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(accessToken))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return discordUserResponse{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		message := readLimitedBody(resp.Body)
+		if message == "" {
+			message = resp.Status
+		}
+		return discordUserResponse{}, fmt.Errorf("discord user fetch failed: %s", message)
+	}
+	var payload discordUserResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return discordUserResponse{}, err
+	}
+	return payload, nil
+}
+
+func readLimitedBody(reader io.Reader) string {
+	const maxBody = 1024
+	body, err := io.ReadAll(io.LimitReader(reader, maxBody))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(body))
 }

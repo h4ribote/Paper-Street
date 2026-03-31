@@ -1,10 +1,25 @@
 package api
 
 import (
+	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/h4ribote/Paper-Street/internal/models"
 )
+
+const discordRolePrefix = "discord:"
+
+func discordRoleForUser(userID int64) string {
+	if userID == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s%d", discordRolePrefix, userID)
+}
+
+func isDiscordRole(role string) bool {
+	return strings.HasPrefix(role, discordRolePrefix)
+}
 
 func (s *MarketStore) APIKeys() []string {
 	if s == nil {
@@ -26,6 +41,9 @@ func (s *MarketStore) APIKeyForRole(role string) (string, models.User, bool) {
 	}
 	normalized := normalizeRole(role)
 	if normalized == "" {
+		return "", models.User{}, false
+	}
+	if isDiscordRole(normalized) {
 		return "", models.User{}, false
 	}
 	s.mu.RLock()

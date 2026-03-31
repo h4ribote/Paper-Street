@@ -688,6 +688,20 @@ func (s *MarketStore) UserForAPIKey(key string) (models.User, bool) {
 	return user, true
 }
 
+func (s *MarketStore) APIKeyForUser(userID int64) (string, bool) {
+	if userID == 0 {
+		return "", false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for key, id := range s.apiKeyToUser {
+		if id == userID {
+			return key, true
+		}
+	}
+	return "", false
+}
+
 func (s *MarketStore) AddUser(username string) models.User {
 	s.mu.Lock()
 	s.nextUserID++
@@ -712,6 +726,25 @@ func (s *MarketStore) EnsureUser(userID int64) models.User {
 	if user.ID != 0 {
 		cashBalance = s.balances[user.ID][defaultCurrency]
 	}
+	s.mu.Unlock()
+	s.persistUser(user, cashBalance)
+	return user
+}
+
+func (s *MarketStore) EnsureUserWithName(userID int64, username string) models.User {
+	s.mu.Lock()
+	user := s.ensureUserLocked(userID)
+	trimmed := strings.TrimSpace(username)
+	if trimmed != "" {
+		if user.Username == "" || strings.HasPrefix(user.Username, "user-") {
+			user.Username = trimmed
+		}
+	}
+	var cashBalance int64
+	if user.ID != 0 {
+		cashBalance = s.balances[user.ID][defaultCurrency]
+	}
+	s.users[user.ID] = user
 	s.mu.Unlock()
 	s.persistUser(user, cashBalance)
 	return user
@@ -1983,7 +2016,7 @@ func (s *MarketStore) loadAPIKeysFromDB(ctx context.Context) error {
 		}
 		s.apiKeyToUser[key] = record.UserID
 		role := normalizeRole(record.Role)
-		if role != "" {
+		if role != "" && !isDiscordRole(role) {
 			s.roleToUserID[role] = record.UserID
 			s.roleToAPIKey[role] = key
 		}

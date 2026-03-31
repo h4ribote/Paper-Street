@@ -14,6 +14,7 @@ func NewRouter(e *engine.Engine, apiKeys *auth.APIKeyCache, store *MarketStore, 
 	mux.HandleFunc("/health", srv.handleHealth)
 	mux.HandleFunc("/auth/login", srv.handleAuthLogin)
 	mux.HandleFunc("/auth/bot", srv.handleAuthLogin)
+	mux.HandleFunc("/auth/callback", srv.handleAuthCallback)
 	mux.HandleFunc("/users/me", srv.handleCurrentUser)
 	mux.HandleFunc("/user/rank", srv.handleUserRank)
 	mux.HandleFunc("/orders", srv.handleOrders)
