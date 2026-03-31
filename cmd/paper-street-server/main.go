@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -26,6 +27,14 @@ func main() {
 	engine := engine.NewEngine(store)
 	apiKeys := loadAPIKeys()
 	handler := api.NewRouter(engine, apiKeys, store)
+	newsCtx, newsCancel := context.WithCancel(context.Background())
+	newsConfig := api.DefaultNewsEngineConfig()
+	newsConfig.Interval = envDuration("NEWS_INTERVAL", newsConfig.Interval)
+	newsConfig.BaseQuantity = envInt64("NEWS_BASE_QUANTITY", newsConfig.BaseQuantity)
+	newsConfig.MinConfidence = envFloat64("NEWS_MIN_CONFIDENCE", newsConfig.MinConfidence)
+	newsConfig.ImpactFactor = envFloat64("NEWS_IMPACT_FACTOR", newsConfig.ImpactFactor)
+	newsConfig.ImpactJitter = envFloat64("NEWS_IMPACT_JITTER", newsConfig.ImpactJitter)
+	api.StartNewsEngine(newsCtx, store, engine, newsConfig)
 	server := &http.Server{
 		Addr:         ":" + port,
 		Handler:      handler,
@@ -42,6 +51,7 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
+	newsCancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -91,4 +101,43 @@ func loadAPIKeys() *auth.APIKeyCache {
 		}
 	}
 	return cache
+}
+
+func envDuration(key string, fallback time.Duration) time.Duration {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	parsed, err := time.ParseDuration(raw)
+	if err != nil {
+		log.Printf("invalid duration for %s: %v", key, err)
+		return fallback
+	}
+	return parsed
+}
+
+func envInt64(key string, fallback int64) int64 {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		log.Printf("invalid int64 for %s: %v", key, err)
+		return fallback
+	}
+	return parsed
+}
+
+func envFloat64(key string, fallback float64) float64 {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		log.Printf("invalid float64 for %s: %v", key, err)
+		return fallback
+	}
+	return parsed
 }
