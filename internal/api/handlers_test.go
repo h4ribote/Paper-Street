@@ -35,7 +35,7 @@ func TestTradeFlowUpdatesMarketData(t *testing.T) {
 	store.EnsureUser(2)
 
 	eng := engine.NewEngine(store)
-	handler := NewRouter(eng, apiKeys, store)
+	handler := NewRouter(eng, apiKeys, store, "")
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -90,7 +90,7 @@ func TestHandleOrdersPagination(t *testing.T) {
 	store.EnsureUser(1)
 
 	eng := engine.NewEngine(store)
-	handler := NewRouter(eng, apiKeys, store)
+	handler := NewRouter(eng, apiKeys, store, "")
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -131,7 +131,7 @@ func TestHandleOrderByIDRequiresAssetID(t *testing.T) {
 	store.EnsureUser(1)
 
 	eng := engine.NewEngine(store)
-	handler := NewRouter(eng, apiKeys, store)
+	handler := NewRouter(eng, apiKeys, store, "")
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -181,7 +181,7 @@ func TestHandleOrderBookDepthLimit(t *testing.T) {
 	store.EnsureUser(2)
 
 	eng := engine.NewEngine(store)
-	handler := NewRouter(eng, apiKeys, store)
+	handler := NewRouter(eng, apiKeys, store, "")
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -222,7 +222,7 @@ func TestHandleOrderBookMethodNotAllowed(t *testing.T) {
 		t.Fatalf("failed to add api key: %v", err)
 	}
 	eng := engine.NewEngine(store)
-	server := httptest.NewServer(NewRouter(eng, apiKeys, store))
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
 	req, err := http.NewRequest(http.MethodPost, server.URL+"/market/orderbook/101", nil)
@@ -244,7 +244,7 @@ func TestHandleHealthMethodNotAllowed(t *testing.T) {
 	store := NewMarketStore()
 	apiKeys := auth.NewAPIKeyCache()
 	eng := engine.NewEngine(store)
-	server := httptest.NewServer(NewRouter(eng, apiKeys, store))
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
 	req, err := http.NewRequest(http.MethodPost, server.URL+"/health", nil)

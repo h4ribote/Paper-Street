@@ -161,6 +161,16 @@ CREATE TABLE IF NOT EXISTS users (
     created_at BIGINT DEFAULT 0
 );
 
+-- APIキー管理
+CREATE TABLE IF NOT EXISTS api_keys (
+    api_key VARCHAR(40) PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    role VARCHAR(50) NOT NULL,
+    created_at BIGINT DEFAULT 0,
+    FOREIGN KEY (user_id) REFERENCES users(user_id),
+    UNIQUE(role)
+);
+
 -- 資産管理: 通貨残高 (Currency Balances)
 CREATE TABLE IF NOT EXISTS currency_balances (
     balance_id BIGINT AUTO_INCREMENT PRIMARY KEY,

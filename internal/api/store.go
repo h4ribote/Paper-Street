@@ -18,9 +18,9 @@ import (
 )
 
 const (
-	defaultCurrency    = "USD"
-	defaultCashBalance = int64(1_000_000_000)
-	defaultAltBalance  = int64(100_000_000) // starter balance for non-default currencies
+	defaultCurrency    = "ARC"
+	defaultCashBalance = int64(10_000)
+	defaultAltBalance  = int64(0) // starter balance for non-default currencies
 	defaultAssetPrice  = int64(10_000)
 	dbOperationTimeout = 2 * time.Second
 	userIDSeed         = int64(9_999)
@@ -404,6 +404,8 @@ type MarketStore struct {
 	positions            map[int64]map[int64]int64
 	assetAcquiredAt      map[int64]map[int64]int64
 	apiKeyToUser         map[string]int64
+	roleToUserID         map[string]int64
+	roleToAPIKey         map[string]string
 	lastPrices           map[int64]int64
 	prevPrices           map[int64]int64
 	volumes              map[int64]int64
@@ -450,6 +452,8 @@ type MarketStore struct {
 	worldEvents          []WorldEvent
 	queries              *db.Queries
 	currencyIDs          map[string]int64
+	needsInitialAlloc    bool
+	initialAllocDone     bool
 }
 
 // NewMarketStore builds an in-memory store. newMarketStore only errors when DB queries are supplied.
@@ -476,6 +480,8 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 		positions:            make(map[int64]map[int64]int64),
 		assetAcquiredAt:      make(map[int64]map[int64]int64),
 		apiKeyToUser:         make(map[string]int64),
+		roleToUserID:         make(map[string]int64),
+		roleToAPIKey:         make(map[string]string),
 		lastPrices:           make(map[int64]int64),
 		prevPrices:           make(map[int64]int64),
 		volumes:              make(map[int64]int64),
@@ -536,6 +542,7 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 		store.refreshMacroIndicatorsLocked(now)
 		store.mu.Unlock()
 		store.seedPools()
+		store.seedInitialAllocations()
 		store.seedMarginPools()
 		store.seedIndexes()
 		store.seedNews(now)
@@ -554,6 +561,9 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 	store.refreshMacroIndicatorsLocked(now)
 	store.mu.Unlock()
 	store.seedPools()
+	if store.needsInitialAlloc {
+		store.seedInitialAllocations()
+	}
 	store.seedMarginPools()
 	store.seedIndexes()
 	store.seedNews(now)
@@ -678,6 +688,20 @@ func (s *MarketStore) UserForAPIKey(key string) (models.User, bool) {
 	return user, true
 }
 
+func (s *MarketStore) APIKeyForUser(userID int64) (string, bool) {
+	if userID == 0 {
+		return "", false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for key, id := range s.apiKeyToUser {
+		if id == userID {
+			return key, true
+		}
+	}
+	return "", false
+}
+
 func (s *MarketStore) AddUser(username string) models.User {
 	s.mu.Lock()
 	s.nextUserID++
@@ -702,6 +726,25 @@ func (s *MarketStore) EnsureUser(userID int64) models.User {
 	if user.ID != 0 {
 		cashBalance = s.balances[user.ID][defaultCurrency]
 	}
+	s.mu.Unlock()
+	s.persistUser(user, cashBalance)
+	return user
+}
+
+func (s *MarketStore) EnsureUserWithName(userID int64, username string) models.User {
+	s.mu.Lock()
+	user := s.ensureUserLocked(userID)
+	trimmed := strings.TrimSpace(username)
+	if trimmed != "" {
+		if user.Username == "" || strings.HasPrefix(user.Username, "user-") {
+			user.Username = trimmed
+		}
+	}
+	var cashBalance int64
+	if user.ID != 0 {
+		cashBalance = s.balances[user.ID][defaultCurrency]
+	}
+	s.users[user.ID] = user
 	s.mu.Unlock()
 	s.persistUser(user, cashBalance)
 	return user
@@ -1546,15 +1589,22 @@ func (s *MarketStore) ensureUserLocked(userID int64) models.User {
 	if user.Rank == "" {
 		user.Rank = defaultRankName
 	}
+	isBot := strings.EqualFold(user.Role, "bot")
+	cashBalance := defaultCashBalance
+	altBalance := defaultAltBalance
+	if isBot {
+		cashBalance = 0
+		altBalance = 0
+	}
 	if _, ok := s.balances[userID]; !ok {
-		s.balances[userID] = map[string]int64{defaultCurrency: defaultCashBalance}
+		s.balances[userID] = map[string]int64{defaultCurrency: cashBalance}
 	}
 	for currency := range s.currencies {
 		if _, ok := s.balances[userID][currency]; !ok {
 			if currency == defaultCurrency {
-				s.balances[userID][currency] = defaultCashBalance
+				s.balances[userID][currency] = cashBalance
 			} else {
-				s.balances[userID][currency] = defaultAltBalance
+				s.balances[userID][currency] = altBalance
 			}
 		}
 	}
@@ -1834,6 +1884,9 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if len(users) == 0 {
+		s.needsInitialAlloc = true
+	}
 	for _, user := range users {
 		user = normalizeUser(user, user.ID)
 		if user.XP == 0 {
@@ -1845,6 +1898,9 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 		if user.ID > s.nextUserID {
 			s.nextUserID = user.ID
 		}
+	}
+	if err := s.loadAPIKeysFromDB(ctx); err != nil {
+		return err
 	}
 
 	currencyBalances, err := s.queries.ListCurrencyBalances(ctx)
@@ -1941,6 +1997,29 @@ func (s *MarketStore) loadNewsFromDB(ctx context.Context) error {
 	s.news = items
 	if maxID > s.nextNewsID {
 		s.nextNewsID = maxID
+	}
+	return nil
+}
+
+func (s *MarketStore) loadAPIKeysFromDB(ctx context.Context) error {
+	if s.queries == nil {
+		return nil
+	}
+	records, err := s.queries.ListAPIKeys(ctx)
+	if err != nil {
+		return err
+	}
+	for _, record := range records {
+		key := strings.TrimSpace(record.Key)
+		if key == "" || record.UserID == 0 {
+			continue
+		}
+		s.apiKeyToUser[key] = record.UserID
+		role := normalizeRole(record.Role)
+		if role != "" && !isDiscordRole(role) {
+			s.roleToUserID[role] = record.UserID
+			s.roleToAPIKey[role] = key
+		}
 	}
 	return nil
 }

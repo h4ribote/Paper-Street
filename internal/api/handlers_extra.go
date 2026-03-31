@@ -3,10 +3,15 @@ package api
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +22,22 @@ import (
 type authResponse struct {
 	APIKey string      `json:"api_key"`
 	User   interface{} `json:"user"`
+}
+
+type botAuthRequest struct {
+	Role          string `json:"role"`
+	AdminPassword string `json:"admin_password"`
+}
+
+type discordTokenResponse struct {
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type"`
+}
+
+type discordUserResponse struct {
+	ID         string `json:"id"`
+	Username   string `json:"username"`
+	GlobalName string `json:"global_name"`
 }
 
 type statusResponse struct {
@@ -61,11 +82,40 @@ type bondOperationRequest struct {
 }
 
 func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	if r.Method != http.MethodPost {
 		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	s.issueAuthKey(w, r)
+	if s.Store == nil || s.APIKeys == nil {
+		respondError(w, http.StatusInternalServerError, "auth store unavailable")
+		return
+	}
+	var payload botAuthRequest
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+		respondError(w, http.StatusBadRequest, "invalid json body")
+		return
+	}
+	role := strings.TrimSpace(payload.Role)
+	if role == "" {
+		respondError(w, http.StatusBadRequest, "role required")
+		return
+	}
+	if !s.validAdminPassword(payload.AdminPassword) {
+		respondError(w, http.StatusUnauthorized, "invalid admin password")
+		return
+	}
+	key, user, ok := s.Store.APIKeyForRole(role)
+	if !ok || key == "" {
+		respondError(w, http.StatusNotFound, "role not found")
+		return
+	}
+	if !s.APIKeys.ContainsHex(key) {
+		if err := s.APIKeys.AddHex(key); err != nil {
+			respondError(w, http.StatusInternalServerError, "failed to register api key")
+			return
+		}
+	}
+	respondJSON(w, http.StatusOK, authResponse{APIKey: key, User: user})
 }
 
 func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
@@ -73,68 +123,62 @@ func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	s.issueAuthKey(w, r)
-}
-
-func (s *Server) handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 	if s.Store == nil || s.APIKeys == nil {
 		respondError(w, http.StatusInternalServerError, "auth store unavailable")
 		return
 	}
-	oldKey := strings.TrimSpace(r.Header.Get(apiKeyHeader))
-	if oldKey == "" {
-		respondError(w, http.StatusUnauthorized, "API key required")
+	if errParam := strings.TrimSpace(r.URL.Query().Get("error")); errParam != "" {
+		respondError(w, http.StatusBadRequest, "discord oauth error: "+errParam)
 		return
 	}
-	user, ok := s.Store.UserForAPIKey(oldKey)
-	if !ok {
-		respondError(w, http.StatusUnauthorized, "API key not associated with user")
+	code := strings.TrimSpace(r.URL.Query().Get("code"))
+	if code == "" {
+		respondError(w, http.StatusBadRequest, "code required")
 		return
 	}
-	newKey, err := generateAPIKeyHex()
+	clientID := strings.TrimSpace(os.Getenv("DISCORD_CLIENT_ID"))
+	clientSecret := strings.TrimSpace(os.Getenv("DISCORD_CLIENT_SECRET"))
+	redirectURI := strings.TrimSpace(os.Getenv("DISCORD_REDIRECT_URI"))
+	if clientID == "" || clientSecret == "" || redirectURI == "" {
+		respondError(w, http.StatusInternalServerError, "discord oauth not configured")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	accessToken, err := exchangeDiscordToken(ctx, code, clientID, clientSecret, redirectURI)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to generate API key")
+		respondError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	if err := s.APIKeys.RemoveHex(oldKey); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid API key")
+	discordUser, err := fetchDiscordUser(ctx, accessToken)
+	if err != nil {
+		respondError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	s.Store.UnregisterAPIKey(oldKey)
-	if err := s.APIKeys.AddHex(newKey); err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to register API key")
+	userID, err := strconv.ParseInt(strings.TrimSpace(discordUser.ID), 10, 64)
+	if err != nil || userID == 0 {
+		respondError(w, http.StatusBadGateway, "invalid discord user id")
 		return
 	}
-	if user.ID != 0 {
-		s.Store.RegisterAPIKey(newKey, user.ID)
+	displayName := discordDisplayName(discordUser, userID)
+	user := s.Store.EnsureUserWithName(userID, displayName)
+	apiKey, ok := s.Store.APIKeyForUser(userID)
+	if !ok || apiKey == "" {
+		apiKey, err = generateAPIKeyHex()
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "failed to generate api key")
+			return
+		}
+		s.Store.RegisterAPIKey(apiKey, userID)
+		s.Store.persistAPIKey(discordRoleForUser(userID), apiKey, userID)
 	}
-	respondJSON(w, http.StatusOK, authResponse{APIKey: newKey, User: user})
-}
-
-func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
+	if !s.APIKeys.ContainsHex(apiKey) {
+		if err := s.APIKeys.AddHex(apiKey); err != nil {
+			respondError(w, http.StatusInternalServerError, "failed to register api key")
+			return
+		}
 	}
-	if s.Store == nil || s.APIKeys == nil {
-		respondError(w, http.StatusInternalServerError, "auth store unavailable")
-		return
-	}
-	apiKey := strings.TrimSpace(r.Header.Get(apiKeyHeader))
-	if apiKey == "" {
-		respondError(w, http.StatusUnauthorized, "API key required")
-		return
-	}
-	if err := s.APIKeys.RemoveHex(apiKey); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid API key")
-		return
-	}
-	s.Store.UnregisterAPIKey(apiKey)
-	respondJSON(w, http.StatusOK, statusResponse{Status: "ok"})
+	respondJSON(w, http.StatusOK, authResponse{APIKey: apiKey, User: user})
 }
 
 func (s *Server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
@@ -915,24 +959,26 @@ func (s *Server) handleIndices(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) issueAuthKey(w http.ResponseWriter, r *http.Request) {
-	if s.Store == nil || s.APIKeys == nil {
-		respondError(w, http.StatusInternalServerError, "auth store unavailable")
-		return
+func (s *Server) validAdminPassword(password string) bool {
+	if s == nil {
+		return false
 	}
-	username := strings.TrimSpace(r.URL.Query().Get("username"))
-	user := s.Store.AddUser(username)
-	key, err := generateAPIKeyHex()
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to generate API key")
-		return
+	expected := strings.TrimSpace(s.AdminPassword)
+	if expected == "" {
+		return false
 	}
-	if err := s.APIKeys.AddHex(key); err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to register API key")
-		return
+	actual := strings.TrimSpace(password)
+	if actual == "" {
+		return false
 	}
-	s.Store.RegisterAPIKey(key, user.ID)
-	respondJSON(w, http.StatusOK, authResponse{APIKey: key, User: user})
+	return subtleCompare(expected, actual)
+}
+
+func subtleCompare(expected, actual string) bool {
+	if len(expected) != len(actual) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(expected), []byte(actual)) == 1
 }
 
 func (s *Server) userIDFromRequest(r *http.Request) int64 {
@@ -956,4 +1002,91 @@ func generateAPIKeyHex() (string, error) {
 		return "", err
 	}
 	return key.String(), nil
+}
+
+func discordAPIBaseURL() string {
+	base := strings.TrimSpace(os.Getenv("DISCORD_API_BASE_URL"))
+	if base == "" {
+		return "https://discord.com/api"
+	}
+	return strings.TrimRight(base, "/")
+}
+
+func exchangeDiscordToken(ctx context.Context, code, clientID, clientSecret, redirectURI string) (string, error) {
+	form := url.Values{}
+	form.Set("client_id", clientID)
+	form.Set("client_secret", clientSecret)
+	form.Set("grant_type", "authorization_code")
+	form.Set("code", code)
+	form.Set("redirect_uri", redirectURI)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, discordAPIBaseURL()+"/oauth2/token", strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		message := readLimitedBody(resp.Body)
+		if message == "" {
+			message = resp.Status
+		}
+		return "", fmt.Errorf("discord token exchange failed: %s", message)
+	}
+	var payload discordTokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(payload.AccessToken) == "" {
+		return "", errors.New("discord access token missing")
+	}
+	return strings.TrimSpace(payload.AccessToken), nil
+}
+
+func fetchDiscordUser(ctx context.Context, accessToken string) (discordUserResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, discordAPIBaseURL()+"/users/@me", nil)
+	if err != nil {
+		return discordUserResponse{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(accessToken))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return discordUserResponse{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		message := readLimitedBody(resp.Body)
+		if message == "" {
+			message = resp.Status
+		}
+		return discordUserResponse{}, fmt.Errorf("discord user fetch failed: %s", message)
+	}
+	var payload discordUserResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return discordUserResponse{}, err
+	}
+	return payload, nil
+}
+
+func readLimitedBody(reader io.Reader) string {
+	const maxBody = 1024
+	body, err := io.ReadAll(io.LimitReader(reader, maxBody))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(body))
+}
+
+func discordDisplayName(user discordUserResponse, userID int64) string {
+	displayName := strings.TrimSpace(user.GlobalName)
+	if displayName == "" {
+		displayName = strings.TrimSpace(user.Username)
+	}
+	if displayName == "" && userID != 0 {
+		displayName = fmt.Sprintf("user-%d", userID)
+	}
+	return displayName
 }

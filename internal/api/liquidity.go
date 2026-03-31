@@ -11,11 +11,12 @@ import (
 )
 
 const (
-	poolFeeLowBps      = int64(4)
-	poolFeeStandardBps = int64(20)
-	indexFeeBps        = int64(10)
-	indexArbBandBps    = int64(20)
-	bpsDenominator     = int64(10_000)
+	poolFeeLowBps        = int64(4)
+	poolFeeStandardBps   = int64(20)
+	indexFeeBps          = int64(10)
+	indexArbBandBps      = int64(20)
+	bpsDenominator       = int64(10_000)
+	defaultPoolLiquidity = int64(15_000_000)
 	// Margin rate model parameters (basis points per day).
 	marginBaseRateBps  = int64(10)  // base rate at 0% utilization
 	marginSlopeBps     = int64(40)  // slope until the kink point
@@ -550,28 +551,68 @@ func (s *MarketStore) updateIndexHoldings(userID, assetID, quantity int64, isCre
 }
 
 func (s *MarketStore) seedPools() {
-	pools := []LiquidityPool{
-		{ID: 1, BaseCurrency: "ARC", QuoteCurrency: "VDP", FeeBps: poolFeeLowBps, Liquidity: 2_000_000, CurrentTick: 120},
-		{ID: 2, BaseCurrency: "ARC", QuoteCurrency: "VDP", FeeBps: poolFeeStandardBps, Liquidity: 1_000_000, CurrentTick: 120},
-		{ID: 3, BaseCurrency: "ARC", QuoteCurrency: "BRB", FeeBps: poolFeeLowBps, Liquidity: 900_000, CurrentTick: -50},
-		{ID: 4, BaseCurrency: "ARC", QuoteCurrency: "BRB", FeeBps: poolFeeStandardBps, Liquidity: 1_200_000, CurrentTick: -50},
+	pairs := []struct {
+		quote string
+		tick  int64
+	}{
+		{quote: "VDP", tick: 120},
+		{quote: "BRB", tick: -50},
+		{quote: "DRL", tick: 35},
+		{quote: "VND", tick: 80},
+		{quote: "ZMR", tick: -20},
+		{quote: "RVD", tick: 15},
 	}
-	for _, pool := range pools {
-		s.pools[pool.ID] = pool
-		s.currencies[pool.BaseCurrency] = struct{}{}
-		s.currencies[pool.QuoteCurrency] = struct{}{}
+	poolID := int64(1)
+	for _, pair := range pairs {
+		pools := []LiquidityPool{
+			{ID: poolID, BaseCurrency: "ARC", QuoteCurrency: pair.quote, FeeBps: poolFeeLowBps, Liquidity: defaultPoolLiquidity, CurrentTick: pair.tick},
+			{ID: poolID + 1, BaseCurrency: "ARC", QuoteCurrency: pair.quote, FeeBps: poolFeeStandardBps, Liquidity: defaultPoolLiquidity, CurrentTick: pair.tick},
+		}
+		poolID += 2
+		for _, pool := range pools {
+			s.pools[pool.ID] = pool
+			s.currencies[pool.BaseCurrency] = struct{}{}
+			s.currencies[pool.QuoteCurrency] = struct{}{}
+		}
 	}
 }
 
 func (s *MarketStore) seedMarginPools() {
-	pools := []MarginPool{
-		{ID: 1, AssetID: 101, TotalCash: 5_000_000, TotalAssets: 25_000, BorrowedCash: 1_000_000, BorrowedAssets: 4_000},
-		{ID: 2, AssetID: 102, TotalCash: 4_000_000, TotalAssets: 18_000, BorrowedCash: 800_000, BorrowedAssets: 3_000},
+	if len(s.companyStates) == 0 {
+		return
 	}
-	for _, pool := range pools {
+	assetIDs := make([]int64, 0, len(s.companyStates))
+	for assetID := range s.companyStates {
+		assetIDs = append(assetIDs, assetID)
+	}
+	sort.Slice(assetIDs, func(i, j int) bool { return assetIDs[i] < assetIDs[j] })
+	totalCash := int64(20_000_000)
+	perPoolCash := totalCash
+	if len(assetIDs) > 0 {
+		perPoolCash = totalCash / int64(len(assetIDs))
+		if perPoolCash == 0 {
+			perPoolCash = totalCash
+		}
+	}
+	poolID := int64(1)
+	for _, assetID := range assetIDs {
+		state := s.companyStates[assetID]
+		if state == nil {
+			continue
+		}
+		totalAssets := state.SharesIssued * 30 / 100
+		pool := MarginPool{
+			ID:             poolID,
+			AssetID:        assetID,
+			TotalCash:      perPoolCash,
+			TotalAssets:    totalAssets,
+			BorrowedCash:   0,
+			BorrowedAssets: 0,
+		}
 		pool = normalizeMarginPoolShares(pool)
 		pool.CashRateBps, pool.AssetRateBps = marginRates(pool)
 		s.marginPools[pool.ID] = pool
+		poolID++
 	}
 }
 

@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	defaultRegionName   = "Global"
-	defaultCountryName  = "United States"
-	defaultCurrencyName = "US Dollar"
+	defaultRegionName   = "Arcadia"
+	defaultCountryName  = "Arcadia"
+	defaultCurrencyName = "Arcadian Credit"
 	defaultUserRank     = "Shrimp"
 )
 
@@ -38,6 +38,12 @@ type AssetBalance struct {
 	UserID   int64
 	AssetID  int64
 	Quantity int64
+}
+
+type APIKeyRecord struct {
+	Key    string
+	UserID int64
+	Role   string
 }
 
 type PerpetualBondRecord struct {
@@ -555,6 +561,47 @@ func (q *Queries) ListCurrencyBalances(ctx context.Context) ([]CurrencyBalance, 
 		balances = append(balances, balance)
 	}
 	return balances, rows.Err()
+}
+
+func (q *Queries) UpsertAPIKey(ctx context.Context, record APIKeyRecord, createdAt time.Time) error {
+	if strings.TrimSpace(record.Key) == "" {
+		return errors.New("api key required")
+	}
+	if record.UserID == 0 {
+		return errors.New("user id required")
+	}
+	if strings.TrimSpace(record.Role) == "" {
+		return errors.New("role required")
+	}
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
+	_, err := q.Conn.DB.ExecContext(ctx, `
+		INSERT INTO api_keys (api_key, user_id, role, created_at)
+		VALUES (?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), role = VALUES(role)
+	`, record.Key, record.UserID, record.Role, createdAt.UnixMilli())
+	return err
+}
+
+func (q *Queries) ListAPIKeys(ctx context.Context) ([]APIKeyRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, "SELECT api_key, user_id, role FROM api_keys")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []APIKeyRecord
+	for rows.Next() {
+		var record APIKeyRecord
+		if err := rows.Scan(&record.Key, &record.UserID, &record.Role); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return records, nil
 }
 
 func (q *Queries) SetAssetBalance(ctx context.Context, userID, assetID, quantity int64) error {

@@ -21,6 +21,104 @@ type wsRawMessage struct {
 	TS    int64           `json:"ts"`
 }
 
+func TestAuthCallbackIssuesAPIKey(t *testing.T) {
+	const (
+		tokenCode    = "test-code"
+		accessToken  = "test-token"
+		discordID    = "123456789012345678"
+		displayName  = "Paper Street User"
+		clientID     = "client-id"
+		clientSecret = "client-secret"
+		redirectURI  = "http://localhost:8000/auth/callback"
+	)
+	discordServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/oauth2/token":
+			if r.Method != http.MethodPost {
+				t.Fatalf("unexpected token method: %s", r.Method)
+			}
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("failed to parse token form: %v", err)
+			}
+			if got := r.PostForm.Get("code"); got != tokenCode {
+				t.Fatalf("unexpected oauth code: %s", got)
+			}
+			if got := r.PostForm.Get("client_id"); got != clientID {
+				t.Fatalf("unexpected client id: %s", got)
+			}
+			if got := r.PostForm.Get("client_secret"); got != clientSecret {
+				t.Fatalf("unexpected client secret: %s", got)
+			}
+			if got := r.PostForm.Get("redirect_uri"); got != redirectURI {
+				t.Fatalf("unexpected redirect uri: %s", got)
+			}
+			respondJSON(w, http.StatusOK, discordTokenResponse{AccessToken: accessToken, TokenType: "Bearer"})
+		case "/api/users/@me":
+			if got := r.Header.Get("Authorization"); got != "Bearer "+accessToken {
+				t.Fatalf("unexpected authorization header: %s", got)
+			}
+			respondJSON(w, http.StatusOK, discordUserResponse{ID: discordID, Username: "paper-street", GlobalName: displayName})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer discordServer.Close()
+
+	t.Setenv("DISCORD_CLIENT_ID", clientID)
+	t.Setenv("DISCORD_CLIENT_SECRET", clientSecret)
+	t.Setenv("DISCORD_REDIRECT_URI", redirectURI)
+	t.Setenv("DISCORD_API_BASE_URL", discordServer.URL+"/api")
+
+	store := NewMarketStore()
+	apiKeys := auth.NewAPIKeyCache()
+	eng := engine.NewEngine(store)
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, "admin"))
+	defer server.Close()
+
+	resp, err := http.Get(server.URL + "/auth/callback?code=" + tokenCode)
+	if err != nil {
+		t.Fatalf("failed to call auth callback: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected status: %d", resp.StatusCode)
+	}
+	var payload authResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if payload.APIKey == "" || len(payload.APIKey) != auth.APIKeyHexLength {
+		t.Fatalf("unexpected api key: %q", payload.APIKey)
+	}
+	if !apiKeys.ContainsHex(payload.APIKey) {
+		t.Fatalf("expected api key to be cached")
+	}
+	userID, err := strconv.ParseInt(discordID, 10, 64)
+	if err != nil {
+		t.Fatalf("failed to parse discord id: %v", err)
+	}
+	user, ok := store.User(userID)
+	if !ok {
+		t.Fatalf("expected user to be created")
+	}
+	if user.Username != displayName {
+		t.Fatalf("expected username %q, got %q", displayName, user.Username)
+	}
+
+	resp2, err := http.Get(server.URL + "/auth/callback?code=" + tokenCode)
+	if err != nil {
+		t.Fatalf("failed to call auth callback again: %v", err)
+	}
+	defer resp2.Body.Close()
+	var payload2 authResponse
+	if err := json.NewDecoder(resp2.Body).Decode(&payload2); err != nil {
+		t.Fatalf("failed to decode second response: %v", err)
+	}
+	if payload2.APIKey != payload.APIKey {
+		t.Fatalf("expected api key to be reused")
+	}
+}
+
 func TestPoolPositionLifecycle(t *testing.T) {
 	store := NewMarketStore()
 	apiKeys := auth.NewAPIKeyCache()
@@ -29,8 +127,11 @@ func TestPoolPositionLifecycle(t *testing.T) {
 	}
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
 	store.EnsureUser(1)
+	store.mu.Lock()
+	store.balances[1]["VDP"] = 1_000
+	store.mu.Unlock()
 	eng := engine.NewEngine(store)
-	server := httptest.NewServer(NewRouter(eng, apiKeys, store))
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
 	request := poolPositionRequest{
@@ -93,7 +194,7 @@ func TestIndexCreateRedeem(t *testing.T) {
 	store.lastPrices[201] = nav + band + 1
 	store.mu.Unlock()
 	eng := engine.NewEngine(store)
-	server := httptest.NewServer(NewRouter(eng, apiKeys, store))
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
 	var createResult IndexActionResult
@@ -178,7 +279,7 @@ func TestWebSocketTickerSubscription(t *testing.T) {
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
 	store.EnsureUser(1)
 	eng := engine.NewEngine(store)
-	server := httptest.NewServer(NewRouter(eng, apiKeys, store))
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?api_key=" + testAPIKeyUser1
@@ -220,7 +321,7 @@ func TestWebSocketOrderBookDelta(t *testing.T) {
 		Quantity: 1,
 		Price:    100,
 	})
-	server := httptest.NewServer(NewRouter(eng, apiKeys, store))
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?api_key=" + testAPIKeyUser1

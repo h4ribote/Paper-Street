@@ -17,20 +17,30 @@ func TestCompanyCapitalStructureEndpoint(t *testing.T) {
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
 	store.EnsureUser(1)
 	eng := engine.NewEngine(store)
-	server := httptest.NewServer(NewRouter(eng, apiKeys, store))
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
 	var structure CompanyCapitalStructure
 	getJSON(t, server.URL+"/companies/101/capital-structure", testAPIKeyUser1, &structure)
-	expectedOutstanding := defaultSharesIssued - (defaultSharesIssued*defaultTreasuryBps)/bpsDenominator
-	if structure.SharesIssued != defaultSharesIssued {
-		t.Fatalf("expected shares issued %d, got %d", defaultSharesIssued, structure.SharesIssued)
+	store.mu.RLock()
+	state := store.companyStates[101]
+	expectedIssued := int64(0)
+	expectedOutstanding := int64(0)
+	expectedTreasury := int64(0)
+	if state != nil {
+		expectedIssued = state.SharesIssued
+		expectedOutstanding = state.SharesOutstanding
+		expectedTreasury = state.TreasuryShares
+	}
+	store.mu.RUnlock()
+	if structure.SharesIssued != expectedIssued {
+		t.Fatalf("expected shares issued %d, got %d", expectedIssued, structure.SharesIssued)
 	}
 	if structure.SharesOutstanding != expectedOutstanding {
 		t.Fatalf("expected shares outstanding %d, got %d", expectedOutstanding, structure.SharesOutstanding)
 	}
-	if structure.TreasuryShares == 0 {
-		t.Fatalf("expected treasury shares, got %d", structure.TreasuryShares)
+	if structure.TreasuryShares != expectedTreasury {
+		t.Fatalf("expected treasury shares %d, got %d", expectedTreasury, structure.TreasuryShares)
 	}
 }
 
@@ -47,8 +57,11 @@ func TestCompanyFinancingAndBuybackEndpoints(t *testing.T) {
 	store.RegisterAPIKey(testAPIKeyUser2, 2)
 	store.EnsureUser(1)
 	store.EnsureUser(2)
+	store.mu.Lock()
+	store.balances[1][defaultCurrency] = 100_000
+	store.mu.Unlock()
 	eng := engine.NewEngine(store)
-	server := httptest.NewServer(NewRouter(eng, apiKeys, store))
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
 	var finance CompanyFinancingResult
@@ -90,7 +103,7 @@ func TestCompanySimulationEndpoint(t *testing.T) {
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
 	store.EnsureUser(1)
 	eng := engine.NewEngine(store)
-	server := httptest.NewServer(NewRouter(eng, apiKeys, store))
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
 	var result CompanySimulationResult

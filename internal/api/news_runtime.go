@@ -21,6 +21,7 @@ const (
 	newsOrderTimeout         = 2 * time.Second
 	newsReactorUserID        = int64(900001)
 	newsLiquidityUserID      = int64(900002)
+	newsCashBufferMultiplier = int64(2)
 )
 
 type NewsEngineConfig struct {
@@ -139,6 +140,9 @@ func (s *MarketStore) applyNewsImpact(item NewsItem, eng *engine.Engine, rng *ra
 		if quantity < 1 {
 			continue
 		}
+		s.mu.Lock()
+		s.ensureNewsBalancesLocked(assetID, quantity, targetPrice, item.Sentiment < 0)
+		s.mu.Unlock()
 		makerSide := engine.SideSell
 		takerSide := engine.SideBuy
 		if item.Sentiment < 0 {
@@ -189,6 +193,47 @@ func (s *MarketStore) ensureNewsBotsLocked() {
 	}
 	ensureBot(newsReactorUserID, "news-reactor")
 	ensureBot(newsLiquidityUserID, "news-impact")
+}
+
+func (s *MarketStore) ensureNewsBalancesLocked(assetID, quantity, price int64, bearish bool) {
+	if assetID == 0 || quantity <= 0 || price <= 0 {
+		return
+	}
+	requiredCash, ok := safeMultiplyInt64(price, quantity)
+	if !ok {
+		requiredCash = price
+	}
+	cashBuffer, ok := safeMultiplyInt64(requiredCash, newsCashBufferMultiplier)
+	if !ok {
+		cashBuffer = requiredCash
+	}
+	ensureUser := func(userID int64) {
+		if _, ok := s.balances[userID]; !ok {
+			s.balances[userID] = make(map[string]int64)
+		}
+		if _, ok := s.positions[userID]; !ok {
+			s.positions[userID] = make(map[int64]int64)
+		}
+	}
+	ensureUser(newsLiquidityUserID)
+	ensureUser(newsReactorUserID)
+	if bearish {
+		// Maker buys, taker sells.
+		if s.balances[newsLiquidityUserID][defaultCurrency] < cashBuffer {
+			s.balances[newsLiquidityUserID][defaultCurrency] = cashBuffer
+		}
+		if s.positions[newsReactorUserID][assetID] < quantity {
+			s.positions[newsReactorUserID][assetID] = quantity
+		}
+	} else {
+		// Maker sells, taker buys.
+		if s.positions[newsLiquidityUserID][assetID] < quantity {
+			s.positions[newsLiquidityUserID][assetID] = quantity
+		}
+		if s.balances[newsReactorUserID][defaultCurrency] < cashBuffer {
+			s.balances[newsReactorUserID][defaultCurrency] = cashBuffer
+		}
+	}
 }
 
 func (s *MarketStore) newsImpactAssets(item NewsItem) []int64 {

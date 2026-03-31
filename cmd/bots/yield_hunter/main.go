@@ -112,13 +112,25 @@ func loadConfig() (config, error) {
 	if baseURL == "" {
 		baseURL = "http://localhost:8000"
 	}
-	apiKey := strings.TrimSpace(os.Getenv("API_KEY"))
-	if apiKey == "" {
-		apiKey = bots.FirstAPIKey(os.Getenv("API_KEYS"))
+	requestTimeout, err := bots.EnvDuration("REQUEST_TIMEOUT", 3*time.Second)
+	if err != nil {
+		return config{}, err
 	}
-	if apiKey == "" {
-		return config{}, errors.New("API_KEY or API_KEYS is required")
+	if requestTimeout <= 0 {
+		return config{}, errors.New("REQUEST_TIMEOUT must be positive")
 	}
+	authResult, err := bots.ResolveAuth(
+		baseURL,
+		strings.TrimSpace(os.Getenv("API_KEY")),
+		strings.TrimSpace(os.Getenv("BOT_ROLE")),
+		strings.TrimSpace(os.Getenv("ADMIN_PASSWORD")),
+		strings.TrimSpace(os.Getenv("API_KEY_FILE")),
+		requestTimeout,
+	)
+	if err != nil {
+		return config{}, err
+	}
+	apiKey := authResult.APIKey
 	bondAssetID, err := bots.EnvInt64("BOND_ASSET_ID", 301)
 	if err != nil {
 		return config{}, err
@@ -133,12 +145,15 @@ func loadConfig() (config, error) {
 	if equityAssetID <= 0 {
 		return config{}, errors.New("EQUITY_ASSET_ID must be positive")
 	}
-	userID, err := bots.EnvInt64("USER_ID", 1)
+	userID, err := bots.EnvInt64("USER_ID", authResult.UserID)
 	if err != nil {
 		return config{}, err
 	}
 	if userID <= 0 {
-		return config{}, errors.New("USER_ID must be positive")
+		return config{}, errors.New("USER_ID or BOT_ROLE is required")
+	}
+	if authResult.UserID != 0 && userID != authResult.UserID {
+		return config{}, errors.New("USER_ID does not match role assignment")
 	}
 	quantity, err := bots.EnvInt64("ORDER_QUANTITY", 10)
 	if err != nil {
@@ -167,13 +182,6 @@ func loadConfig() (config, error) {
 	}
 	if refreshInterval <= 0 {
 		return config{}, errors.New("REFRESH_INTERVAL must be positive")
-	}
-	requestTimeout, err := bots.EnvDuration("REQUEST_TIMEOUT", 3*time.Second)
-	if err != nil {
-		return config{}, err
-	}
-	if requestTimeout <= 0 {
-		return config{}, errors.New("REQUEST_TIMEOUT must be positive")
 	}
 	return config{
 		BaseURL:         baseURL,

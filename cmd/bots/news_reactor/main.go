@@ -92,19 +92,34 @@ func loadConfig() (config, error) {
 	if baseURL == "" {
 		baseURL = "http://localhost:8000"
 	}
-	apiKey := strings.TrimSpace(os.Getenv("API_KEY"))
-	if apiKey == "" {
-		apiKey = bots.FirstAPIKey(os.Getenv("API_KEYS"))
+	requestTimeout, err := bots.EnvDuration("REQUEST_TIMEOUT", 2*time.Second)
+	if err != nil {
+		return config{}, err
 	}
-	if apiKey == "" {
-		return config{}, errors.New("API_KEY or API_KEYS is required")
+	if requestTimeout <= 0 {
+		return config{}, errors.New("REQUEST_TIMEOUT must be positive")
 	}
-	userID, err := bots.EnvInt64("USER_ID", 1)
+	authResult, err := bots.ResolveAuth(
+		baseURL,
+		strings.TrimSpace(os.Getenv("API_KEY")),
+		strings.TrimSpace(os.Getenv("BOT_ROLE")),
+		strings.TrimSpace(os.Getenv("ADMIN_PASSWORD")),
+		strings.TrimSpace(os.Getenv("API_KEY_FILE")),
+		requestTimeout,
+	)
+	if err != nil {
+		return config{}, err
+	}
+	apiKey := authResult.APIKey
+	userID, err := bots.EnvInt64("USER_ID", authResult.UserID)
 	if err != nil {
 		return config{}, err
 	}
 	if userID <= 0 {
-		return config{}, errors.New("USER_ID must be positive")
+		return config{}, errors.New("USER_ID or BOT_ROLE is required")
+	}
+	if authResult.UserID != 0 && userID != authResult.UserID {
+		return config{}, errors.New("USER_ID does not match role assignment")
 	}
 	defaultAssetID, err := bots.EnvInt64("DEFAULT_ASSET_ID", 1)
 	if err != nil {
@@ -130,13 +145,6 @@ func loadConfig() (config, error) {
 	}
 	if jitter < 0 {
 		return config{}, errors.New("JITTER must be non-negative")
-	}
-	requestTimeout, err := bots.EnvDuration("REQUEST_TIMEOUT", 2*time.Second)
-	if err != nil {
-		return config{}, err
-	}
-	if requestTimeout <= 0 {
-		return config{}, errors.New("REQUEST_TIMEOUT must be positive")
 	}
 	return config{
 		BaseURL:        baseURL,
