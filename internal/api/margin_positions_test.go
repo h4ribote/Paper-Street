@@ -134,6 +134,10 @@ func TestMarginInterestAccrualUpdatesPool(t *testing.T) {
 	store.EnsureUser(2)
 	eng := engine.NewEngine(store)
 
+	store.mu.Lock()
+	store.balances[1][defaultCurrency] = 2_000_000
+	store.mu.Unlock()
+
 	submitEngineOrder(t, eng, &engine.Order{
 		AssetID:  101,
 		UserID:   1,

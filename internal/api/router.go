@@ -7,15 +7,13 @@ import (
 	"github.com/h4ribote/Paper-Street/internal/engine"
 )
 
-func NewRouter(e *engine.Engine, apiKeys *auth.APIKeyCache, store *MarketStore) http.Handler {
+func NewRouter(e *engine.Engine, apiKeys *auth.APIKeyCache, store *MarketStore, adminPassword string) http.Handler {
 	hub := newWSHub(store, e)
-	srv := &Server{Engine: e, APIKeys: apiKeys, Store: store, WSHub: hub}
+	srv := &Server{Engine: e, APIKeys: apiKeys, Store: store, WSHub: hub, AdminPassword: adminPassword}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", srv.handleHealth)
 	mux.HandleFunc("/auth/login", srv.handleAuthLogin)
-	mux.HandleFunc("/auth/callback", srv.handleAuthCallback)
-	mux.HandleFunc("/auth/refresh", srv.handleAuthRefresh)
-	mux.HandleFunc("/auth/logout", srv.handleAuthLogout)
+	mux.HandleFunc("/auth/bot", srv.handleAuthLogin)
 	mux.HandleFunc("/users/me", srv.handleCurrentUser)
 	mux.HandleFunc("/user/rank", srv.handleUserRank)
 	mux.HandleFunc("/orders", srv.handleOrders)

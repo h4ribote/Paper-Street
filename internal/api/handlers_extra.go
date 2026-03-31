@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
@@ -17,6 +18,11 @@ import (
 type authResponse struct {
 	APIKey string      `json:"api_key"`
 	User   interface{} `json:"user"`
+}
+
+type botAuthRequest struct {
+	Role          string `json:"role"`
+	AdminPassword string `json:"admin_password"`
 }
 
 type statusResponse struct {
@@ -61,22 +67,6 @@ type bondOperationRequest struct {
 }
 
 func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	s.issueAuthKey(w, r)
-}
-
-func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	s.issueAuthKey(w, r)
-}
-
-func (s *Server) handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -85,56 +75,32 @@ func (s *Server) handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "auth store unavailable")
 		return
 	}
-	oldKey := strings.TrimSpace(r.Header.Get(apiKeyHeader))
-	if oldKey == "" {
-		respondError(w, http.StatusUnauthorized, "API key required")
+	var payload botAuthRequest
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+		respondError(w, http.StatusBadRequest, "invalid json body")
 		return
 	}
-	user, ok := s.Store.UserForAPIKey(oldKey)
-	if !ok {
-		respondError(w, http.StatusUnauthorized, "API key not associated with user")
+	role := strings.TrimSpace(payload.Role)
+	if role == "" {
+		respondError(w, http.StatusBadRequest, "role required")
 		return
 	}
-	newKey, err := generateAPIKeyHex()
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to generate API key")
+	if !s.validAdminPassword(payload.AdminPassword) {
+		respondError(w, http.StatusUnauthorized, "invalid admin password")
 		return
 	}
-	if err := s.APIKeys.RemoveHex(oldKey); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid API key")
+	key, user, ok := s.Store.APIKeyForRole(role)
+	if !ok || key == "" {
+		respondError(w, http.StatusNotFound, "role not found")
 		return
 	}
-	s.Store.UnregisterAPIKey(oldKey)
-	if err := s.APIKeys.AddHex(newKey); err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to register API key")
-		return
+	if !s.APIKeys.ContainsHex(key) {
+		if err := s.APIKeys.AddHex(key); err != nil {
+			respondError(w, http.StatusInternalServerError, "failed to register api key")
+			return
+		}
 	}
-	if user.ID != 0 {
-		s.Store.RegisterAPIKey(newKey, user.ID)
-	}
-	respondJSON(w, http.StatusOK, authResponse{APIKey: newKey, User: user})
-}
-
-func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	if s.Store == nil || s.APIKeys == nil {
-		respondError(w, http.StatusInternalServerError, "auth store unavailable")
-		return
-	}
-	apiKey := strings.TrimSpace(r.Header.Get(apiKeyHeader))
-	if apiKey == "" {
-		respondError(w, http.StatusUnauthorized, "API key required")
-		return
-	}
-	if err := s.APIKeys.RemoveHex(apiKey); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid API key")
-		return
-	}
-	s.Store.UnregisterAPIKey(apiKey)
-	respondJSON(w, http.StatusOK, statusResponse{Status: "ok"})
+	respondJSON(w, http.StatusOK, authResponse{APIKey: key, User: user})
 }
 
 func (s *Server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
@@ -915,24 +881,26 @@ func (s *Server) handleIndices(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) issueAuthKey(w http.ResponseWriter, r *http.Request) {
-	if s.Store == nil || s.APIKeys == nil {
-		respondError(w, http.StatusInternalServerError, "auth store unavailable")
-		return
+func (s *Server) validAdminPassword(password string) bool {
+	if s == nil {
+		return false
 	}
-	username := strings.TrimSpace(r.URL.Query().Get("username"))
-	user := s.Store.AddUser(username)
-	key, err := generateAPIKeyHex()
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to generate API key")
-		return
+	expected := strings.TrimSpace(s.AdminPassword)
+	if expected == "" {
+		return false
 	}
-	if err := s.APIKeys.AddHex(key); err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to register API key")
-		return
+	actual := strings.TrimSpace(password)
+	if actual == "" {
+		return false
 	}
-	s.Store.RegisterAPIKey(key, user.ID)
-	respondJSON(w, http.StatusOK, authResponse{APIKey: key, User: user})
+	return subtleCompare(expected, actual)
+}
+
+func subtleCompare(expected, actual string) bool {
+	if len(expected) != len(actual) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(expected), []byte(actual)) == 1
 }
 
 func (s *Server) userIDFromRequest(r *http.Request) int64 {

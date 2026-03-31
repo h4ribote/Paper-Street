@@ -25,8 +25,17 @@ func main() {
 
 	store := createStore()
 	engine := engine.NewEngine(store)
-	apiKeys := loadAPIKeys()
-	handler := api.NewRouter(engine, apiKeys, store)
+	adminPassword := strings.TrimSpace(os.Getenv("ADMIN_PASSWORD"))
+	if adminPassword == "" {
+		log.Fatal("ADMIN_PASSWORD is required")
+	}
+	apiKeys := auth.NewAPIKeyCache()
+	for _, key := range store.APIKeys() {
+		if err := apiKeys.AddHex(key); err != nil {
+			log.Printf("invalid API key %q: %v", key, err)
+		}
+	}
+	handler := api.NewRouter(engine, apiKeys, store, adminPassword)
 	newsCtx, newsCancel := context.WithCancel(context.Background())
 	newsConfig := api.DefaultNewsEngineConfig()
 	newsConfig.Interval = envDuration("NEWS_INTERVAL", newsConfig.Interval)
@@ -86,24 +95,6 @@ func createStore() *api.MarketStore {
 		log.Fatalf("db store error: %v", err)
 	}
 	return store
-}
-
-func loadAPIKeys() *auth.APIKeyCache {
-	cache := auth.NewAPIKeyCache()
-	raw := strings.TrimSpace(os.Getenv("API_KEYS"))
-	if raw == "" {
-		return cache
-	}
-	for _, value := range strings.Split(raw, ",") {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		if err := cache.AddHex(value); err != nil {
-			log.Printf("invalid API key %q: %v", value, err)
-		}
-	}
-	return cache
 }
 
 func envDuration(key string, fallback time.Duration) time.Duration {

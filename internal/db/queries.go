@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	defaultRegionName   = "Global"
-	defaultCountryName  = "United States"
-	defaultCurrencyName = "US Dollar"
+	defaultRegionName   = "Arcadia"
+	defaultCountryName  = "Arcadia"
+	defaultCurrencyName = "Arcadian Credit"
 	defaultUserRank     = "Shrimp"
 )
 

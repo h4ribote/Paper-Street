@@ -9,16 +9,9 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
     *   HTTPヘッダー `X-API-Key` に20文字の16進数キーを指定します。
 *   `GET /health`
     *   稼働確認用のヘルスチェックです（認証不要）。
-*   `GET /auth/login`
-    *   Discord OAuth2 ログインプロセスを開始します。
-    *   現行の簡易実装では `username` クエリ (任意) を受け取り、APIキーを即時発行します。
-*   `GET /auth/callback`
-    *   Discord からのコールバックを受け取り、APIキー(20文字の16進数)を発行します。
-    *   現行の簡易実装では `username` クエリ (任意) を受け取り、APIキーを即時発行します。
-*   `POST /auth/refresh`
-    *   APIキーをローテーションし、新しいキーを発行します。
-*   `POST /auth/logout`
-    *   ログアウトし、APIキーを無効化します。
+*   `POST /auth/login` / `POST /auth/bot`
+    *   管理者用パスワードとボットの役割からAPIキーを取得します。
+    *   Body: `{ "role": "market_maker", "admin_password": "..." }`
 *   `GET /users/me`
     *   現在のユーザー情報を取得します。`user_id` を指定した場合はそのユーザーを返します。
 

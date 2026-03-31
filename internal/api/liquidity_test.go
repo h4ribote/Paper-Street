@@ -51,6 +51,10 @@ func TestSwapPoolRouterMultiHop(t *testing.T) {
 	store := NewMarketStore()
 	store.EnsureUser(1)
 
+	store.mu.Lock()
+	store.balances[1]["VDP"] = 100_000
+	store.mu.Unlock()
+
 	startVDP := store.balances[1]["VDP"]
 	startBRB := store.balances[1]["BRB"]
 	startARC := store.balances[1]["ARC"]

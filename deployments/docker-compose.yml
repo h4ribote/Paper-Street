@@ -23,7 +23,7 @@ services:
       - "8000:8000"
     environment:
       PORT: "8000"
-      API_KEYS: ${API_KEYS:?API_KEYS environment variable is required}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD environment variable is required}
       DATABASE_DSN: ${DATABASE_DSN:-root:${MYSQL_ROOT_PASSWORD}@tcp(db:3306)/${MYSQL_DATABASE:-paperstreet}?parseTime=true}
     depends_on:
       db:
@@ -36,7 +36,8 @@ services:
     command: ["./market_maker"]
     environment:
       API_BASE_URL: http://server:8000
-      API_KEYS: ${API_KEYS:?API_KEYS environment variable is required}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD environment variable is required}
+      BOT_ROLE: market_maker
     depends_on:
       - server
     profiles:
@@ -49,7 +50,8 @@ services:
     command: ["./news_reactor"]
     environment:
       API_BASE_URL: http://server:8000
-      API_KEYS: ${API_KEYS:?API_KEYS environment variable is required}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD environment variable is required}
+      BOT_ROLE: news_reactor
     depends_on:
       - server
     profiles:

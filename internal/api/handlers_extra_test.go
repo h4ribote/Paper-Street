@@ -29,8 +29,11 @@ func TestPoolPositionLifecycle(t *testing.T) {
 	}
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
 	store.EnsureUser(1)
+	store.mu.Lock()
+	store.balances[1]["VDP"] = 1_000
+	store.mu.Unlock()
 	eng := engine.NewEngine(store)
-	server := httptest.NewServer(NewRouter(eng, apiKeys, store))
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
 	request := poolPositionRequest{
@@ -93,7 +96,7 @@ func TestIndexCreateRedeem(t *testing.T) {
 	store.lastPrices[201] = nav + band + 1
 	store.mu.Unlock()
 	eng := engine.NewEngine(store)
-	server := httptest.NewServer(NewRouter(eng, apiKeys, store))
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
 	var createResult IndexActionResult
@@ -178,7 +181,7 @@ func TestWebSocketTickerSubscription(t *testing.T) {
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
 	store.EnsureUser(1)
 	eng := engine.NewEngine(store)
-	server := httptest.NewServer(NewRouter(eng, apiKeys, store))
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?api_key=" + testAPIKeyUser1
@@ -220,7 +223,7 @@ func TestWebSocketOrderBookDelta(t *testing.T) {
 		Quantity: 1,
 		Price:    100,
 	})
-	server := httptest.NewServer(NewRouter(eng, apiKeys, store))
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?api_key=" + testAPIKeyUser1

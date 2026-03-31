@@ -1,0 +1,54 @@
+package api
+
+import (
+	"log"
+	"strings"
+)
+
+func (s *MarketStore) ensureCurrencyID(currency string) int64 {
+	if s == nil || s.queries == nil {
+		return 0
+	}
+	currency = strings.TrimSpace(currency)
+	if currency == "" {
+		return 0
+	}
+	if id, ok := s.currencyIDs[currency]; ok {
+		return id
+	}
+	ctx, cancel := s.dbContext()
+	defer cancel()
+	id, err := s.queries.EnsureDefaultCurrency(ctx, currency)
+	if err != nil {
+		log.Printf("db ensure currency %s: %v", currency, err)
+		return 0
+	}
+	s.currencyIDs[currency] = id
+	return id
+}
+
+func (s *MarketStore) persistCurrencyBalance(userID int64, currency string, amount int64) {
+	if s == nil || s.queries == nil || userID == 0 {
+		return
+	}
+	currencyID := s.ensureCurrencyID(currency)
+	if currencyID == 0 {
+		return
+	}
+	ctx, cancel := s.dbContext()
+	defer cancel()
+	if err := s.queries.SetCurrencyBalance(ctx, userID, currencyID, amount); err != nil {
+		log.Printf("db set currency balance %d/%s: %v", userID, currency, err)
+	}
+}
+
+func (s *MarketStore) persistAssetBalance(userID, assetID, quantity int64) {
+	if s == nil || s.queries == nil || userID == 0 || assetID == 0 {
+		return
+	}
+	ctx, cancel := s.dbContext()
+	defer cancel()
+	if err := s.queries.SetAssetBalance(ctx, userID, assetID, quantity); err != nil {
+		log.Printf("db set asset balance %d/%d: %v", userID, assetID, err)
+	}
+}

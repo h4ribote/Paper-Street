@@ -12,7 +12,7 @@ func (s *Server) withAPIKeyAuth(next http.Handler) http.Handler {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/health" || r.URL.Path == "/auth/login" || r.URL.Path == "/auth/callback" || r.URL.Path == "/ws" {
+		if r.URL.Path == "/health" || r.URL.Path == "/auth/login" || r.URL.Path == "/auth/bot" || r.URL.Path == "/ws" {
 			next.ServeHTTP(w, r)
 			return
 		}

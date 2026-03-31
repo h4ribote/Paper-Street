@@ -17,10 +17,11 @@ import (
 )
 
 type Server struct {
-	Engine  *engine.Engine
-	APIKeys *auth.APIKeyCache
-	Store   *MarketStore
-	WSHub   *wsHub
+	Engine        *engine.Engine
+	APIKeys       *auth.APIKeyCache
+	Store         *MarketStore
+	WSHub         *wsHub
+	AdminPassword string
 }
 
 type orderRequest struct {

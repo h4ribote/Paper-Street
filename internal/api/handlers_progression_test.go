@@ -21,7 +21,7 @@ func TestDailyMissionCompletionAwardsReward(t *testing.T) {
 	store.EnsureUser(1)
 
 	eng := engine.NewEngine(store)
-	server := httptest.NewServer(NewRouter(eng, apiKeys, store))
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
 	var response DailyMissionResponse
@@ -79,7 +79,7 @@ func TestContractDeliveryAwardsXP(t *testing.T) {
 	store.EnsureUser(1)
 
 	eng := engine.NewEngine(store)
-	server := httptest.NewServer(NewRouter(eng, apiKeys, store))
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
 	var contracts []ContractStatus
