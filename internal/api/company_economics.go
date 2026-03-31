@@ -499,8 +499,9 @@ func splitDemandRevenue(revenue int64, demand CompanyDemandBreakdown) (int64, in
 		return 0, 0
 	}
 	denominator := demand.Total
-	if demand.B2C+demand.B2G > demand.Total {
-		denominator = demand.B2C + demand.B2G
+	componentTotal := demand.B2C + demand.B2G
+	if componentTotal > demand.Total {
+		denominator = componentTotal
 		if denominator <= 0 {
 			return 0, 0
 		}

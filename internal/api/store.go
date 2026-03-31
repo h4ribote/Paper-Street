@@ -1108,6 +1108,7 @@ func (s *MarketStore) ensureMacroQuarterTrackingLocked(quarterIndex int64) {
 		s.macroCPIIndexCurrent = make(map[string]float64)
 		s.macroGovSpending = make(map[string]int64)
 		s.macroGovQuarterIndex = quarterIndex
+		s.macroQuarterIndex = quarterIndex
 	}
 }
 
