@@ -92,13 +92,14 @@ func (s *MarketStore) generateNewsTick(now time.Time, eng *engine.Engine, rng *r
 
 func (s *MarketStore) publishNewsItem(now time.Time, item NewsItem) NewsItem {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.nextNewsID++
 	item.ID = s.nextNewsID
 	if item.PublishedAt == 0 {
 		item.PublishedAt = now.UnixMilli()
 	}
 	s.news = append([]NewsItem{item}, s.news...)
+	s.mu.Unlock()
+	s.persistNewsItem(item)
 	return item
 }
 

@@ -406,12 +406,14 @@ func (s *MarketStore) bondOperationNewsLocked(def PerpetualBondDefinition, actio
 		return
 	}
 	s.nextNewsID++
-	s.news = append(s.news, NewsItem{
+	item := NewsItem{
 		ID:          s.nextNewsID,
 		Headline:    headline,
 		Impact:      "NEUTRAL",
 		AssetID:     asset.ID,
 		Category:    "CENTRAL_BANK",
 		PublishedAt: now.UnixMilli(),
-	})
+	}
+	s.news = append(s.news, item)
+	s.persistNewsItem(item)
 }

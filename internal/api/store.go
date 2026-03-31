@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"log"
@@ -38,6 +39,8 @@ const (
 	fxTheoreticalCPI   = 5.0
 	fxTheoreticalScale = int64(100)
 	fxArcadiaCountry   = "Arcadia"
+	newsSentimentScale = 100.0
+	defaultNewsSource  = "Paper Street Wire"
 )
 
 func stringsEqualFold(a, b string) bool {
@@ -80,6 +83,39 @@ func safeAddInt64(a, b int64) (int64, bool) {
 		return 0, false
 	}
 	return a + b, true
+}
+
+func newsSentimentToScore(sentiment float64) int64 {
+	return int64(math.Round(sentiment * newsSentimentScale))
+}
+
+func newsSentimentFromScore(score int64) float64 {
+	if newsSentimentScale == 0 {
+		return 0
+	}
+	return float64(score) / newsSentimentScale
+}
+
+func encodeImpactScope(scope []string) string {
+	if len(scope) == 0 {
+		return ""
+	}
+	encoded, err := json.Marshal(scope)
+	if err != nil {
+		return ""
+	}
+	return string(encoded)
+}
+
+func decodeImpactScope(encoded string) []string {
+	if strings.TrimSpace(encoded) == "" {
+		return nil
+	}
+	var scope []string
+	if err := json.Unmarshal([]byte(encoded), &scope); err != nil {
+		return nil
+	}
+	return scope
 }
 
 type NewsItem struct {
@@ -474,11 +510,19 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 			{Name: "Season 1: The Great Resurgence", Theme: "RECOVERY", StartAt: now.Add(-7 * 24 * time.Hour).UnixMilli(), EndAt: now.Add(53 * 24 * time.Hour).UnixMilli()},
 		},
 		regions: []Region{
-			{ID: 1, Name: "Eurasia", Description: "Manufacturing and tech corridor"},
-			{ID: 2, Name: "Aurora Belt", Description: "Energy and commodity frontier"},
+			{ID: 1, Name: "Northern Alliance", Description: "Advanced markets with high-tech leadership and aging demographics."},
+			{ID: 2, Name: "Eastern Coalition", Description: "Industrial powerhouse with state-led growth and export-driven policy."},
+			{ID: 3, Name: "Southern Resource Pact", Description: "Resource-rich bloc with high commodity exposure and political risk."},
+			{ID: 4, Name: "Oceanic Tech Arch", Description: "Financial hubs and tax havens fueling volatile innovation."},
 		},
 		worldEvents: []WorldEvent{
-			{ID: 1, Name: "Central Bank Briefing", Description: "Liquidity outlook update", StartsAt: now.Add(2 * time.Hour).UnixMilli(), EndsAt: now.Add(3 * time.Hour).UnixMilli()},
+			{ID: 1, Name: "Central Bank Briefing", Description: "Liquidity outlook update from global policy makers.", StartsAt: now.Add(2 * time.Hour).UnixMilli(), EndsAt: now.Add(3 * time.Hour).UnixMilli()},
+			{ID: 2, Name: "Tech Bubble Burst", Description: "Accounting irregularities spark a sharp selloff in Arcadian tech.", StartsAt: now.Add(-6 * time.Hour).UnixMilli(), EndsAt: now.Add(-4 * time.Hour).UnixMilli()},
+			{ID: 3, Name: "Resource War", Description: "El Dorado limits rare metal exports, stoking supply shock fears.", StartsAt: now.Add(6 * time.Hour).UnixMilli(), EndsAt: now.Add(12 * time.Hour).UnixMilli()},
+			{ID: 4, Name: "Digital Currency Crisis", Description: "Neo Venice exchange hack triggers liquidity freeze across crypto markets.", StartsAt: now.Add(18 * time.Hour).UnixMilli(), EndsAt: now.Add(24 * time.Hour).UnixMilli()},
+			{ID: 5, Name: "Boros Election", Description: "Presidential race pivots defense spending and trade policy outlook.", StartsAt: now.Add(36 * time.Hour).UnixMilli(), EndsAt: now.Add(48 * time.Hour).UnixMilli()},
+			{ID: 6, Name: "Arcadia Privacy Act", Description: "New data privacy law threatens ad-tech and analytics revenue.", StartsAt: now.Add(60 * time.Hour).UnixMilli(), EndsAt: now.Add(72 * time.Hour).UnixMilli()},
+			{ID: 7, Name: "El Dorado Succession", Description: "Royal succession tensions raise civil unrest risks and currency volatility.", StartsAt: now.Add(84 * time.Hour).UnixMilli(), EndsAt: now.Add(96 * time.Hour).UnixMilli()},
 		},
 		queries:     queries,
 		currencyIDs: make(map[string]int64),
@@ -1470,6 +1514,12 @@ func (s *MarketStore) seedAssets() {
 }
 
 func (s *MarketStore) seedNews(now time.Time) {
+	s.mu.RLock()
+	hasNews := len(s.news) > 0
+	s.mu.RUnlock()
+	if hasNews {
+		return
+	}
 	headlines := s.generatePatternNews(now)
 	if len(headlines) == 0 {
 		headlines = []NewsItem{
@@ -1478,11 +1528,9 @@ func (s *MarketStore) seedNews(now time.Time) {
 			{Headline: "Aurora Metals signs a new long-term export agreement.", Impact: "POSITIVE", AssetID: 103},
 		}
 	}
-	for _, item := range headlines {
-		s.nextNewsID++
-		item.ID = s.nextNewsID
-		item.PublishedAt = now.Add(-time.Duration(s.nextNewsID) * time.Hour).UnixMilli()
-		s.news = append(s.news, item)
+	for idx, item := range headlines {
+		item.PublishedAt = now.Add(-time.Duration(idx+1) * time.Hour).UnixMilli()
+		s.publishNewsItem(now, item)
 	}
 }
 
@@ -1778,6 +1826,9 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 	if err := s.loadFinancialReportsFromDB(ctx); err != nil {
 		return err
 	}
+	if err := s.loadNewsFromDB(ctx); err != nil {
+		return err
+	}
 
 	users, err := s.queries.ListUsers(ctx)
 	if err != nil {
@@ -1864,6 +1915,33 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 		s.ensureUserLocked(userID)
 	}
 	s.refreshMarketStatsLocked()
+	return nil
+}
+
+func (s *MarketStore) loadNewsFromDB(ctx context.Context) error {
+	if s.queries == nil {
+		return nil
+	}
+	records, err := s.queries.ListNewsFeed(ctx)
+	if err != nil {
+		return err
+	}
+	if len(records) == 0 {
+		return nil
+	}
+	items := make([]NewsItem, 0, len(records))
+	var maxID int64
+	for _, record := range records {
+		item := newsRecordToItem(record)
+		items = append(items, item)
+		if record.ID > maxID {
+			maxID = record.ID
+		}
+	}
+	s.news = items
+	if maxID > s.nextNewsID {
+		s.nextNewsID = maxID
+	}
 	return nil
 }
 
@@ -1984,6 +2062,51 @@ func (s *MarketStore) persistOrder(order *engine.Order, user models.User, asset 
 	if err := s.queries.UpsertOrder(ctx, order); err != nil {
 		log.Printf("db upsert order %d: %v", order.ID, err)
 	}
+}
+
+func (s *MarketStore) persistNewsItem(item NewsItem) {
+	if s.queries == nil || item.ID == 0 {
+		return
+	}
+	ctx, cancel := s.dbContext()
+	defer cancel()
+	record := newsItemToRecord(item)
+	if err := s.queries.UpsertNewsFeed(ctx, record); err != nil {
+		log.Printf("db upsert news %d: %v", item.ID, err)
+	}
+}
+
+func newsItemToRecord(item NewsItem) db.NewsRecord {
+	return db.NewsRecord{
+		ID:             item.ID,
+		Headline:       item.Headline,
+		Body:           item.Body,
+		PublishedAt:    item.PublishedAt,
+		Source:         defaultNewsSource,
+		SentimentScore: newsSentimentToScore(item.Sentiment),
+		AssetID:        item.AssetID,
+		Category:       item.Category,
+		Impact:         item.Impact,
+		ImpactScope:    encodeImpactScope(item.ImpactScope),
+	}
+}
+
+func newsRecordToItem(record db.NewsRecord) NewsItem {
+	item := NewsItem{
+		ID:          record.ID,
+		Headline:    record.Headline,
+		Body:        record.Body,
+		AssetID:     record.AssetID,
+		Category:    record.Category,
+		Sentiment:   newsSentimentFromScore(record.SentimentScore),
+		ImpactScope: decodeImpactScope(record.ImpactScope),
+		PublishedAt: record.PublishedAt,
+	}
+	item.Impact = strings.TrimSpace(record.Impact)
+	if item.Impact == "" && item.Sentiment != 0 {
+		item.Impact = sentimentImpact(item.Sentiment)
+	}
+	return item
 }
 
 type partySnapshot struct {
