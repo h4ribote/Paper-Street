@@ -29,6 +29,9 @@ terminate() {
     for pid in $pids; do
       kill "$pid" 2>/dev/null || true
     done
+    for pid in $pids; do
+      wait "$pid" || true
+    done
   fi
 }
 
