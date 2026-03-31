@@ -30,4 +30,4 @@ COPY --from=builder /out/arbitrageur ./arbitrageur
 COPY --from=builder /out/yield_hunter ./yield_hunter
 COPY --from=builder /out/public_consumer ./public_consumer
 COPY deployments/docker/run-bots.sh ./run-bots.sh
-CMD ["/app/run-bots.sh"]
+CMD ["sh", "/app/run-bots.sh"]

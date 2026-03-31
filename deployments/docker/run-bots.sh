@@ -4,10 +4,7 @@ set -eu
 : "${API_BASE_URL:?API_BASE_URL environment variable is required}"
 : "${ADMIN_PASSWORD:?ADMIN_PASSWORD environment variable is required}"
 
-api_key_env=""
-if [ -n "${API_KEY_FILE:-}" ]; then
-  api_key_env="API_KEY_FILE=$API_KEY_FILE"
-else
+if [ -z "${API_KEY_FILE:-}" ]; then
   unset API_KEY_FILE
 fi
 
@@ -18,7 +15,11 @@ start_bot() {
   cmd="$2"
   shift 2
   echo "Starting bot: ${name}"
-  env API_BASE_URL="$API_BASE_URL" ADMIN_PASSWORD="$ADMIN_PASSWORD" ${api_key_env:+$api_key_env} "$@" "$cmd" &
+  if [ -n "${API_KEY_FILE:-}" ]; then
+    env API_BASE_URL="$API_BASE_URL" ADMIN_PASSWORD="$ADMIN_PASSWORD" API_KEY_FILE="$API_KEY_FILE" "$@" "$cmd" &
+  else
+    env API_BASE_URL="$API_BASE_URL" ADMIN_PASSWORD="$ADMIN_PASSWORD" "$@" "$cmd" &
+  fi
   pids="$pids $!"
 }
 
