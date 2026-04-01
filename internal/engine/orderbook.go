@@ -350,6 +350,16 @@ func (ob *OrderBook) match(order *Order) OrderResult {
 		return OrderResult{Order: order.clone(), Executions: executions}
 	}
 
+	if timeInForce == TimeInForceFOK {
+		if order.Remaining == 0 {
+			order.Status = OrderStatusFilled
+		} else {
+			order.cancel()
+			order.Remaining = 0
+		}
+		return OrderResult{Order: order.clone(), Executions: executions}
+	}
+
 	if order.Remaining == 0 {
 		order.Status = OrderStatusFilled
 		return OrderResult{Order: order.clone(), Executions: executions}
@@ -370,12 +380,6 @@ func (ob *OrderBook) match(order *Order) OrderResult {
 			return OrderResult{Order: order.clone(), Executions: executions}
 		}
 		order.Status = OrderStatusPartial
-		order.Remaining = 0
-		return OrderResult{Order: order.clone(), Executions: executions}
-	}
-
-	if timeInForce == TimeInForceFOK {
-		order.cancel()
 		order.Remaining = 0
 		return OrderResult{Order: order.clone(), Executions: executions}
 	}

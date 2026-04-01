@@ -158,7 +158,7 @@ func (s *Server) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	prevCooldown, prevOK, err := s.reserveMarketCooldown(order)
+	previousTimestamp, hadPreviousEntry, err := s.checkAndSetMarketCooldown(order)
 	if err != nil {
 		respondError(w, http.StatusTooManyRequests, err.Error())
 		return
@@ -167,7 +167,7 @@ func (s *Server) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	result, err := s.Engine.SubmitOrder(ctx, order)
 	if err != nil {
-		s.restoreMarketCooldown(order, prevCooldown, prevOK)
+		s.restoreMarketCooldown(order, previousTimestamp, hadPreviousEntry)
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -289,7 +289,7 @@ type marketCooldownKey struct {
 	side   engine.Side
 }
 
-func (s *Server) reserveMarketCooldown(order *engine.Order) (time.Time, bool, error) {
+func (s *Server) checkAndSetMarketCooldown(order *engine.Order) (time.Time, bool, error) {
 	if s == nil || order == nil || order.Type != engine.OrderTypeMarket {
 		return time.Time{}, false, nil
 	}
