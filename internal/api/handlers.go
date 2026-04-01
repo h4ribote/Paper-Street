@@ -28,15 +28,15 @@ type Server struct {
 }
 
 type orderRequest struct {
-	AssetID            int64  `json:"asset_id"`
-	UserID             int64  `json:"user_id"`
-	Side               string `json:"side"`
-	Type               string `json:"type"`
-	ExecutionCondition string `json:"execution_condition"`
-	Quantity           int64  `json:"quantity"`
-	Price              int64  `json:"price"`
-	StopPrice          int64  `json:"stop_price"`
-	Leverage           int64  `json:"leverage"`
+	AssetID     int64  `json:"asset_id"`
+	UserID      int64  `json:"user_id"`
+	Side        string `json:"side"`
+	Type        string `json:"type"`
+	TimeInForce string `json:"time_in_force"`
+	Quantity    int64  `json:"quantity"`
+	Price       int64  `json:"price"`
+	StopPrice   int64  `json:"stop_price"`
+	Leverage    int64  `json:"leverage"`
 }
 
 type errorResponse struct {
@@ -262,14 +262,14 @@ func (o orderRequest) toOrder(defaultUserID int64) (*engine.Order, error) {
 	if leverage > marginLeverageMax {
 		return nil, errors.New("leverage must be at most 5")
 	}
-	timeInForce := strings.ToUpper(strings.TrimSpace(o.ExecutionCondition))
+	timeInForce := strings.ToUpper(strings.TrimSpace(o.TimeInForce))
 	if timeInForce == "" {
 		timeInForce = string(engine.TimeInForceGTC)
 	}
 	switch engine.TimeInForce(timeInForce) {
 	case engine.TimeInForceGTC, engine.TimeInForceIOC, engine.TimeInForceFOK:
 	default:
-		return nil, errors.New("invalid execution condition")
+		return nil, errors.New("invalid time in force")
 	}
 	return &engine.Order{
 		AssetID:     o.AssetID,

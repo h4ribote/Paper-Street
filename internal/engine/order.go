@@ -42,7 +42,7 @@ type Order struct {
 	AssetID     int64       `json:"asset_id"`
 	Side        Side        `json:"side"`
 	Type        OrderType   `json:"type"`
-	TimeInForce TimeInForce `json:"execution_condition,omitempty"`
+	TimeInForce TimeInForce `json:"time_in_force,omitempty"`
 	Quantity    int64       `json:"quantity"`
 	Remaining   int64       `json:"remaining"`
 	Price       int64       `json:"price,omitempty"`
