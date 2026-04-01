@@ -684,7 +684,10 @@ func (s *MarketStore) procureInputsLocked(state *companyState, production int64,
 				continue
 			}
 			if cost > cash {
-				production = 0
+				possible := available / input.Quantity
+				if possible < production {
+					production = possible
+				}
 				aborted = true
 				break
 			}
@@ -748,14 +751,10 @@ func (s *MarketStore) canAffordProductionLocked(state *companyState, production 
 			if cost > cash {
 				return false
 			}
-			sum := requiredCash + cost
-			if sum < requiredCash {
+			if requiredCash > cash-cost {
 				return false
 			}
-			requiredCash = sum
-			if requiredCash > cash {
-				return false
-			}
+			requiredCash += cost
 		}
 	}
 	return true

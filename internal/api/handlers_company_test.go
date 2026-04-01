@@ -149,6 +149,7 @@ func TestCompanyProcurementRespectsCashBalance(t *testing.T) {
 	store.positions[state.UserID][inputAsset.ID] = 0
 	cashBalance := int64(50)
 	store.balances[state.UserID][defaultCurrency] = cashBalance
+	availableInputs := store.positions[state.UserID][inputAsset.ID]
 	store.mu.Unlock()
 
 	result, err := store.SimulateCompanyQuarter(101, time.Now().UTC())
@@ -156,7 +157,7 @@ func TestCompanyProcurementRespectsCashBalance(t *testing.T) {
 		t.Fatalf("simulate company quarter: %v", err)
 	}
 	maxAffordableInputs := cashBalance / inputPrice
-	expectedProduction := maxAffordableInputs / inputQuantity
+	expectedProduction := (availableInputs + maxAffordableInputs) / inputQuantity
 	if result.Production != expectedProduction {
 		t.Fatalf("expected production to be %d with limited cash, got %d", expectedProduction, result.Production)
 	}
