@@ -3,9 +3,11 @@ package api
 import (
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/h4ribote/Paper-Street/internal/auth"
 	"github.com/h4ribote/Paper-Street/internal/engine"
+	"github.com/h4ribote/Paper-Street/internal/models"
 )
 
 func TestCompanyCapitalStructureEndpoint(t *testing.T) {
@@ -116,5 +118,47 @@ func TestCompanySimulationEndpoint(t *testing.T) {
 	}
 	if result.Report.CompanyID != 101 {
 		t.Fatalf("expected report for company 101, got %d", result.Report.CompanyID)
+	}
+}
+
+func TestCompanyProcurementRespectsCashBalance(t *testing.T) {
+	store := NewMarketStore()
+	inputAsset := models.Asset{ID: 104, Symbol: "INP", Name: "Input", Type: "COMMODITY", Sector: "METAL"}
+	store.mu.Lock()
+	state := store.companyStates[101]
+	if state == nil {
+		store.mu.Unlock()
+		t.Fatal("expected company state for 101")
+	}
+	store.assets[inputAsset.ID] = inputAsset
+	store.basePrices[inputAsset.ID] = 10
+	state.MaxProductionCapacity = 10
+	store.companyRecipes[state.Company.ID] = []ProductionRecipe{
+		{
+			ID:             1,
+			CompanyID:      state.Company.ID,
+			OutputAssetID:  state.OutputAssetID,
+			OutputQuantity: 1,
+			Inputs: []ProductionInput{
+				{AssetID: inputAsset.ID, Quantity: 2},
+			},
+		},
+	}
+	store.positions[state.UserID][inputAsset.ID] = 0
+	store.balances[state.UserID][defaultCurrency] = 50
+	store.mu.Unlock()
+
+	result, err := store.SimulateCompanyQuarter(101, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("simulate company quarter: %v", err)
+	}
+	if result.Production != 2 {
+		t.Fatalf("expected production to be 2 with limited cash, got %d", result.Production)
+	}
+	store.mu.RLock()
+	inputBalance := store.positions[state.UserID][inputAsset.ID]
+	store.mu.RUnlock()
+	if inputBalance != 0 {
+		t.Fatalf("expected input inventory to be fully consumed, got %d", inputBalance)
 	}
 }

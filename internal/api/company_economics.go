@@ -633,12 +633,13 @@ func (s *MarketStore) runCompanyProductionLocked(state *companyState, demandTota
 	}
 	targetOutput := state.MaxProductionCapacity
 	production := targetOutput
+	production = s.procureInputsLocked(state, production, recipes)
 	for _, recipe := range recipes {
 		for _, input := range recipe.Inputs {
-			available := s.positions[state.UserID][input.AssetID]
 			if input.Quantity <= 0 {
 				continue
 			}
+			available := s.positions[state.UserID][input.AssetID]
 			possible := available / input.Quantity
 			if possible < production {
 				production = possible
@@ -649,7 +650,6 @@ func (s *MarketStore) runCompanyProductionLocked(state *companyState, demandTota
 		production = 0
 	}
 	production = minInt64(production, targetOutput)
-	production = s.procureInputsLocked(state, production, recipes)
 	if production > targetOutput {
 		production = targetOutput
 	}
@@ -680,25 +680,51 @@ func (s *MarketStore) procureInputsLocked(state *companyState, production int64,
 			if input.Quantity <= 0 {
 				continue
 			}
-			required := production * input.Quantity
 			available := s.positions[state.UserID][input.AssetID]
+			price := s.marketPriceLocked(input.AssetID)
+			if price <= 0 {
+				possible := available / input.Quantity
+				if possible < production {
+					production = possible
+				}
+				continue
+			}
+			required := production * input.Quantity
 			if available >= required {
 				continue
 			}
 			shortfall := required - available
-			price := s.marketPriceLocked(input.AssetID)
-			if price <= 0 {
-				continue
-			}
 			maxAffordable := cash / price
 			if maxAffordable <= 0 {
-				production = available / input.Quantity
+				possible := available / input.Quantity
+				if possible < production {
+					production = possible
+				}
 				continue
 			}
 			if shortfall > maxAffordable {
 				shortfall = maxAffordable
+				affordableProduction := (available + shortfall) / input.Quantity
+				if affordableProduction < production {
+					production = affordableProduction
+				}
+			}
+			required = production * input.Quantity
+			if available >= required {
+				continue
+			}
+			shortfall = required - available
+			if shortfall <= 0 {
+				continue
 			}
 			cost := shortfall * price
+			if cost > cash {
+				shortfall = cash / price
+				cost = shortfall * price
+			}
+			if shortfall <= 0 {
+				continue
+			}
 			cash -= cost
 			s.positions[state.UserID][input.AssetID] += shortfall
 		}
