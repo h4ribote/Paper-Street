@@ -306,9 +306,6 @@ func (s *Server) checkAndSetMarketCooldown(order *engine.Order) (time.Time, bool
 	if ok && last.Add(marketOrderCooldown).After(now) {
 		remaining := last.Add(marketOrderCooldown).Sub(now)
 		remainingSeconds := int(math.Ceil(remaining.Seconds()))
-		if remainingSeconds < 1 {
-			remainingSeconds = 1
-		}
 		return time.Time{}, false, fmt.Errorf("market order cooldown active, retry in %d seconds", remainingSeconds)
 	}
 	s.marketCooldown[key] = now
