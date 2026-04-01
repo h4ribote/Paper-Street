@@ -683,14 +683,8 @@ func (s *MarketStore) procureInputsLocked(state *companyState, production int64,
 				continue
 			}
 			if cost > cash {
-				shortfall = minInt64(shortfall, cash/price)
-				if shortfall <= 0 {
-					continue
-				}
-				cost, ok = safeMultiplyInt64(shortfall, price)
-				if !ok || cost <= 0 {
-					continue
-				}
+				s.balances[state.UserID][defaultCurrency] = cash
+				return 0
 			}
 			if shortfall <= 0 || cost <= 0 {
 				continue

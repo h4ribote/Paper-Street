@@ -130,8 +130,10 @@ func TestCompanyProcurementRespectsCashBalance(t *testing.T) {
 		store.mu.Unlock()
 		t.Fatal("expected company state for 101")
 	}
+	inputPrice := int64(10)
+	inputQuantity := int64(2)
 	store.assets[inputAsset.ID] = inputAsset
-	store.basePrices[inputAsset.ID] = 10
+	store.basePrices[inputAsset.ID] = inputPrice
 	state.MaxProductionCapacity = 10
 	store.companyRecipes[state.Company.ID] = []ProductionRecipe{
 		{
@@ -140,20 +142,23 @@ func TestCompanyProcurementRespectsCashBalance(t *testing.T) {
 			OutputAssetID:  state.OutputAssetID,
 			OutputQuantity: 1,
 			Inputs: []ProductionInput{
-				{AssetID: inputAsset.ID, Quantity: 2},
+				{AssetID: inputAsset.ID, Quantity: inputQuantity},
 			},
 		},
 	}
 	store.positions[state.UserID][inputAsset.ID] = 0
-	store.balances[state.UserID][defaultCurrency] = 50
+	cashBalance := int64(50)
+	store.balances[state.UserID][defaultCurrency] = cashBalance
 	store.mu.Unlock()
 
 	result, err := store.SimulateCompanyQuarter(101, time.Now().UTC())
 	if err != nil {
 		t.Fatalf("simulate company quarter: %v", err)
 	}
-	if result.Production != 2 {
-		t.Fatalf("expected production to be 2 with limited cash, got %d", result.Production)
+	maxAffordableInputs := cashBalance / inputPrice
+	expectedProduction := maxAffordableInputs / inputQuantity
+	if result.Production != expectedProduction {
+		t.Fatalf("expected production to be %d with limited cash, got %d", expectedProduction, result.Production)
 	}
 	store.mu.RLock()
 	inputBalance := store.positions[state.UserID][inputAsset.ID]
