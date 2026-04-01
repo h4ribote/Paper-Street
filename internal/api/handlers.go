@@ -301,7 +301,7 @@ func (s *Server) checkAndSetMarketCooldown(order *engine.Order) (time.Time, bool
 		s.marketCooldown = make(map[marketCooldownKey]time.Time)
 	}
 	last, ok := s.marketCooldown[key]
-	if ok && now.Sub(last) < marketOrderCooldown {
+	if ok && last.Add(marketOrderCooldown).After(now) {
 		return time.Time{}, false, errors.New("market order cooldown active")
 	}
 	s.marketCooldown[key] = now

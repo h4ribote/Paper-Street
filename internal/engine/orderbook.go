@@ -355,7 +355,6 @@ func (ob *OrderBook) match(order *Order) OrderResult {
 			order.Status = OrderStatusFilled
 		} else {
 			order.cancel()
-			order.Remaining = 0
 		}
 		return OrderResult{Order: order.clone(), Executions: executions}
 	}
