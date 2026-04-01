@@ -375,12 +375,8 @@ func (ob *OrderBook) match(order *Order) OrderResult {
 	}
 
 	if timeInForce == TimeInForceFOK {
-		if len(executions) == 0 {
-			order.cancel()
-		} else {
-			order.Status = OrderStatusFilled
-			order.Remaining = 0
-		}
+		order.cancel()
+		order.Remaining = 0
 		return OrderResult{Order: order.clone(), Executions: executions}
 	}
 

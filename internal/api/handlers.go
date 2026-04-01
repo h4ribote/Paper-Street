@@ -293,7 +293,7 @@ func (s *Server) reserveMarketCooldown(order *engine.Order) (time.Time, bool, er
 	if s == nil || order == nil || order.Type != engine.OrderTypeMarket {
 		return time.Time{}, false, nil
 	}
-	now := time.Now().UTC()
+	now := time.Now()
 	key := marketCooldownKey{userID: order.UserID, side: order.Side}
 	s.marketCooldownMu.Lock()
 	defer s.marketCooldownMu.Unlock()
