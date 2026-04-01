@@ -660,7 +660,7 @@ func (s *MarketStore) procureInputsLocked(state *companyState, production int64,
 		return 0
 	}
 	cash := s.balances[state.UserID][defaultCurrency]
-	aborted := false
+	cashLimitReached := false
 	for _, recipe := range recipes {
 		for _, input := range recipe.Inputs {
 			if input.Quantity <= 0 {
@@ -688,13 +688,13 @@ func (s *MarketStore) procureInputsLocked(state *companyState, production int64,
 				if possible < production {
 					production = possible
 				}
-				aborted = true
+				cashLimitReached = true
 				break
 			}
 			cash -= cost
 			s.positions[state.UserID][input.AssetID] += shortfall
 		}
-		if aborted {
+		if cashLimitReached {
 			break
 		}
 	}
@@ -751,10 +751,11 @@ func (s *MarketStore) canAffordProductionLocked(state *companyState, production 
 			if cost > cash {
 				return false
 			}
-			if requiredCash > cash-cost {
+			sum := requiredCash + cost
+			if sum > cash {
 				return false
 			}
-			requiredCash += cost
+			requiredCash = sum
 		}
 	}
 	return true
