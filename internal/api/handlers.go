@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/h4ribote/Paper-Street/internal/auth"
@@ -17,22 +18,25 @@ import (
 )
 
 type Server struct {
-	Engine        *engine.Engine
-	APIKeys       *auth.APIKeyCache
-	Store         *MarketStore
-	WSHub         *wsHub
-	AdminPassword string
+	Engine           *engine.Engine
+	APIKeys          *auth.APIKeyCache
+	Store            *MarketStore
+	WSHub            *wsHub
+	AdminPassword    string
+	marketCooldownMu sync.Mutex
+	marketCooldown   map[marketCooldownKey]time.Time
 }
 
 type orderRequest struct {
-	AssetID   int64  `json:"asset_id"`
-	UserID    int64  `json:"user_id"`
-	Side      string `json:"side"`
-	Type      string `json:"type"`
-	Quantity  int64  `json:"quantity"`
-	Price     int64  `json:"price"`
-	StopPrice int64  `json:"stop_price"`
-	Leverage  int64  `json:"leverage"`
+	AssetID            int64  `json:"asset_id"`
+	UserID             int64  `json:"user_id"`
+	Side               string `json:"side"`
+	Type               string `json:"type"`
+	ExecutionCondition string `json:"execution_condition"`
+	Quantity           int64  `json:"quantity"`
+	Price              int64  `json:"price"`
+	StopPrice          int64  `json:"stop_price"`
+	Leverage           int64  `json:"leverage"`
 }
 
 type errorResponse struct {
@@ -42,6 +46,7 @@ type errorResponse struct {
 const (
 	defaultOrderBookDepth = 20
 	maxOrderBookDepth     = 100
+	marketOrderCooldown   = 5 * time.Second
 )
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -153,10 +158,16 @@ func (s *Server) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	prevCooldown, prevOK, err := s.reserveMarketCooldown(order)
+	if err != nil {
+		respondError(w, http.StatusTooManyRequests, err.Error())
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 	result, err := s.Engine.SubmitOrder(ctx, order)
 	if err != nil {
+		s.restoreMarketCooldown(order, prevCooldown, prevOK)
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -251,16 +262,64 @@ func (o orderRequest) toOrder(defaultUserID int64) (*engine.Order, error) {
 	if leverage > marginLeverageMax {
 		return nil, errors.New("leverage must be at most 5")
 	}
+	timeInForce := strings.ToUpper(strings.TrimSpace(o.ExecutionCondition))
+	if timeInForce == "" {
+		timeInForce = string(engine.TimeInForceGTC)
+	}
+	switch engine.TimeInForce(timeInForce) {
+	case engine.TimeInForceGTC, engine.TimeInForceIOC, engine.TimeInForceFOK:
+	default:
+		return nil, errors.New("invalid execution condition")
+	}
 	return &engine.Order{
-		AssetID:   o.AssetID,
-		UserID:    userID,
-		Side:      orderSide,
-		Type:      orderType,
-		Quantity:  o.Quantity,
-		Price:     o.Price,
-		StopPrice: o.StopPrice,
-		Leverage:  leverage,
+		AssetID:     o.AssetID,
+		UserID:      userID,
+		Side:        orderSide,
+		Type:        orderType,
+		TimeInForce: engine.TimeInForce(timeInForce),
+		Quantity:    o.Quantity,
+		Price:       o.Price,
+		StopPrice:   o.StopPrice,
+		Leverage:    leverage,
 	}, nil
+}
+
+type marketCooldownKey struct {
+	userID int64
+	side   engine.Side
+}
+
+func (s *Server) reserveMarketCooldown(order *engine.Order) (time.Time, bool, error) {
+	if s == nil || order == nil || order.Type != engine.OrderTypeMarket {
+		return time.Time{}, false, nil
+	}
+	now := time.Now().UTC()
+	key := marketCooldownKey{userID: order.UserID, side: order.Side}
+	s.marketCooldownMu.Lock()
+	defer s.marketCooldownMu.Unlock()
+	if s.marketCooldown == nil {
+		s.marketCooldown = make(map[marketCooldownKey]time.Time)
+	}
+	last, ok := s.marketCooldown[key]
+	if ok && now.Sub(last) < marketOrderCooldown {
+		return time.Time{}, false, errors.New("market order cooldown active")
+	}
+	s.marketCooldown[key] = now
+	return last, ok, nil
+}
+
+func (s *Server) restoreMarketCooldown(order *engine.Order, previous time.Time, hadPrevious bool) {
+	if s == nil || order == nil || order.Type != engine.OrderTypeMarket {
+		return
+	}
+	key := marketCooldownKey{userID: order.UserID, side: order.Side}
+	s.marketCooldownMu.Lock()
+	defer s.marketCooldownMu.Unlock()
+	if !hadPrevious {
+		delete(s.marketCooldown, key)
+		return
+	}
+	s.marketCooldown[key] = previous
 }
 
 func respondJSON(w http.ResponseWriter, status int, payload interface{}) {
