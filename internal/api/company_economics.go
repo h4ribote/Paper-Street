@@ -632,27 +632,12 @@ func (s *MarketStore) runCompanyProductionLocked(state *companyState, demandTota
 		return 0
 	}
 	targetOutput := state.MaxProductionCapacity
-	production := targetOutput
-	for _, recipe := range recipes {
-		for _, input := range recipe.Inputs {
-			available := s.positions[state.UserID][input.AssetID]
-			if input.Quantity <= 0 {
-				continue
-			}
-			possible := available / input.Quantity
-			if possible < production {
-				production = possible
-			}
-		}
-	}
+	affordableProduction := s.affordableProductionLocked(state, targetOutput, recipes, s.balances[state.UserID][defaultCurrency])
+	production := s.procureInputsLocked(state, affordableProduction, recipes)
 	if production < 0 {
 		production = 0
 	}
 	production = minInt64(production, targetOutput)
-	production = s.procureInputsLocked(state, production, recipes)
-	if production > targetOutput {
-		production = targetOutput
-	}
 	for _, recipe := range recipes {
 		for _, input := range recipe.Inputs {
 			consumed := production * input.Quantity
@@ -675,36 +660,105 @@ func (s *MarketStore) procureInputsLocked(state *companyState, production int64,
 		return 0
 	}
 	cash := s.balances[state.UserID][defaultCurrency]
+	cashLimitReached := false
 	for _, recipe := range recipes {
 		for _, input := range recipe.Inputs {
 			if input.Quantity <= 0 {
 				continue
 			}
-			required := production * input.Quantity
+			price := s.marketPriceLocked(input.AssetID)
+			if price <= 0 {
+				continue
+			}
+			required, ok := safeMultiplyInt64(production, input.Quantity)
+			if !ok {
+				continue
+			}
 			available := s.positions[state.UserID][input.AssetID]
 			if available >= required {
 				continue
 			}
 			shortfall := required - available
-			price := s.marketPriceLocked(input.AssetID)
-			if price <= 0 {
+			cost, ok := safeMultiplyInt64(shortfall, price)
+			if !ok {
 				continue
 			}
-			maxAffordable := cash / price
-			if maxAffordable <= 0 {
-				production = available / input.Quantity
-				continue
+			if cost > cash {
+				possible := available / input.Quantity
+				if possible < production {
+					production = possible
+				}
+				cashLimitReached = true
+				break
 			}
-			if shortfall > maxAffordable {
-				shortfall = maxAffordable
-			}
-			cost := shortfall * price
 			cash -= cost
 			s.positions[state.UserID][input.AssetID] += shortfall
+		}
+		if cashLimitReached {
+			break
 		}
 	}
 	s.balances[state.UserID][defaultCurrency] = cash
 	return production
+}
+
+func (s *MarketStore) affordableProductionLocked(state *companyState, target int64, recipes []ProductionRecipe, cash int64) int64 {
+	if target <= 0 {
+		return 0
+	}
+	low := int64(0)
+	high := target
+	best := int64(0)
+	for low <= high {
+		mid := low + (high-low)/2
+		if s.canAffordProductionLocked(state, mid, recipes, cash) {
+			best = mid
+			low = mid + 1
+			continue
+		}
+		high = mid - 1
+	}
+	return best
+}
+
+func (s *MarketStore) canAffordProductionLocked(state *companyState, production int64, recipes []ProductionRecipe, cash int64) bool {
+	if production <= 0 {
+		return true
+	}
+	requiredCash := int64(0)
+	for _, recipe := range recipes {
+		for _, input := range recipe.Inputs {
+			if input.Quantity <= 0 {
+				continue
+			}
+			required, ok := safeMultiplyInt64(production, input.Quantity)
+			if !ok {
+				return false
+			}
+			available := s.positions[state.UserID][input.AssetID]
+			if available >= required {
+				continue
+			}
+			price := s.marketPriceLocked(input.AssetID)
+			if price <= 0 {
+				return false
+			}
+			shortfall := required - available
+			cost, ok := safeMultiplyInt64(shortfall, price)
+			if !ok {
+				return false
+			}
+			if cost > cash {
+				return false
+			}
+			sum := requiredCash + cost
+			if sum > cash {
+				return false
+			}
+			requiredCash = sum
+		}
+	}
+	return true
 }
 
 func (s *MarketStore) runCompanySalesLocked(state *companyState, demandTotal, production int64) (int64, int64, int64) {
