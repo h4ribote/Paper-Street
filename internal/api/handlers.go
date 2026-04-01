@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -302,7 +304,12 @@ func (s *Server) checkAndSetMarketCooldown(order *engine.Order) (time.Time, bool
 	}
 	last, ok := s.marketCooldown[key]
 	if ok && last.Add(marketOrderCooldown).After(now) {
-		return time.Time{}, false, errors.New("market order cooldown active")
+		remaining := last.Add(marketOrderCooldown).Sub(now)
+		remainingSeconds := int(math.Ceil(remaining.Seconds()))
+		if remainingSeconds < 1 {
+			remainingSeconds = 1
+		}
+		return time.Time{}, false, fmt.Errorf("market order cooldown active, retry in %d seconds", remainingSeconds)
 	}
 	s.marketCooldown[key] = now
 	return last, ok, nil

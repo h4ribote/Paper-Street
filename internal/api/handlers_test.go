@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -273,6 +274,20 @@ func TestMarketOrderCooldown(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("expected status 429, got %d", resp.StatusCode)
+	}
+	var response errorResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if !strings.Contains(response.Error, "retry in ") {
+		t.Fatalf("expected retry message, got %q", response.Error)
+	}
+	var retrySeconds int
+	if _, err := fmt.Sscanf(response.Error, "market order cooldown active, retry in %d seconds", &retrySeconds); err != nil {
+		t.Fatalf("expected retry seconds in message, got %q", response.Error)
+	}
+	if retrySeconds <= 0 {
+		t.Fatalf("expected positive retry seconds, got %d", retrySeconds)
 	}
 }
 
