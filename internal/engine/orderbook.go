@@ -290,6 +290,11 @@ func (ob *OrderBook) match(order *Order) OrderResult {
 	var executions []Execution
 	var guardPrice int64
 	guardEnabled := order.Type == OrderTypeMarket
+	timeInForce := order.effectiveTimeInForce()
+	if timeInForce == TimeInForceFOK && !ob.canFill(order) {
+		order.cancel()
+		return OrderResult{Order: order.clone(), Executions: nil}
+	}
 	selfTradeReduced := false
 	for order.Remaining > 0 {
 		maker := ob.bestOpposing(order.Side)
@@ -304,7 +309,7 @@ func (ob *OrderBook) match(order *Order) OrderResult {
 			ob.removeMaker(maker)
 			maker.cancel()
 			ob.events.EnqueueOrder(maker)
-			if order.Type == OrderTypeMarket {
+			if order.Type == OrderTypeMarket && timeInForce != TimeInForceFOK {
 				order.Remaining -= selfTradeQty
 				selfTradeReduced = true
 				if order.Remaining == 0 {
@@ -345,11 +350,30 @@ func (ob *OrderBook) match(order *Order) OrderResult {
 		return OrderResult{Order: order.clone(), Executions: executions}
 	}
 
+	if timeInForce == TimeInForceFOK {
+		if order.Remaining == 0 {
+			order.Status = OrderStatusFilled
+		} else {
+			order.cancel()
+		}
+		return OrderResult{Order: order.clone(), Executions: executions}
+	}
+
 	if order.Remaining == 0 {
 		order.Status = OrderStatusFilled
 		return OrderResult{Order: order.clone(), Executions: executions}
 	}
 	if order.Type == OrderTypeMarket {
+		if len(executions) == 0 {
+			order.cancel()
+			return OrderResult{Order: order.clone(), Executions: executions}
+		}
+		order.Status = OrderStatusPartial
+		order.Remaining = 0
+		return OrderResult{Order: order.clone(), Executions: executions}
+	}
+
+	if timeInForce == TimeInForceIOC {
 		if len(executions) == 0 {
 			order.cancel()
 			return OrderResult{Order: order.clone(), Executions: executions}
@@ -370,6 +394,77 @@ func (ob *OrderBook) match(order *Order) OrderResult {
 	}
 	ob.addToBook(order)
 	return OrderResult{Order: order.clone(), Executions: executions}
+}
+
+func (ob *OrderBook) canFill(order *Order) bool {
+	if order == nil {
+		return false
+	}
+	if order.Remaining <= 0 {
+		return true
+	}
+	guardEnabled := order.Type == OrderTypeMarket
+	var guardPrice int64
+	if guardEnabled {
+		maker := ob.bestOpposing(order.Side)
+		if maker == nil {
+			return false
+		}
+		guardPrice = ob.guardFrom(maker.Price, order.Side)
+		if guardPrice == 0 {
+			return false
+		}
+	}
+	remaining := order.Remaining
+	if order.Side == SideBuy {
+		for i := 0; i < len(ob.asks.prices) && remaining > 0; i++ {
+			price := ob.asks.prices[i]
+			if !ob.priceAcceptable(order, price, guardEnabled, guardPrice) {
+				break
+			}
+			for _, maker := range ob.asks.levels[price] {
+				if maker.UserID == order.UserID {
+					continue
+				}
+				remaining -= maker.Remaining
+				if remaining <= 0 {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	for i := len(ob.bids.prices) - 1; i >= 0 && remaining > 0; i-- {
+		price := ob.bids.prices[i]
+		if !ob.priceAcceptable(order, price, guardEnabled, guardPrice) {
+			break
+		}
+		for _, maker := range ob.bids.levels[price] {
+			if maker.UserID == order.UserID {
+				continue
+			}
+			remaining -= maker.Remaining
+			if remaining <= 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (ob *OrderBook) priceAcceptable(order *Order, price int64, guardEnabled bool, guardPrice int64) bool {
+	if guardEnabled && !ob.guardSatisfied(price, guardPrice, order.Side) {
+		return false
+	}
+	switch order.Type {
+	case OrderTypeLimit, OrderTypeStopLimit:
+		if order.Side == SideBuy {
+			return price <= order.Price
+		}
+		return price >= order.Price
+	default:
+		return true
+	}
 }
 
 func (ob *OrderBook) addToBook(order *Order) {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -212,6 +213,81 @@ func TestHandleOrderBookDepthLimit(t *testing.T) {
 	}
 	if len(snapshot.Asks) != maxOrderBookDepth {
 		t.Fatalf("expected %d ask levels, got %d", maxOrderBookDepth, len(snapshot.Asks))
+	}
+}
+
+func TestMarketOrderCooldown(t *testing.T) {
+	store := NewMarketStore()
+	apiKeys := auth.NewAPIKeyCache()
+	if err := apiKeys.AddHex(testAPIKeyUser1); err != nil {
+		t.Fatalf("failed to add api key: %v", err)
+	}
+	if err := apiKeys.AddHex(testAPIKeyUser2); err != nil {
+		t.Fatalf("failed to add api key: %v", err)
+	}
+	store.RegisterAPIKey(testAPIKeyUser1, 1)
+	store.RegisterAPIKey(testAPIKeyUser2, 2)
+	store.EnsureUser(1)
+	store.EnsureUser(2)
+
+	eng := engine.NewEngine(store)
+	handler := NewRouter(eng, apiKeys, store, "")
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	submitOrder(t, server.URL, testAPIKeyUser2, orderRequest{
+		AssetID:  101,
+		UserID:   2,
+		Side:     "SELL",
+		Type:     "LIMIT",
+		Quantity: 10,
+		Price:    100,
+	})
+	submitOrder(t, server.URL, testAPIKeyUser1, orderRequest{
+		AssetID:  101,
+		UserID:   1,
+		Side:     "BUY",
+		Type:     "MARKET",
+		Quantity: 1,
+	})
+
+	payload, err := json.Marshal(orderRequest{
+		AssetID:  101,
+		UserID:   1,
+		Side:     "BUY",
+		Type:     "MARKET",
+		Quantity: 1,
+	})
+	if err != nil {
+		t.Fatalf("failed to marshal order: %v", err)
+	}
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/orders", bytes.NewReader(payload))
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(apiKeyHeader, testAPIKeyUser1)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("expected status 429, got %d", resp.StatusCode)
+	}
+	var response errorResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if !strings.Contains(response.Error, "retry in ") {
+		t.Fatalf("expected retry message, got %q", response.Error)
+	}
+	var retrySeconds int
+	if _, err := fmt.Sscanf(response.Error, "market order cooldown active, retry in %d seconds", &retrySeconds); err != nil {
+		t.Fatalf("expected retry seconds in message, got %q", response.Error)
+	}
+	if retrySeconds <= 0 {
+		t.Fatalf("expected positive retry seconds, got %d", retrySeconds)
 	}
 }
 

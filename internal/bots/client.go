@@ -20,13 +20,14 @@ type APIClient struct {
 }
 
 type OrderRequest struct {
-	AssetID   int64  `json:"asset_id"`
-	UserID    int64  `json:"user_id"`
-	Side      string `json:"side"`
-	Type      string `json:"type"`
-	Quantity  int64  `json:"quantity"`
-	Price     int64  `json:"price,omitempty"`
-	StopPrice int64  `json:"stop_price,omitempty"`
+	AssetID     int64  `json:"asset_id"`
+	UserID      int64  `json:"user_id"`
+	Side        string `json:"side"`
+	Type        string `json:"type"`
+	TimeInForce string `json:"time_in_force,omitempty"`
+	Quantity    int64  `json:"quantity"`
+	Price       int64  `json:"price,omitempty"`
+	StopPrice   int64  `json:"stop_price,omitempty"`
 }
 
 type orderResponse struct {

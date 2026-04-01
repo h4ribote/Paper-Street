@@ -52,6 +52,66 @@ func TestMarketOrderGuard(t *testing.T) {
 	}
 }
 
+func TestIOCOrderCancelsRemainder(t *testing.T) {
+	eng := NewEngine(NewDiscardSink())
+	ctx := context.Background()
+	_, _ = eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 2, Side: SideSell, Type: OrderTypeLimit, Quantity: 5, Price: 100})
+
+	buy, _ := eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 1, Side: SideBuy, Type: OrderTypeLimit, TimeInForce: TimeInForceIOC, Quantity: 10, Price: 100})
+	if len(buy.Executions) != 1 {
+		t.Fatalf("expected 1 execution, got %d", len(buy.Executions))
+	}
+	if buy.Order.Status != OrderStatusPartial {
+		t.Fatalf("expected partial status, got %s", buy.Order.Status)
+	}
+	if buy.Order.Remaining != 0 {
+		t.Fatalf("expected remaining cancelled, got %d", buy.Order.Remaining)
+	}
+	snapshot, err := eng.Snapshot(ctx, 1, 10)
+	if err != nil {
+		t.Fatalf("snapshot failed: %v", err)
+	}
+	if len(snapshot.Bids) != 0 {
+		t.Fatalf("expected no resting bids, got %d", len(snapshot.Bids))
+	}
+}
+
+func TestFOKOrderRejectsInsufficientLiquidity(t *testing.T) {
+	eng := NewEngine(NewDiscardSink())
+	ctx := context.Background()
+	sell, _ := eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 2, Side: SideSell, Type: OrderTypeLimit, Quantity: 5, Price: 100})
+
+	buy, _ := eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 1, Side: SideBuy, Type: OrderTypeLimit, TimeInForce: TimeInForceFOK, Quantity: 10, Price: 100})
+	if len(buy.Executions) != 0 {
+		t.Fatalf("expected no executions, got %d", len(buy.Executions))
+	}
+	if buy.Order.Status != OrderStatusCancelled {
+		t.Fatalf("expected cancelled status, got %s", buy.Order.Status)
+	}
+	resting, ok := eng.FindOrder(1, sell.Order.ID)
+	if !ok || resting.Status != OrderStatusOpen {
+		t.Fatalf("expected resting sell order, got %+v", resting)
+	}
+}
+
+func TestFOKOrderFillsEntirely(t *testing.T) {
+	eng := NewEngine(NewDiscardSink())
+	ctx := context.Background()
+	_, _ = eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 2, Side: SideSell, Type: OrderTypeLimit, Quantity: 5, Price: 100})
+	_, _ = eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 3, Side: SideSell, Type: OrderTypeLimit, Quantity: 5, Price: 100})
+
+	buy, _ := eng.SubmitOrder(ctx, &Order{AssetID: 1, UserID: 1, Side: SideBuy, Type: OrderTypeLimit, TimeInForce: TimeInForceFOK, Quantity: 10, Price: 100})
+	if len(buy.Executions) != 2 {
+		t.Fatalf("expected 2 executions, got %d", len(buy.Executions))
+	}
+	if buy.Order.Status != OrderStatusFilled {
+		t.Fatalf("expected filled status, got %s", buy.Order.Status)
+	}
+	if buy.Order.Remaining != 0 {
+		t.Fatalf("expected no remaining, got %d", buy.Order.Remaining)
+	}
+}
+
 func TestSelfTradePrevention(t *testing.T) {
 	eng := NewEngine(NewDiscardSink())
 	ctx := context.Background()
