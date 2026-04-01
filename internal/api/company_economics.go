@@ -688,7 +688,13 @@ func (s *MarketStore) procureInputsLocked(state *companyState, production int64,
 			}
 			if cost > cash {
 				shortfall = cash / price
-				cost = shortfall * price
+				if shortfall <= 0 {
+					continue
+				}
+				cost, ok = safeMultiplyInt64(shortfall, price)
+				if !ok || cost <= 0 || cost > cash {
+					continue
+				}
 			}
 			if shortfall <= 0 || cost <= 0 {
 				continue
@@ -748,10 +754,14 @@ func (s *MarketStore) canAffordProductionLocked(state *companyState, production 
 			if cost > cash {
 				return false
 			}
-			if requiredCash > cash-cost {
+			sum := requiredCash + cost
+			if sum < requiredCash {
 				return false
 			}
-			requiredCash += cost
+			if sum > cash {
+				return false
+			}
+			requiredCash = sum
 		}
 	}
 	return true
