@@ -632,9 +632,7 @@ func (s *MarketStore) runCompanyProductionLocked(state *companyState, demandTota
 		return 0
 	}
 	targetOutput := state.MaxProductionCapacity
-	affordableProduction := s.affordableProductionLocked(state, targetOutput, recipes, s.balances[state.UserID][defaultCurrency])
-	production := affordableProduction
-	production = s.procureInputsLocked(state, production, recipes)
+	production := s.procureInputsLocked(state, s.affordableProductionLocked(state, targetOutput, recipes, s.balances[state.UserID][defaultCurrency]), recipes)
 	if production < 0 {
 		production = 0
 	}
@@ -687,7 +685,7 @@ func (s *MarketStore) procureInputsLocked(state *companyState, production int64,
 				continue
 			}
 			if cost > cash {
-				shortfall = cash / price
+				shortfall = minInt64(shortfall, cash/price)
 				if shortfall <= 0 {
 					continue
 				}
@@ -713,15 +711,17 @@ func (s *MarketStore) affordableProductionLocked(state *companyState, target int
 	}
 	low := int64(0)
 	high := target
-	for low < high {
-		mid := low + (high-low+1)/2
+	best := int64(0)
+	for low <= high {
+		mid := low + (high-low)/2
 		if s.canAffordProductionLocked(state, mid, recipes, cash) {
-			low = mid
+			best = mid
+			low = mid + 1
 			continue
 		}
 		high = mid - 1
 	}
-	return low
+	return best
 }
 
 func (s *MarketStore) canAffordProductionLocked(state *companyState, production int64, recipes []ProductionRecipe, cash int64) bool {
@@ -754,14 +754,10 @@ func (s *MarketStore) canAffordProductionLocked(state *companyState, production 
 			if cost > cash {
 				return false
 			}
-			sum := requiredCash + cost
-			if sum < requiredCash {
+			if requiredCash > cash-cost {
 				return false
 			}
-			if sum > cash {
-				return false
-			}
-			requiredCash = sum
+			requiredCash += cost
 		}
 	}
 	return true
