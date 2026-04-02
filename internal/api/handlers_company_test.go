@@ -259,6 +259,7 @@ func TestCompanyDividendDistributionCoversSpotPoolAndMargin(t *testing.T) {
 	store.storeFinancialReportLocked(101, report)
 	companyStartCash := store.balances[state.UserID][defaultCurrency]
 	spotStartCash := store.balances[spotUser][defaultCurrency]
+	poolProviderStartCash := store.balances[poolUser][defaultCurrency]
 	longStartMargin := store.marginPositions[5001].MarginUsed
 	shortStartFees := store.marginPositions[5002].AccumulatedFees
 	poolStartCash := store.marginPools[poolID].TotalCash
@@ -284,6 +285,10 @@ func TestCompanyDividendDistributionCoversSpotPoolAndMargin(t *testing.T) {
 		store.mu.RUnlock()
 		t.Fatalf("expected spot holder to receive dividend, start=%d got=%d", spotStartCash, got)
 	}
+	if got := store.balances[poolUser][defaultCurrency]; got <= poolProviderStartCash {
+		store.mu.RUnlock()
+		t.Fatalf("expected pool asset provider to receive short-side dividend, start=%d got=%d", poolProviderStartCash, got)
+	}
 	if got := store.marginPositions[5001].MarginUsed; got <= longStartMargin {
 		store.mu.RUnlock()
 		t.Fatalf("expected margin long to receive dividend credit, start=%d got=%d", longStartMargin, got)
@@ -292,9 +297,9 @@ func TestCompanyDividendDistributionCoversSpotPoolAndMargin(t *testing.T) {
 		store.mu.RUnlock()
 		t.Fatalf("expected margin short to be charged dividend, start=%d got=%d", shortStartFees, got)
 	}
-	if got := store.marginPools[poolID].TotalCash; got <= poolStartCash {
+	if got := store.marginPools[poolID].TotalCash; got < poolStartCash {
 		store.mu.RUnlock()
-		t.Fatalf("expected margin pool cash to increase, start=%d got=%d", poolStartCash, got)
+		t.Fatalf("expected margin pool cash to be preserved or increased, start=%d got=%d", poolStartCash, got)
 	}
 	if record.PoolPayout <= 0 {
 		store.mu.RUnlock()

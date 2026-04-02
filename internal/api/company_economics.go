@@ -737,10 +737,14 @@ func (s *MarketStore) applyCompanyDividendLocked(state *companyState, report Com
 				shortCharge += charge
 			}
 			if shortCharge > 0 {
-				pool := s.marginPools[poolID]
-				pool.TotalCash += shortCharge
-				pool.CashRateBps, pool.AssetRateBps = marginRates(pool)
-				s.marginPools[poolID] = pool
+				distributed := s.distributeShortDividendToAssetProvidersLocked(poolID, shortCharge)
+				if distributed < shortCharge {
+					remaining := shortCharge - distributed
+					pool := s.marginPools[poolID]
+					pool.TotalCash += remaining
+					pool.CashRateBps, pool.AssetRateBps = marginRates(pool)
+					s.marginPools[poolID] = pool
+				}
 			}
 		}
 	}
@@ -826,6 +830,68 @@ func (s *MarketStore) marginPoolByAssetLocked(assetID int64) (int64, MarginPool,
 		}
 	}
 	return 0, MarginPool{}, false
+}
+
+func (s *MarketStore) distributeShortDividendToAssetProvidersLocked(poolID, amount int64) int64 {
+	if poolID == 0 || amount <= 0 {
+		return 0
+	}
+	type providerCandidate struct {
+		userID    int64
+		shares    int64
+		amount    int64
+		remainder int64
+	}
+	candidates := make([]providerCandidate, 0)
+	totalShares := int64(0)
+	for key, provider := range s.marginProviders {
+		if key.PoolID != poolID || provider.AssetShares <= 0 {
+			continue
+		}
+		candidates = append(candidates, providerCandidate{
+			userID: key.UserID,
+			shares: provider.AssetShares,
+		})
+		totalShares += provider.AssetShares
+	}
+	if totalShares <= 0 || len(candidates) == 0 {
+		return 0
+	}
+	distributed := int64(0)
+	for i, candidate := range candidates {
+		numerator, ok := safeMultiplyInt64(amount, candidate.shares)
+		if !ok || numerator <= 0 {
+			continue
+		}
+		candidates[i].amount = numerator / totalShares
+		candidates[i].remainder = numerator % totalShares
+		distributed += candidates[i].amount
+	}
+	remaining := amount - distributed
+	if remaining > 0 {
+		sort.Slice(candidates, func(i, j int) bool {
+			if candidates[i].remainder == candidates[j].remainder {
+				return candidates[i].shares > candidates[j].shares
+			}
+			return candidates[i].remainder > candidates[j].remainder
+		})
+		limit := int(remaining)
+		if limit > len(candidates) {
+			limit = len(candidates)
+		}
+		for i := 0; i < limit; i++ {
+			candidates[i].amount++
+		}
+		distributed += int64(limit)
+	}
+	for _, candidate := range candidates {
+		if candidate.amount <= 0 {
+			continue
+		}
+		s.ensureUserLocked(candidate.userID)
+		s.balances[candidate.userID][defaultCurrency] += candidate.amount
+	}
+	return distributed
 }
 
 func splitDemandRevenue(revenue int64, demand CompanyDemandBreakdown) (int64, int64) {
