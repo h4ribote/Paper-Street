@@ -120,6 +120,25 @@ type FinancialReportRecord struct {
 	PublishedAt     int64
 }
 
+type CompanyDividendRecord struct {
+	CompanyID          int64
+	AssetID            int64
+	FiscalYear         int
+	FiscalQuarter      int
+	NetIncome          int64
+	PayoutRatioBps     int64
+	DividendPerShare   int64
+	CompanyPayout      int64
+	PoolPayout         int64
+	SpotPayout         int64
+	MarginLongPayout   int64
+	MarginShortCharge  int64
+	EligibleSpotShares int64
+	EligibleLongShares int64
+	PoolShares         int64
+	CreatedAt          int64
+}
+
 func NewQueries(conn *Connection) *Queries {
 	return &Queries{Conn: conn}
 }
@@ -840,6 +859,92 @@ func (q *Queries) UpsertFinancialReport(ctx context.Context, report FinancialRep
 			inventory_level = VALUES(inventory_level),
 			guidance = VALUES(guidance),
 			published_at = VALUES(published_at)
+	`, args...)
+	return err
+}
+
+func (q *Queries) ListCompanyDividends(ctx context.Context) ([]CompanyDividendRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT
+			company_id, asset_id, fiscal_year, fiscal_quarter, net_income, payout_ratio_bps,
+			dividend_per_share, company_payout, pool_payout, spot_payout, margin_long_payout,
+			margin_short_charge, eligible_spot_shares, eligible_long_shares, pool_shares, created_at
+		FROM company_dividends
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []CompanyDividendRecord
+	for rows.Next() {
+		var record CompanyDividendRecord
+		if err := rows.Scan(
+			&record.CompanyID,
+			&record.AssetID,
+			&record.FiscalYear,
+			&record.FiscalQuarter,
+			&record.NetIncome,
+			&record.PayoutRatioBps,
+			&record.DividendPerShare,
+			&record.CompanyPayout,
+			&record.PoolPayout,
+			&record.SpotPayout,
+			&record.MarginLongPayout,
+			&record.MarginShortCharge,
+			&record.EligibleSpotShares,
+			&record.EligibleLongShares,
+			&record.PoolShares,
+			&record.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) UpsertCompanyDividend(ctx context.Context, record CompanyDividendRecord) error {
+	if record.CompanyID == 0 {
+		return errors.New("company id required")
+	}
+	args := []interface{}{
+		record.CompanyID,
+		record.AssetID,
+		record.FiscalYear,
+		record.FiscalQuarter,
+		record.NetIncome,
+		record.PayoutRatioBps,
+		record.DividendPerShare,
+		record.CompanyPayout,
+		record.PoolPayout,
+		record.SpotPayout,
+		record.MarginLongPayout,
+		record.MarginShortCharge,
+		record.EligibleSpotShares,
+		record.EligibleLongShares,
+		record.PoolShares,
+		record.CreatedAt,
+	}
+	_, err := q.Conn.DB.ExecContext(ctx, `
+		INSERT INTO company_dividends (
+			company_id, asset_id, fiscal_year, fiscal_quarter, net_income, payout_ratio_bps, dividend_per_share,
+			company_payout, pool_payout, spot_payout, margin_long_payout, margin_short_charge,
+			eligible_spot_shares, eligible_long_shares, pool_shares, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+			asset_id = VALUES(asset_id),
+			net_income = VALUES(net_income),
+			payout_ratio_bps = VALUES(payout_ratio_bps),
+			dividend_per_share = VALUES(dividend_per_share),
+			company_payout = VALUES(company_payout),
+			pool_payout = VALUES(pool_payout),
+			spot_payout = VALUES(spot_payout),
+			margin_long_payout = VALUES(margin_long_payout),
+			margin_short_charge = VALUES(margin_short_charge),
+			eligible_spot_shares = VALUES(eligible_spot_shares),
+			eligible_long_shares = VALUES(eligible_long_shares),
+			pool_shares = VALUES(pool_shares),
+			created_at = VALUES(created_at)
 	`, args...)
 	return err
 }

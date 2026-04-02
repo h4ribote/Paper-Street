@@ -1878,6 +1878,9 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 	if err := s.loadFinancialReportsFromDB(ctx); err != nil {
 		return err
 	}
+	if err := s.loadCompanyDividendsFromDB(ctx); err != nil {
+		return err
+	}
 	if err := s.loadNewsFromDB(ctx); err != nil {
 		return err
 	}

@@ -330,9 +330,22 @@ func (s *MarketStore) SimulateCompanyQuarter(companyID int64, now time.Time) (Co
 	}
 	result := s.runCompanyQuarterLocked(state, now)
 	report := result.Report
+	var dividendRecord CompanyDividendRecord
+	hasDividendRecord := false
+	records := s.companyDividends[companyID]
+	if len(records) > 0 {
+		latest := records[len(records)-1]
+		if latest.FiscalYear == report.FiscalYear && latest.FiscalQuarter == report.FiscalQuarter {
+			dividendRecord = latest
+			hasDividendRecord = true
+		}
+	}
 	s.mu.Unlock()
 	s.persistCompanyState(state)
 	s.persistFinancialReport(report)
+	if hasDividendRecord {
+		s.persistCompanyDividend(dividendRecord)
+	}
 	return result, nil
 }
 
@@ -719,7 +732,7 @@ func (s *MarketStore) applyCompanyDividendLocked(state *companyState, report Com
 	}
 	s.balances[state.UserID][defaultCurrency] -= companyCashSpent
 
-	// Short positions pay manufactured dividends into the margin pool cash bucket.
+	// Short positions pay manufactured dividends to stock providers in the margin pool.
 	if hasPool {
 		shortPerShare := dividendPerShare * scaleBps / bpsDenominator
 		if shortPerShare > 0 {

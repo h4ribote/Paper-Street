@@ -124,6 +124,37 @@ func (s *MarketStore) loadFinancialReportsFromDB(ctx context.Context) error {
 	return nil
 }
 
+func (s *MarketStore) loadCompanyDividendsFromDB(ctx context.Context) error {
+	if s.queries == nil {
+		return nil
+	}
+	records, err := s.queries.ListCompanyDividends(ctx)
+	if err != nil {
+		return err
+	}
+	for _, record := range records {
+		s.companyDividends[record.CompanyID] = append(s.companyDividends[record.CompanyID], CompanyDividendRecord{
+			CompanyID:          record.CompanyID,
+			AssetID:            record.AssetID,
+			FiscalYear:         record.FiscalYear,
+			FiscalQuarter:      record.FiscalQuarter,
+			NetIncome:          record.NetIncome,
+			PayoutRatioBps:     record.PayoutRatioBps,
+			DividendPerShare:   record.DividendPerShare,
+			CompanyPayout:      record.CompanyPayout,
+			PoolPayout:         record.PoolPayout,
+			SpotPayout:         record.SpotPayout,
+			MarginLongPayout:   record.MarginLongPayout,
+			MarginShortCharge:  record.MarginShortCharge,
+			EligibleSpotShares: record.EligibleSpotShares,
+			EligibleLongShares: record.EligibleLongShares,
+			PoolShares:         record.PoolShares,
+			CreatedAt:          record.CreatedAt,
+		})
+	}
+	return nil
+}
+
 func (s *MarketStore) persistCompanyState(state *companyState) {
 	if s.queries == nil || state == nil {
 		return
@@ -168,5 +199,34 @@ func (s *MarketStore) persistFinancialReport(report CompanyFinancialReport) {
 	}
 	if err := s.queries.UpsertFinancialReport(ctx, record); err != nil {
 		log.Printf("db upsert financial report %d: %v", report.CompanyID, err)
+	}
+}
+
+func (s *MarketStore) persistCompanyDividend(record CompanyDividendRecord) {
+	if s.queries == nil || record.CompanyID == 0 {
+		return
+	}
+	ctx, cancel := s.dbContext()
+	defer cancel()
+	dividend := db.CompanyDividendRecord{
+		CompanyID:          record.CompanyID,
+		AssetID:            record.AssetID,
+		FiscalYear:         record.FiscalYear,
+		FiscalQuarter:      record.FiscalQuarter,
+		NetIncome:          record.NetIncome,
+		PayoutRatioBps:     record.PayoutRatioBps,
+		DividendPerShare:   record.DividendPerShare,
+		CompanyPayout:      record.CompanyPayout,
+		PoolPayout:         record.PoolPayout,
+		SpotPayout:         record.SpotPayout,
+		MarginLongPayout:   record.MarginLongPayout,
+		MarginShortCharge:  record.MarginShortCharge,
+		EligibleSpotShares: record.EligibleSpotShares,
+		EligibleLongShares: record.EligibleLongShares,
+		PoolShares:         record.PoolShares,
+		CreatedAt:          record.CreatedAt,
+	}
+	if err := s.queries.UpsertCompanyDividend(ctx, dividend); err != nil {
+		log.Printf("db upsert company dividend %d: %v", record.CompanyID, err)
 	}
 }
