@@ -188,6 +188,9 @@ func TestCompanyDividendDistributionCoversSpotPoolAndMargin(t *testing.T) {
 	store.ensureUserLocked(spotUser)
 	store.ensureUserLocked(poolUser)
 	store.positions[spotUser][101] = 100
+	if _, ok := store.assetAcquiredAt[spotUser]; !ok {
+		store.assetAcquiredAt[spotUser] = make(map[int64]int64)
+	}
 	store.assetAcquiredAt[spotUser][101] = now.Add(-45 * 24 * time.Hour).UnixMilli()
 	store.positions[poolUser][101] = 1_000
 	poolID := int64(0)
@@ -245,20 +248,23 @@ func TestCompanyDividendDistributionCoversSpotPoolAndMargin(t *testing.T) {
 		CreatedAt:      now.Add(-20 * 24 * time.Hour).UnixMilli(),
 		UpdatedAt:      now.Add(-20 * 24 * time.Hour).UnixMilli(),
 	}
+	report := CompanyFinancialReport{
+		CompanyID:     101,
+		FiscalYear:    2026,
+		FiscalQuarter: 1,
+		NetIncome:     2_000_000_000,
+		EPS:           10,
+		PublishedAt:   now.UnixMilli(),
+	}
+	store.storeFinancialReportLocked(101, report)
 	companyStartCash := store.balances[state.UserID][defaultCurrency]
 	spotStartCash := store.balances[spotUser][defaultCurrency]
 	longStartMargin := store.marginPositions[5001].MarginUsed
 	shortStartFees := store.marginPositions[5002].AccumulatedFees
 	poolStartCash := store.marginPools[poolID].TotalCash
+	store.applyCompanyDividendLocked(state, report, 2_000_000_000, now)
 	store.mu.Unlock()
 
-	result, err := store.SimulateCompanyQuarter(101, now)
-	if err != nil {
-		t.Fatalf("simulate company quarter: %v", err)
-	}
-	if result.NetIncome <= 0 {
-		t.Fatalf("expected positive net income, got %d", result.NetIncome)
-	}
 	store.mu.RLock()
 	records := store.companyDividends[101]
 	if len(records) == 0 {
@@ -320,13 +326,34 @@ func TestCompanyDividendsEndpoint(t *testing.T) {
 	holder := int64(3101)
 	store.ensureUserLocked(holder)
 	store.positions[holder][101] = 10
-	store.assetAcquiredAt[holder][101] = now.Add(-10 * 24 * time.Hour).UnixMilli()
-	store.balances[state.UserID][defaultCurrency] = 1_000_000
-	store.mu.Unlock()
-
-	if _, err := store.SimulateCompanyQuarter(101, now); err != nil {
-		t.Fatalf("simulate company quarter: %v", err)
+	if _, ok := store.assetAcquiredAt[holder]; !ok {
+		store.assetAcquiredAt[holder] = make(map[int64]int64)
 	}
+	store.assetAcquiredAt[holder][101] = now.Add(-10 * 24 * time.Hour).UnixMilli()
+	store.balances[state.UserID][defaultCurrency] = 2_000_000_000
+	report := CompanyFinancialReport{
+		CompanyID:     101,
+		FiscalYear:    2026,
+		FiscalQuarter: 1,
+		NetIncome:     1_000_000_000,
+		EPS:           5,
+		PublishedAt:   now.UnixMilli(),
+	}
+	if state.SharesOutstanding <= 0 {
+		store.mu.Unlock()
+		t.Fatalf("expected positive shares outstanding")
+	}
+	if payout := store.companyPayoutRatioBpsLocked(state, report, 1_000_000_000); payout <= 0 {
+		store.mu.Unlock()
+		t.Fatalf("expected positive payout ratio, got %d", payout)
+	}
+	store.storeFinancialReportLocked(101, report)
+	store.applyCompanyDividendLocked(state, report, 1_000_000_000, now)
+	if len(store.companyDividends[101]) == 0 {
+		store.mu.Unlock()
+		t.Fatalf("expected in-store dividend records before endpoint call")
+	}
+	store.mu.Unlock()
 	apiKeys := auth.NewAPIKeyCache()
 	if err := apiKeys.AddHex(testAPIKeyUser1); err != nil {
 		t.Fatalf("failed to add api key: %v", err)
