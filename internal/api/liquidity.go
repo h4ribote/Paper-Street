@@ -716,6 +716,10 @@ func (s *MarketStore) seedMarginPools() {
 }
 
 func (s *MarketStore) seedIndexes() {
+	if _, ok := s.indexes[201]; ok {
+		// Already loaded (e.g. from DB) — skip re-seeding.
+		return
+	}
 	indexAsset := models.Asset{
 		ID:     201,
 		Symbol: "TRI",
@@ -731,6 +735,7 @@ func (s *MarketStore) seedIndexes() {
 	}
 	s.indexes[indexAsset.ID] = definition
 	s.basePrices[indexAsset.ID] = s.indexUnitPriceLocked(definition)
+	s.persistIndex(definition)
 }
 
 func (s *MarketStore) ensureIndexLocked(assetID int64) IndexDefinition {
@@ -759,6 +764,7 @@ func (s *MarketStore) ensureIndexLocked(assetID int64) IndexDefinition {
 	}
 	s.assets[assetID] = asset
 	s.basePrices[assetID] = s.indexUnitPriceLocked(definition)
+	go s.persistIndex(definition)
 	return definition
 }
 
@@ -855,6 +861,35 @@ func (s *MarketStore) indexUnitPriceLocked(definition IndexDefinition) int64 {
 		total = defaultAssetPrice
 	}
 	return total
+}
+
+// IndexInfo holds the definition and current NAV of an index.
+type IndexInfo struct {
+	Definition IndexDefinition `json:"definition"`
+	NAV        int64           `json:"nav"`
+}
+
+// Index returns the definition and current NAV for a single index asset, or false if not found.
+func (s *MarketStore) Index(assetID int64) (IndexInfo, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	def, ok := s.indexes[assetID]
+	if !ok {
+		return IndexInfo{}, false
+	}
+	return IndexInfo{Definition: def, NAV: s.indexUnitPriceLocked(def)}, true
+}
+
+// Indexes returns definition and current NAV for all known index assets.
+func (s *MarketStore) Indexes() []IndexInfo {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]IndexInfo, 0, len(s.indexes))
+	for _, def := range s.indexes {
+		result = append(result, IndexInfo{Definition: def, NAV: s.indexUnitPriceLocked(def)})
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Definition.AssetID < result[j].Definition.AssetID })
+	return result
 }
 
 func marginRates(pool MarginPool) (cashRate int64, assetRate int64) {

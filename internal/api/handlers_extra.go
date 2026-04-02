@@ -908,13 +908,44 @@ func (s *Server) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleIndices(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/indices/")
 	segments := strings.Split(strings.Trim(path, "/"), "/")
-	if len(segments) < 2 {
-		respondError(w, http.StatusBadRequest, "asset id and action required")
+
+	// GET /indices/ — list all index definitions with current NAV.
+	if r.Method == http.MethodGet && (path == "" || path == "/") {
+		if s.Store == nil {
+			respondError(w, http.StatusInternalServerError, "store unavailable")
+			return
+		}
+		respondJSON(w, http.StatusOK, s.Store.Indexes())
+		return
+	}
+
+	if len(segments) < 1 || segments[0] == "" {
+		respondError(w, http.StatusBadRequest, "asset id required")
 		return
 	}
 	assetID, err := parseID(segments[0])
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid asset id")
+		return
+	}
+
+	// GET /indices/{assetID} — return index definition and current NAV.
+	if r.Method == http.MethodGet && len(segments) == 1 {
+		if s.Store == nil {
+			respondError(w, http.StatusInternalServerError, "store unavailable")
+			return
+		}
+		info, ok := s.Store.Index(assetID)
+		if !ok {
+			respondError(w, http.StatusNotFound, "index not found")
+			return
+		}
+		respondJSON(w, http.StatusOK, info)
+		return
+	}
+
+	if len(segments) < 2 {
+		respondError(w, http.StatusBadRequest, "asset id and action required")
 		return
 	}
 	action := segments[1]

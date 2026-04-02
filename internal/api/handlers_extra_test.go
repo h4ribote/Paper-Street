@@ -270,6 +270,66 @@ func TestIndexUnitPriceUsesFXRates(t *testing.T) {
 	}
 }
 
+func TestIndexGetEndpoints(t *testing.T) {
+	store := NewMarketStore()
+	apiKeys := auth.NewAPIKeyCache()
+	if err := apiKeys.AddHex(testAPIKeyUser1); err != nil {
+		t.Fatalf("failed to add api key: %v", err)
+	}
+	store.RegisterAPIKey(testAPIKeyUser1, 1)
+	eng := engine.NewEngine(store)
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
+	defer server.Close()
+
+	// GET /indices/ — list all indexes.
+	var indexes []IndexInfo
+	getJSON(t, server.URL+"/indices/", testAPIKeyUser1, &indexes)
+	if len(indexes) == 0 {
+		t.Fatal("expected at least one index in list")
+	}
+	found := false
+	for _, idx := range indexes {
+		if idx.Definition.AssetID == 201 {
+			found = true
+			if idx.NAV <= 0 {
+				t.Fatalf("expected positive NAV for TRI index, got %d", idx.NAV)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("TRI index (asset 201) not found in index list: %+v", indexes)
+	}
+
+	// GET /indices/201 — get specific index.
+	var info IndexInfo
+	getJSON(t, server.URL+"/indices/201", testAPIKeyUser1, &info)
+	if info.Definition.AssetID != 201 {
+		t.Fatalf("expected index asset_id 201, got %d", info.Definition.AssetID)
+	}
+	if info.NAV <= 0 {
+		t.Fatalf("expected positive NAV, got %d", info.NAV)
+	}
+	if len(info.Definition.Components) == 0 {
+		t.Fatal("expected non-empty components")
+	}
+
+	// GET /indices/9999 — unknown index should return 404.
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/indices/9999", nil)
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	req.Header.Set(apiKeyHeader, testAPIKeyUser1)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("get unknown index: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404 for unknown index, got %d", resp.StatusCode)
+	}
+}
+
 func TestWebSocketTickerSubscription(t *testing.T) {
 	store := NewMarketStore()
 	apiKeys := auth.NewAPIKeyCache()
