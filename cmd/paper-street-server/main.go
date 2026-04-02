@@ -46,6 +46,8 @@ func main() {
 	api.StartNewsEngine(newsCtx, store, engine, newsConfig)
 	marginCtx, marginCancel := context.WithCancel(context.Background())
 	api.StartMarginMaintenance(marginCtx, store, 0)
+	companyCtx, companyCancel := context.WithCancel(context.Background())
+	api.StartCompanyEconomyCycle(companyCtx, store, 0)
 	server := &http.Server{
 		Addr:         ":" + port,
 		Handler:      handler,
@@ -64,6 +66,7 @@ func main() {
 	<-quit
 	newsCancel()
 	marginCancel()
+	companyCancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

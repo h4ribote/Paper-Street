@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -37,6 +38,9 @@ const (
 	dividendBonusTier2Bps         = int64(12_000)
 	dividendBonusTier3Bps         = int64(13_000)
 	dividendPayoutCapBps          = int64(8_000)
+	companyGuidanceLead           = macroQuarterPeriod / 2
+	companyDividendSettlementWait = 24 * time.Hour
+	defaultCompanyEconomyInterval = time.Hour
 )
 
 type companyState struct {
@@ -66,6 +70,8 @@ type companyState struct {
 	ActiveCapex           *capexProject
 	LastFinancingAt       int64
 	LastBuybackAt         int64
+	LastGuidanceAt        int64
+	LastGuidance          string
 }
 
 type capexProject struct {
@@ -191,6 +197,33 @@ type CompanyDividendRecord struct {
 	EligibleLongShares int64 `json:"eligible_long_shares"`
 	PoolShares         int64 `json:"pool_shares"`
 	CreatedAt          int64 `json:"created_at"`
+	PayableAt          int64 `json:"payable_at,omitempty"`
+}
+
+type pendingBalanceCredit struct {
+	UserID int64
+	Amount int64
+}
+
+type pendingMarginCredit struct {
+	PositionID int64
+	UserID     int64
+	Amount     int64
+}
+
+type pendingMarginCharge struct {
+	PositionID int64
+	Amount     int64
+}
+
+type pendingCompanyDividend struct {
+	Record               CompanyDividendRecord
+	SpotCredits          []pendingBalanceCredit
+	MarginLongCredits    []pendingMarginCredit
+	MarginShortCharges   []pendingMarginCharge
+	ShortProviderCredits []pendingBalanceCredit
+	PoolID               int64
+	ShortPoolResidual    int64
 }
 
 type CompanySimulationResult struct {
@@ -520,10 +553,92 @@ func (s *MarketStore) maybeRunCompanyCycleLocked(state *companyState, now time.T
 		return
 	}
 	elapsed := now.Sub(time.UnixMilli(state.LastProductionAt))
+	s.maybePublishGuidanceLocked(state, now)
+	s.settlePendingCompanyDividendsLocked(state, now)
 	if elapsed < macroQuarterPeriod {
 		return
 	}
 	_ = s.runCompanyQuarterLocked(state, now)
+}
+
+func (s *MarketStore) maybePublishGuidanceLocked(state *companyState, now time.Time) {
+	if state == nil {
+		return
+	}
+	if state.LastProductionAt <= 0 {
+		return
+	}
+	if state.LastGuidanceAt >= state.LastProductionAt {
+		return
+	}
+	elapsed := now.Sub(time.UnixMilli(state.LastProductionAt))
+	if elapsed < companyGuidanceLead {
+		return
+	}
+	guidance := s.buildGuidanceLocked(state, now)
+	if strings.TrimSpace(guidance) == "" {
+		return
+	}
+	year, quarter := fiscalPeriod(time.UnixMilli(state.LastProductionAt).Add(macroQuarterPeriod))
+	report := CompanyFinancialReport{
+		CompanyID:       state.Company.ID,
+		FiscalYear:      year,
+		FiscalQuarter:   quarter,
+		Revenue:         0,
+		NetIncome:       0,
+		EPS:             0,
+		Capex:           0,
+		UtilizationRate: state.UtilizationRate,
+		InventoryLevel:  state.CurrentInventory,
+		Guidance:        guidance,
+		PublishedAt:     now.UnixMilli(),
+	}
+	s.storeFinancialReportLocked(state.Company.ID, report)
+	s.persistFinancialReport(report)
+	s.addNewsLocked(fmt.Sprintf("[GUIDANCE] %s updates outlook: %s", state.Company.Name, guidance), state.Company.ID, "GUIDANCE")
+	state.LastGuidanceAt = now.UnixMilli()
+	state.LastGuidance = guidance
+}
+
+func (s *MarketStore) buildGuidanceLocked(state *companyState, now time.Time) string {
+	if state == nil {
+		return ""
+	}
+	remaining := macroQuarterPeriod
+	if state.LastProductionAt > 0 {
+		elapsed := now.Sub(time.UnixMilli(state.LastProductionAt))
+		if elapsed >= macroQuarterPeriod {
+			remaining = 0
+		} else if elapsed > 0 {
+			remaining = macroQuarterPeriod - elapsed
+		}
+	}
+	demand := s.calculateCompanyDemandLocked(state)
+	projectedSales := minInt64(state.CurrentInventory+state.MaxProductionCapacity, demand.Total)
+	projectedPrice := s.marketPriceLocked(state.OutputAssetID)
+	if projectedPrice <= 0 {
+		projectedPrice = defaultAssetPrice
+	}
+	projectedRevenue := projectedSales * projectedPrice
+	weeks := int64(remaining / macroWeekPeriod)
+	if weeks <= 0 {
+		weeks = 1
+	}
+	weeklyFixed := state.MaxProductionCapacity * defaultFixedCostPerUnit / 2
+	projectedFixedCost := weeklyFixed * weeks
+	if projectedFixedCost < 0 {
+		projectedFixedCost = 0
+	}
+	projectedCOGS := state.COGSPerUnit * projectedSales
+	projectedNet := projectedRevenue - projectedCOGS - projectedFixedCost
+	projectedEPS := int64(0)
+	if state.SharesOutstanding > 0 {
+		projectedEPS = projectedNet / state.SharesOutstanding
+	}
+	if projectedEPS >= 0 {
+		return fmt.Sprintf("Projected revenue %d ARC, EPS %+d; demand %d, utilization %d bps.", projectedRevenue, projectedEPS, demand.Total, state.UtilizationRate)
+	}
+	return fmt.Sprintf("Projected revenue %d ARC, EPS %d; demand %d, utilization %d bps.", projectedRevenue, projectedEPS, demand.Total, state.UtilizationRate)
 }
 
 func (s *MarketStore) runCompanyQuarterLocked(state *companyState, now time.Time) CompanySimulationResult {
@@ -549,13 +664,20 @@ func (s *MarketStore) runCompanyQuarterLocked(state *companyState, now time.Time
 
 	report := s.buildFinancialReportLocked(state, netIncome, revenue, capexCost, now)
 	result.Report = report
-	s.applyCompanyDividendLocked(state, report, netIncome, now)
+	s.queueCompanyDividendLocked(state, report, netIncome, now)
+	state.LastGuidanceAt = 0
+	state.LastGuidance = ""
 
 	s.evaluateFinancingLocked(state, demand, now)
 	return result
 }
 
 func (s *MarketStore) applyCompanyDividendLocked(state *companyState, report CompanyFinancialReport, netIncome int64, now time.Time) {
+	s.queueCompanyDividendLocked(state, report, netIncome, now)
+	s.settlePendingCompanyDividendsLocked(state, now.Add(companyDividendSettlementWait))
+}
+
+func (s *MarketStore) queueCompanyDividendLocked(state *companyState, report CompanyFinancialReport, netIncome int64, now time.Time) {
 	if state == nil || state.Company.ID == 0 || state.SharesOutstanding <= 0 || netIncome <= 0 {
 		return
 	}
@@ -692,16 +814,17 @@ func (s *MarketStore) applyCompanyDividendLocked(state *companyState, report Com
 			return
 		}
 	}
+	spotPlanned := make([]pendingBalanceCredit, 0, len(spotCredits))
 	for _, credit := range spotCredits {
 		amount := credit.amount * scaleBps / bpsDenominator
 		if amount <= 0 {
 			continue
 		}
-		s.ensureUserLocked(credit.userID)
-		s.balances[credit.userID][defaultCurrency] += amount
 		spotPayout += amount
 		companyCashSpent += amount
+		spotPlanned = append(spotPlanned, pendingBalanceCredit{UserID: credit.userID, Amount: amount})
 	}
+	longPlanned := make([]pendingMarginCredit, 0, len(longCredits))
 	for _, credit := range longCredits {
 		amount := credit.amount * scaleBps / bpsDenominator
 		if amount <= 0 {
@@ -711,28 +834,38 @@ func (s *MarketStore) applyCompanyDividendLocked(state *companyState, report Com
 		if !ok {
 			continue
 		}
-		position.MarginUsed += amount
-		position.UpdatedAt = nowMillis
-		s.marginPositions[credit.positionID] = position
 		marginLongPayout += amount
 		companyCashSpent += amount
+		longPlanned = append(longPlanned, pendingMarginCredit{
+			PositionID: credit.positionID,
+			UserID:     position.UserID,
+			Amount:     amount,
+		})
 	}
+	poolPlanned := int64(0)
 	if hasPool && poolCompanyPayout > 0 {
 		amount := poolCompanyPayout * scaleBps / bpsDenominator
 		if amount > 0 {
-			pool.TotalCash += amount
-			pool.CashRateBps, pool.AssetRateBps = marginRates(pool)
-			s.marginPools[poolID] = pool
 			poolPayout += amount
 			companyCashSpent += amount
+			poolPlanned = amount
 		}
 	}
 	if companyCashSpent <= 0 {
 		return
 	}
-	s.balances[state.UserID][defaultCurrency] -= companyCashSpent
+	companyCash := s.balances[state.UserID][defaultCurrency]
+	if companyCashSpent > companyCash {
+		companyCashSpent = companyCash
+	}
+	if companyCashSpent <= 0 {
+		return
+	}
 
 	// Short positions pay manufactured dividends to stock providers in the margin pool.
+	shortCharges := make([]pendingMarginCharge, 0)
+	shortProviderCredits := make([]pendingBalanceCredit, 0)
+	shortPoolResidual := int64(0)
 	if hasPool {
 		shortPerShare := dividendPerShare * scaleBps / bpsDenominator
 		if shortPerShare > 0 {
@@ -744,24 +877,15 @@ func (s *MarketStore) applyCompanyDividendLocked(state *companyState, report Com
 				if !ok || charge <= 0 {
 					continue
 				}
-				position.AccumulatedFees += charge
-				position.UpdatedAt = nowMillis
-				s.marginPositions[positionID] = position
+				shortCharges = append(shortCharges, pendingMarginCharge{PositionID: positionID, Amount: charge})
 				shortCharge += charge
 			}
 			if shortCharge > 0 {
-				distributed := s.distributeShortDividendToAssetProvidersLocked(poolID, shortCharge)
-				if distributed < shortCharge {
-					remaining := shortCharge - distributed
-					pool := s.marginPools[poolID]
-					pool.TotalCash += remaining
-					pool.CashRateBps, pool.AssetRateBps = marginRates(pool)
-					s.marginPools[poolID] = pool
-				}
+				shortProviderCredits, shortPoolResidual = s.planShortDividendDistributionLocked(poolID, shortCharge)
 			}
 		}
 	}
-	s.companyDividends[state.Company.ID] = append(s.companyDividends[state.Company.ID], CompanyDividendRecord{
+	record := CompanyDividendRecord{
 		CompanyID:          state.Company.ID,
 		AssetID:            state.Company.ID,
 		FiscalYear:         report.FiscalYear,
@@ -778,7 +902,160 @@ func (s *MarketStore) applyCompanyDividendLocked(state *companyState, report Com
 		EligibleLongShares: eligibleLongShares,
 		PoolShares:         poolShares,
 		CreatedAt:          nowMillis,
+		PayableAt:          now.Add(companyDividendSettlementWait).UnixMilli(),
+	}
+	s.pendingCompanyDividends[state.Company.ID] = append(s.pendingCompanyDividends[state.Company.ID], pendingCompanyDividend{
+		Record:               record,
+		SpotCredits:          spotPlanned,
+		MarginLongCredits:    longPlanned,
+		MarginShortCharges:   shortCharges,
+		ShortProviderCredits: shortProviderCredits,
+		PoolID:               poolID,
+		ShortPoolResidual:    shortPoolResidual + poolPlanned,
 	})
+}
+
+func (s *MarketStore) settlePendingCompanyDividendsLocked(state *companyState, now time.Time) {
+	if state == nil || state.Company.ID == 0 {
+		return
+	}
+	pending := s.pendingCompanyDividends[state.Company.ID]
+	if len(pending) == 0 {
+		return
+	}
+	nowMillis := now.UnixMilli()
+	remaining := make([]pendingCompanyDividend, 0, len(pending))
+	for _, entry := range pending {
+		if entry.Record.PayableAt > 0 && entry.Record.PayableAt > nowMillis {
+			remaining = append(remaining, entry)
+			continue
+		}
+		companyCash := s.balances[state.UserID][defaultCurrency]
+		if entry.Record.CompanyPayout > companyCash {
+			remaining = append(remaining, entry)
+			continue
+		}
+		s.balances[state.UserID][defaultCurrency] -= entry.Record.CompanyPayout
+		for _, credit := range entry.SpotCredits {
+			if credit.Amount <= 0 {
+				continue
+			}
+			s.ensureUserLocked(credit.UserID)
+			s.balances[credit.UserID][defaultCurrency] += credit.Amount
+		}
+		for _, credit := range entry.MarginLongCredits {
+			if credit.Amount <= 0 {
+				continue
+			}
+			position, ok := s.marginPositions[credit.PositionID]
+			if !ok {
+				continue
+			}
+			position.MarginUsed += credit.Amount
+			position.UpdatedAt = nowMillis
+			s.marginPositions[credit.PositionID] = position
+		}
+		for _, charge := range entry.MarginShortCharges {
+			if charge.Amount <= 0 {
+				continue
+			}
+			position, ok := s.marginPositions[charge.PositionID]
+			if !ok {
+				continue
+			}
+			position.AccumulatedFees += charge.Amount
+			position.UpdatedAt = nowMillis
+			s.marginPositions[charge.PositionID] = position
+		}
+		for _, credit := range entry.ShortProviderCredits {
+			if credit.Amount <= 0 {
+				continue
+			}
+			s.ensureUserLocked(credit.UserID)
+			s.balances[credit.UserID][defaultCurrency] += credit.Amount
+		}
+		if entry.PoolID != 0 {
+			pool, ok := s.marginPools[entry.PoolID]
+			if ok {
+				if entry.Record.PoolPayout > 0 {
+					pool.TotalCash += entry.Record.PoolPayout
+				}
+				if entry.ShortPoolResidual > 0 {
+					pool.TotalCash += entry.ShortPoolResidual
+				}
+				pool.CashRateBps, pool.AssetRateBps = marginRates(pool)
+				s.marginPools[entry.PoolID] = pool
+			}
+		}
+		s.companyDividends[state.Company.ID] = append(s.companyDividends[state.Company.ID], entry.Record)
+		s.persistCompanyDividend(entry.Record)
+	}
+	s.pendingCompanyDividends[state.Company.ID] = remaining
+}
+
+func (s *MarketStore) planShortDividendDistributionLocked(poolID, amount int64) ([]pendingBalanceCredit, int64) {
+	if poolID == 0 || amount <= 0 {
+		return nil, 0
+	}
+	type providerCandidate struct {
+		userID    int64
+		shares    int64
+		amount    int64
+		remainder int64
+	}
+	candidates := make([]providerCandidate, 0)
+	totalShares := int64(0)
+	for key, provider := range s.marginProviders {
+		if key.PoolID != poolID || provider.AssetShares <= 0 {
+			continue
+		}
+		candidates = append(candidates, providerCandidate{
+			userID: key.UserID,
+			shares: provider.AssetShares,
+		})
+		totalShares += provider.AssetShares
+	}
+	if totalShares <= 0 || len(candidates) == 0 {
+		return nil, amount
+	}
+	distributed := int64(0)
+	for i, candidate := range candidates {
+		numerator, ok := safeMultiplyInt64(amount, candidate.shares)
+		if !ok || numerator <= 0 {
+			continue
+		}
+		candidates[i].amount = numerator / totalShares
+		candidates[i].remainder = numerator % totalShares
+		distributed += candidates[i].amount
+	}
+	remaining := amount - distributed
+	if remaining > 0 {
+		sort.Slice(candidates, func(i, j int) bool {
+			if candidates[i].remainder == candidates[j].remainder {
+				return candidates[i].shares > candidates[j].shares
+			}
+			return candidates[i].remainder > candidates[j].remainder
+		})
+		limit := int(remaining)
+		if limit > len(candidates) {
+			limit = len(candidates)
+		}
+		for i := 0; i < limit; i++ {
+			candidates[i].amount++
+		}
+		distributed += int64(limit)
+	}
+	credits := make([]pendingBalanceCredit, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.amount <= 0 {
+			continue
+		}
+		credits = append(credits, pendingBalanceCredit{
+			UserID: candidate.userID,
+			Amount: candidate.amount,
+		})
+	}
+	return credits, amount - distributed
 }
 
 func (s *MarketStore) companyPayoutRatioBpsLocked(state *companyState, report CompanyFinancialReport, netIncome int64) int64 {
@@ -1347,6 +1624,20 @@ func (s *MarketStore) evaluateFinancingLocked(state *companyState, demand Compan
 		_, _ = s.initiateEquityFinancingLocked(state, CompanyFinancingRequest{Reason: "SAFETY_MARGIN"})
 		return
 	}
+	if state.ActiveCapex != nil {
+		required := state.ActiveCapex.Cost
+		if required <= 0 {
+			required = state.MaxProductionCapacity * defaultCapexCostPerUnit
+		}
+		if required > 0 && cash < required {
+			target := required - cash + weeklyCost
+			if target < 0 {
+				target = weeklyCost
+			}
+			_, _ = s.initiateEquityFinancingLocked(state, CompanyFinancingRequest{Reason: "CAPEX", TargetAmount: target})
+			return
+		}
+	}
 	if ma > 0 && price > ma*overvaluationPriceBps/bpsDenominator && pe > overvaluationPERatioBps {
 		_, _ = s.initiateEquityFinancingLocked(state, CompanyFinancingRequest{Reason: "OVERVALUATION"})
 		return
@@ -1354,6 +1645,42 @@ func (s *MarketStore) evaluateFinancingLocked(state *companyState, demand Compan
 	if cash > weeklyCost*excessCashWeeks && (ma == 0 || price < ma*undervaluationPriceBps/bpsDenominator) {
 		_, _ = s.authorizeShareBuybackLocked(state, CompanyBuybackRequest{})
 	}
+}
+
+func StartCompanyEconomyCycle(ctx context.Context, store *MarketStore, interval time.Duration) {
+	if store == nil || ctx == nil {
+		return
+	}
+	if interval <= 0 {
+		interval = defaultCompanyEconomyInterval
+	}
+	ticker := time.NewTicker(interval)
+	go func() {
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				store.runCompanyEconomyCycle()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
+func (s *MarketStore) runCompanyEconomyCycle() {
+	if s == nil {
+		return
+	}
+	now := time.Now().UTC()
+	s.mu.Lock()
+	for _, state := range s.companyStates {
+		if state == nil {
+			continue
+		}
+		s.maybeRunCompanyCycleLocked(state, now)
+	}
+	s.mu.Unlock()
 }
 
 func (s *MarketStore) initiateEquityFinancingLocked(state *companyState, req CompanyFinancingRequest) (CompanyFinancingResult, error) {
