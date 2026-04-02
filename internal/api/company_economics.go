@@ -226,6 +226,13 @@ type pendingCompanyDividend struct {
 	ShortPoolResidual    int64
 }
 
+type dividendProviderCandidate struct {
+	userID    int64
+	shares    int64
+	amount    int64
+	remainder int64
+}
+
 type CompanySimulationResult struct {
 	CompanyID  int64                  `json:"company_id"`
 	Demand     CompanyDemandBreakdown `json:"demand"`
@@ -624,6 +631,8 @@ func (s *MarketStore) buildGuidanceLocked(state *companyState, now time.Time) st
 	if weeks <= 0 {
 		weeks = 1
 	}
+	// Existing cost model defines weekly fixed cost as "capacity * fixed / 2".
+	// Guidance uses the same weekly baseline to stay consistent with P/L simulation.
 	weeklyFixed := state.MaxProductionCapacity * defaultFixedCostPerUnit / 2
 	projectedFixedCost := weeklyFixed * weeks
 	if projectedFixedCost < 0 {
@@ -997,19 +1006,13 @@ func (s *MarketStore) planShortDividendDistributionLocked(poolID, amount int64) 
 	if poolID == 0 || amount <= 0 {
 		return nil, 0
 	}
-	type providerCandidate struct {
-		userID    int64
-		shares    int64
-		amount    int64
-		remainder int64
-	}
-	candidates := make([]providerCandidate, 0)
+	candidates := make([]dividendProviderCandidate, 0)
 	totalShares := int64(0)
 	for key, provider := range s.marginProviders {
 		if key.PoolID != poolID || provider.AssetShares <= 0 {
 			continue
 		}
-		candidates = append(candidates, providerCandidate{
+		candidates = append(candidates, dividendProviderCandidate{
 			userID: key.UserID,
 			shares: provider.AssetShares,
 		})
@@ -1030,20 +1033,7 @@ func (s *MarketStore) planShortDividendDistributionLocked(poolID, amount int64) 
 	}
 	remaining := amount - distributed
 	if remaining > 0 {
-		sort.Slice(candidates, func(i, j int) bool {
-			if candidates[i].remainder == candidates[j].remainder {
-				return candidates[i].shares > candidates[j].shares
-			}
-			return candidates[i].remainder > candidates[j].remainder
-		})
-		limit := int(remaining)
-		if limit > len(candidates) {
-			limit = len(candidates)
-		}
-		for i := 0; i < limit; i++ {
-			candidates[i].amount++
-		}
-		distributed += int64(limit)
+		distributed += distributeProviderRemainder(candidates, remaining)
 	}
 	credits := make([]pendingBalanceCredit, 0, len(candidates))
 	for _, candidate := range candidates {
@@ -1126,19 +1116,13 @@ func (s *MarketStore) distributeShortDividendToAssetProvidersLocked(poolID, amou
 	if poolID == 0 || amount <= 0 {
 		return 0
 	}
-	type providerCandidate struct {
-		userID    int64
-		shares    int64
-		amount    int64
-		remainder int64
-	}
-	candidates := make([]providerCandidate, 0)
+	candidates := make([]dividendProviderCandidate, 0)
 	totalShares := int64(0)
 	for key, provider := range s.marginProviders {
 		if key.PoolID != poolID || provider.AssetShares <= 0 {
 			continue
 		}
-		candidates = append(candidates, providerCandidate{
+		candidates = append(candidates, dividendProviderCandidate{
 			userID: key.UserID,
 			shares: provider.AssetShares,
 		})
@@ -1159,20 +1143,7 @@ func (s *MarketStore) distributeShortDividendToAssetProvidersLocked(poolID, amou
 	}
 	remaining := amount - distributed
 	if remaining > 0 {
-		sort.Slice(candidates, func(i, j int) bool {
-			if candidates[i].remainder == candidates[j].remainder {
-				return candidates[i].shares > candidates[j].shares
-			}
-			return candidates[i].remainder > candidates[j].remainder
-		})
-		limit := int(remaining)
-		if limit > len(candidates) {
-			limit = len(candidates)
-		}
-		for i := 0; i < limit; i++ {
-			candidates[i].amount++
-		}
-		distributed += int64(limit)
+		distributed += distributeProviderRemainder(candidates, remaining)
 	}
 	for _, candidate := range candidates {
 		if candidate.amount <= 0 {
@@ -1182,6 +1153,26 @@ func (s *MarketStore) distributeShortDividendToAssetProvidersLocked(poolID, amou
 		s.balances[candidate.userID][defaultCurrency] += candidate.amount
 	}
 	return distributed
+}
+
+func distributeProviderRemainder(candidates []dividendProviderCandidate, remaining int64) int64 {
+	if remaining <= 0 || len(candidates) == 0 {
+		return 0
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].remainder == candidates[j].remainder {
+			return candidates[i].shares > candidates[j].shares
+		}
+		return candidates[i].remainder > candidates[j].remainder
+	})
+	limit := len(candidates)
+	if remaining < int64(limit) {
+		limit = int(remaining)
+	}
+	for i := 0; i < limit; i++ {
+		candidates[i].amount++
+	}
+	return int64(limit)
 }
 
 func splitDemandRevenue(revenue int64, demand CompanyDemandBreakdown) (int64, int64) {
@@ -1627,6 +1618,8 @@ func (s *MarketStore) evaluateFinancingLocked(state *companyState, demand Compan
 	if state.ActiveCapex != nil {
 		required := state.ActiveCapex.Cost
 		if required <= 0 {
+			// Fallback estimate for legacy/empty capex cost records:
+			// approximate one full-capacity upgrade block cost.
 			required = state.MaxProductionCapacity * defaultCapexCostPerUnit
 		}
 		if required > 0 && cash < required {
@@ -1648,8 +1641,11 @@ func (s *MarketStore) evaluateFinancingLocked(state *companyState, demand Compan
 }
 
 func StartCompanyEconomyCycle(ctx context.Context, store *MarketStore, interval time.Duration) {
-	if store == nil || ctx == nil {
+	if store == nil {
 		return
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 	if interval <= 0 {
 		interval = defaultCompanyEconomyInterval
