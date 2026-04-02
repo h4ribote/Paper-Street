@@ -143,6 +143,9 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
     *   生産レシピと原材料の構成を取得します。
 *   `GET /companies/{company_id}/financials`
     *   企業の四半期決算データを取得します。`limit` で件数を指定できます。
+*   `GET /companies/{company_id}/dividends`
+    *   企業の四半期配当実績を取得します。`limit` で件数を指定できます。
+    *   レコードには1株配当、配当性向、現物保有者への支払い、信用プール/信用建玉への反映結果が含まれます。
 *   `POST /companies/{company_id}/simulate`
     *   企業の四半期シミュレーションを実行します。Body: `quarters` (任意、デフォルト1)。
 

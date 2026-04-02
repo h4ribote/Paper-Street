@@ -83,6 +83,17 @@ func (s *Server) handleCompanyOperations(w http.ResponseWriter, r *http.Request)
 		}
 		limit := parseLimit(r, 8)
 		respondJSON(w, http.StatusOK, s.Store.CompanyFinancialReports(companyID, limit))
+	case "dividends":
+		if r.Method != http.MethodGet {
+			respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		if s.Store == nil {
+			respondError(w, http.StatusInternalServerError, "store unavailable")
+			return
+		}
+		limit := parseLimit(r, 8)
+		respondJSON(w, http.StatusOK, s.Store.CompanyDividends(companyID, limit))
 	case "simulate":
 		if r.Method != http.MethodPost {
 			respondError(w, http.StatusMethodNotAllowed, "method not allowed")

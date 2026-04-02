@@ -122,6 +122,30 @@ CREATE TABLE IF NOT EXISTS financial_reports (
     UNIQUE(company_id, fiscal_year, fiscal_quarter)
 );
 
+-- 企業配当実績 (Company Dividend Records)
+CREATE TABLE IF NOT EXISTS company_dividends (
+    dividend_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    company_id INT NOT NULL,
+    asset_id INT NOT NULL,
+    fiscal_year INT NOT NULL,
+    fiscal_quarter INT NOT NULL COMMENT '1, 2, 3, 4',
+    net_income BIGINT DEFAULT 0,
+    payout_ratio_bps BIGINT DEFAULT 0,
+    dividend_per_share BIGINT DEFAULT 0,
+    company_payout BIGINT DEFAULT 0,
+    pool_payout BIGINT DEFAULT 0,
+    spot_payout BIGINT DEFAULT 0,
+    margin_long_payout BIGINT DEFAULT 0,
+    margin_short_charge BIGINT DEFAULT 0,
+    eligible_spot_shares BIGINT DEFAULT 0,
+    eligible_long_shares BIGINT DEFAULT 0,
+    pool_shares BIGINT DEFAULT 0,
+    created_at BIGINT NOT NULL,
+
+    FOREIGN KEY (company_id) REFERENCES companies(company_id),
+    UNIQUE(company_id, fiscal_year, fiscal_quarter)
+);
+
 -- 資産マスタ (Tradable Assets: Stock, Bond, Index, etc.)
 CREATE TABLE IF NOT EXISTS assets (
     asset_id INT AUTO_INCREMENT PRIMARY KEY,
