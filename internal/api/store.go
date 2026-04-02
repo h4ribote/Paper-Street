@@ -1865,6 +1865,10 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 		return err
 	}
 
+	if err := s.loadIndexesFromDB(ctx); err != nil {
+		return err
+	}
+
 	if err := s.loadCompaniesFromDB(ctx); err != nil {
 		return err
 	}

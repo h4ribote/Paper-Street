@@ -53,6 +53,11 @@ type PerpetualBondRecord struct {
 	PaymentFrequency string
 }
 
+type IndexConstituentRecord struct {
+	IndexAssetID     int64
+	ComponentAssetID int64
+}
+
 type ExecutionRecord struct {
 	ID           int64
 	AssetID      int64
@@ -947,4 +952,46 @@ func (q *Queries) UpsertCompanyDividend(ctx context.Context, record CompanyDivid
 			created_at = VALUES(created_at)
 	`, args...)
 	return err
+}
+
+func (q *Queries) ListIndexConstituents(ctx context.Context) ([]IndexConstituentRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT index_asset_id, component_asset_id
+		FROM index_constituents
+		ORDER BY index_asset_id, component_asset_id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []IndexConstituentRecord
+	for rows.Next() {
+		var r IndexConstituentRecord
+		if err := rows.Scan(&r.IndexAssetID, &r.ComponentAssetID); err != nil {
+			return nil, err
+		}
+		records = append(records, r)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) UpsertIndexConstituents(ctx context.Context, indexAssetID int64, componentAssetIDs []int64) error {
+	if indexAssetID == 0 {
+		return errors.New("index asset id required")
+	}
+	_, err := q.Conn.DB.ExecContext(ctx, `DELETE FROM index_constituents WHERE index_asset_id = ?`, indexAssetID)
+	if err != nil {
+		return err
+	}
+	for _, componentID := range componentAssetIDs {
+		_, err := q.Conn.DB.ExecContext(ctx, `
+			INSERT INTO index_constituents (index_asset_id, component_asset_id)
+			VALUES (?, ?)
+			ON DUPLICATE KEY UPDATE component_asset_id = VALUES(component_asset_id)
+		`, indexAssetID, componentID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
