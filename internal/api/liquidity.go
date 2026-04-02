@@ -667,9 +667,6 @@ func (s *MarketStore) updateIndexHoldings(userID, assetID, quantity int64, isCre
 }
 
 func (s *MarketStore) seedPools() {
-	if len(s.pools) > 0 {
-		return
-	}
 	pairs := []struct {
 		quote string
 		tick  int64
@@ -689,6 +686,9 @@ func (s *MarketStore) seedPools() {
 		}
 		poolID += 2
 		for _, pool := range pools {
+			if _, exists := s.pools[pool.ID]; exists {
+				continue
+			}
 			s.pools[pool.ID] = pool
 			s.currencies[pool.BaseCurrency] = struct{}{}
 			s.currencies[pool.QuoteCurrency] = struct{}{}
@@ -699,9 +699,6 @@ func (s *MarketStore) seedPools() {
 }
 
 func (s *MarketStore) seedMarginPools() {
-	if len(s.marginPools) > 0 {
-		return
-	}
 	if len(s.companyStates) == 0 {
 		return
 	}
@@ -735,6 +732,10 @@ func (s *MarketStore) seedMarginPools() {
 		}
 		pool = normalizeMarginPoolShares(pool)
 		pool.CashRateBps, pool.AssetRateBps = marginRates(pool)
+		if _, exists := s.marginPools[pool.ID]; exists {
+			poolID++
+			continue
+		}
 		s.marginPools[pool.ID] = pool
 		poolSnapshot := pool
 		go s.persistMarginPool(poolSnapshot)

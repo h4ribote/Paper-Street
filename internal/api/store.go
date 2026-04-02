@@ -562,7 +562,12 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 		return nil, err
 	}
 	store.mu.Lock()
-	if len(store.macroIndicators) == 0 {
+	quarterIndex := macroPeriodIndex(now, macroQuarterPeriod)
+	weekIndex := macroPeriodIndex(now, macroWeekPeriod)
+	needsRefresh := len(store.macroIndicators) == 0 ||
+		store.macroQuarterIndex != quarterIndex ||
+		store.macroWeekIndex != weekIndex
+	if needsRefresh {
 		store.refreshMacroIndicatorsLocked(now)
 	}
 	store.persistWorldState()

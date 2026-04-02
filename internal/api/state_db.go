@@ -99,10 +99,6 @@ func (s *MarketStore) loadMarginStateFromDB(ctx context.Context) error {
 		if position.Side == "SHORT" {
 			side = engine.SideSell
 		}
-		leverage := position.Leverage
-		if leverage >= 100 {
-			leverage = leverage / 100
-		}
 		marginPosition := MarginPosition{
 			ID:           position.ID,
 			UserID:       position.UserID,
@@ -111,7 +107,7 @@ func (s *MarketStore) loadMarginStateFromDB(ctx context.Context) error {
 			Quantity:     position.Quantity,
 			EntryPrice:   position.EntryPrice,
 			CurrentPrice: position.CurrentPrice,
-			Leverage:     leverage,
+			Leverage:     position.Leverage,
 			MarginUsed:   position.MarginUsed,
 			CreatedAt:    position.CreatedAt,
 			UpdatedAt:    position.UpdatedAt,

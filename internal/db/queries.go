@@ -1223,9 +1223,6 @@ func (q *Queries) UpsertLiquidityPosition(ctx context.Context, record LiquidityP
 		updatedAt = now.UTC().UnixMilli()
 	}
 	liquidity := record.Liquidity
-	if liquidity == 0 {
-		liquidity = record.BaseAmount + record.QuoteAmount
-	}
 	_, err := q.Conn.DB.ExecContext(ctx, `
 		INSERT INTO liquidity_positions (
 			position_id, pool_id, user_id, tick_lower, tick_upper, liquidity,
@@ -1237,7 +1234,7 @@ func (q *Queries) UpsertLiquidityPosition(ctx context.Context, record LiquidityP
 			user_id = VALUES(user_id),
 			tick_lower = VALUES(tick_lower),
 			tick_upper = VALUES(tick_upper),
-			liquidity = VALUES(liquidity),
+			liquidity = IF(VALUES(liquidity)=0, liquidity, VALUES(liquidity)),
 			tokens_owed_0 = VALUES(tokens_owed_0),
 			tokens_owed_1 = VALUES(tokens_owed_1),
 			updated_at = VALUES(updated_at)
@@ -1356,18 +1353,14 @@ func (q *Queries) UpsertMarginPoolProvider(ctx context.Context, record MarginPoo
 	if updatedAt == 0 {
 		updatedAt = now.UTC().UnixMilli()
 	}
-	providerID := record.ID
-	if providerID == 0 {
-		providerID = record.UserID*1_000_000 + record.PoolID
-	}
 	_, err := q.Conn.DB.ExecContext(ctx, `
-		INSERT INTO margin_pool_providers (provider_id, pool_id, user_id, cash_shares, asset_shares, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO margin_pool_providers (pool_id, user_id, cash_shares, asset_shares, updated_at)
+		VALUES (?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			cash_shares = VALUES(cash_shares),
 			asset_shares = VALUES(asset_shares),
 			updated_at = VALUES(updated_at)
-	`, providerID, record.PoolID, record.UserID, record.CashShares, record.AssetShares, updatedAt)
+	`, record.PoolID, record.UserID, record.CashShares, record.AssetShares, updatedAt)
 	return err
 }
 
@@ -1402,10 +1395,6 @@ func (q *Queries) UpsertMarginPosition(ctx context.Context, record MarginPositio
 	if strings.TrimSpace(record.Side) == "" {
 		return errors.New("position side required")
 	}
-	leverage := record.Leverage
-	if leverage < 100 {
-		leverage *= 100
-	}
 	side := strings.ToUpper(strings.TrimSpace(record.Side))
 	switch side {
 	case "BUY", "LONG":
@@ -1430,7 +1419,7 @@ func (q *Queries) UpsertMarginPosition(ctx context.Context, record MarginPositio
 			margin_used = VALUES(margin_used),
 			unrealized_pl = VALUES(unrealized_pl),
 			updated_at = VALUES(updated_at)
-	`, record.ID, record.UserID, record.AssetID, side, record.Quantity, record.EntryPrice, record.CurrentPrice, leverage, record.MarginUsed, record.UnrealizedPL, record.CreatedAt, record.UpdatedAt)
+	`, record.ID, record.UserID, record.AssetID, side, record.Quantity, record.EntryPrice, record.CurrentPrice, record.Leverage, record.MarginUsed, record.UnrealizedPL, record.CreatedAt, record.UpdatedAt)
 	return err
 }
 
