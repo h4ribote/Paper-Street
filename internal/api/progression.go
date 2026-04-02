@@ -486,14 +486,17 @@ func (s *MarketStore) pruneContractsLocked(now time.Time) {
 	for id, contract := range s.contracts {
 		if contract == nil {
 			delete(s.contracts, id)
+			go s.deleteContract(id)
 			continue
 		}
 		if contract.Delivered >= contract.TotalRequired {
 			delete(s.contracts, id)
+			go s.deleteContract(id)
 			continue
 		}
 		if contract.DeadlineAt > 0 && nowMillis > contract.DeadlineAt {
 			delete(s.contracts, id)
+			go s.deleteContract(id)
 		}
 	}
 }
@@ -507,6 +510,8 @@ func (s *MarketStore) ensureContractKindLocked(now time.Time, kind contractKind)
 	contract := s.generateContractLocked(now, kind)
 	if contract != nil {
 		s.contracts[contract.ID] = contract
+		contractSnapshot := *contract
+		go s.persistContract(&contractSnapshot)
 	}
 }
 
@@ -845,8 +850,15 @@ func (s *MarketStore) DeliverContract(userID, contractID, quantity int64) (Contr
 	status := s.contractStatusLocked(contract, userID)
 	info := s.userRankInfoLocked(userID)
 	cash := s.balances[userID][defaultCurrency]
+	assetQty := s.positions[userID][contract.AssetID]
+	contractAssetID := contract.AssetID
+	contractIDSnapshot := contract.ID
+	contractSnapshot := *contract
 	s.mu.Unlock()
 	s.persistUser(user, cash)
+	s.persistAssetBalance(userID, contractAssetID, assetQty)
+	s.persistContract(&contractSnapshot)
+	s.persistContractDelivery(contractIDSnapshot, userID, quantity, cashReward, xpReward, now)
 	return ContractDeliveryResult{
 		Contract:     status,
 		Quantity:     quantity,

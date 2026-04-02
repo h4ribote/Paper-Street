@@ -168,6 +168,8 @@ func (s *MarketStore) AddMargin(userID, positionID, amount int64) (MarginPositio
 	position.UpdatedAt = now
 	s.balances[position.UserID][defaultCurrency] -= amount
 	s.marginPositions[position.ID] = position
+	positionSnapshot := position
+	go s.persistMarginPosition(positionSnapshot)
 	return position, nil
 }
 
@@ -325,6 +327,8 @@ func (s *MarketStore) applyMarginInterestLocked(position MarginPosition, cashFee
 	if cashFee > 0 || assetFee > 0 {
 		pool.CashRateBps, pool.AssetRateBps = marginRates(pool)
 		s.marginPools[pool.ID] = pool
+		poolSnapshot := pool
+		go s.persistMarginPool(poolSnapshot)
 	}
 }
 
@@ -383,6 +387,8 @@ func (s *MarketStore) applyMarginBorrowLocked(assetID int64, side engine.Side, a
 	}
 	pool.CashRateBps, pool.AssetRateBps = marginRates(pool)
 	s.marginPools[pool.ID] = pool
+	poolSnapshot := pool
+	go s.persistMarginPool(poolSnapshot)
 	return nil
 }
 
@@ -409,6 +415,8 @@ func (s *MarketStore) repayMarginBorrowLocked(position MarginPosition) {
 	}
 	pool.CashRateBps, pool.AssetRateBps = marginRates(pool)
 	s.marginPools[pool.ID] = pool
+	poolSnapshot := pool
+	go s.persistMarginPool(poolSnapshot)
 }
 
 func (s *MarketStore) openMarginPositionLocked(userID, assetID int64, side engine.Side, quantity, price, marginUsed, leverage, borrowed, now int64) MarginPosition {
@@ -429,6 +437,8 @@ func (s *MarketStore) openMarginPositionLocked(userID, assetID int64, side engin
 		lastFeeAt:      now,
 	}
 	s.marginPositions[position.ID] = position
+	positionSnapshot := position
+	go s.persistMarginPosition(positionSnapshot)
 	return position
 }
 
@@ -445,9 +455,12 @@ func (s *MarketStore) checkMarginLiquidationsLocked(assetID int64) {
 		if position.LossRatioBps >= marginLossCutBps {
 			s.liquidateMarginPositionLocked(position, now)
 			delete(s.marginPositions, id)
+			go s.deleteMarginPosition(id)
 			continue
 		}
 		s.marginPositions[id] = position
+		positionSnapshot := position
+		go s.persistMarginPosition(positionSnapshot)
 	}
 }
 

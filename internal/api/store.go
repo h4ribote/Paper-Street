@@ -562,7 +562,10 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 		return nil, err
 	}
 	store.mu.Lock()
-	store.refreshMacroIndicatorsLocked(now)
+	if len(store.macroIndicators) == 0 {
+		store.refreshMacroIndicatorsLocked(now)
+	}
+	store.persistWorldState()
 	store.mu.Unlock()
 	store.seedPools()
 	if store.needsInitialAlloc {
@@ -1087,6 +1090,7 @@ func (s *MarketStore) refreshMacroIndicatorsLocked(now time.Time) {
 	s.refreshPerpetualBondPricingLocked(now)
 	s.macroQuarterIndex = macroPeriodIndex(now, macroQuarterPeriod)
 	s.macroWeekIndex = macroPeriodIndex(now, macroWeekPeriod)
+	s.persistMacroIndicatorsLocked()
 }
 
 func (s *MarketStore) refreshTheoreticalFXRatesLocked(now time.Time) {
@@ -1864,6 +1868,12 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 	if err := s.loadPerpetualBondsFromDB(ctx); err != nil {
 		return err
 	}
+	if err := s.loadLiquidityStateFromDB(ctx); err != nil {
+		return err
+	}
+	if err := s.loadMarginStateFromDB(ctx); err != nil {
+		return err
+	}
 
 	if err := s.loadIndexesFromDB(ctx); err != nil {
 		return err
@@ -1885,6 +1895,15 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 		return err
 	}
 	if err := s.loadCompanyDividendsFromDB(ctx); err != nil {
+		return err
+	}
+	if err := s.loadContractsFromDB(ctx); err != nil {
+		return err
+	}
+	if err := s.loadWorldFromDB(ctx); err != nil {
+		return err
+	}
+	if err := s.loadMacroIndicatorsFromDB(ctx); err != nil {
 		return err
 	}
 	if err := s.loadNewsFromDB(ctx); err != nil {

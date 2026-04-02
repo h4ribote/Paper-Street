@@ -963,6 +963,8 @@ func (s *MarketStore) settlePendingCompanyDividendsLocked(state *companyState, n
 			position.MarginUsed += credit.Amount
 			position.UpdatedAt = nowMillis
 			s.marginPositions[credit.PositionID] = position
+			positionSnapshot := position
+			go s.persistMarginPosition(positionSnapshot)
 		}
 		for _, charge := range entry.MarginShortCharges {
 			if charge.Amount <= 0 {
@@ -975,6 +977,8 @@ func (s *MarketStore) settlePendingCompanyDividendsLocked(state *companyState, n
 			position.AccumulatedFees += charge.Amount
 			position.UpdatedAt = nowMillis
 			s.marginPositions[charge.PositionID] = position
+			positionSnapshot := position
+			go s.persistMarginPosition(positionSnapshot)
 		}
 		for _, credit := range entry.ShortProviderCredits {
 			if credit.Amount <= 0 {
@@ -994,6 +998,8 @@ func (s *MarketStore) settlePendingCompanyDividendsLocked(state *companyState, n
 				}
 				pool.CashRateBps, pool.AssetRateBps = marginRates(pool)
 				s.marginPools[entry.PoolID] = pool
+				poolSnapshot := pool
+				go s.persistMarginPool(poolSnapshot)
 			}
 		}
 		s.companyDividends[state.Company.ID] = append(s.companyDividends[state.Company.ID], entry.Record)
