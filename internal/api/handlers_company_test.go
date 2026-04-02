@@ -378,3 +378,99 @@ func TestCompanyDividendsEndpoint(t *testing.T) {
 		t.Fatalf("expected company_id 101, got %d", records[0].CompanyID)
 	}
 }
+
+func TestCompanyGuidancePublishedMidQuarter(t *testing.T) {
+	store := NewMarketStore()
+	store.mu.Lock()
+	state := store.companyStates[101]
+	if state == nil {
+		store.mu.Unlock()
+		t.Fatal("expected company state for 101")
+	}
+	now := time.Now().UTC()
+	state.LastProductionAt = now.Add(-companyGuidanceLead - time.Hour).UnixMilli()
+	state.LastGuidanceAt = 0
+	store.maybePublishGuidanceLocked(state, now)
+	last := store.latestFinancialReportLocked(101)
+	store.mu.Unlock()
+
+	if last.CompanyID != 101 {
+		t.Fatalf("expected guidance report for company 101")
+	}
+	if last.Guidance == "" {
+		t.Fatalf("expected non-empty guidance")
+	}
+}
+
+func TestCompanyDividendSettlesAfterDelay(t *testing.T) {
+	store := NewMarketStore()
+	now := time.Now().UTC()
+	store.mu.Lock()
+	state := store.companyStates[101]
+	if state == nil {
+		store.mu.Unlock()
+		t.Fatal("expected company state for 101")
+	}
+	holder := int64(3201)
+	store.ensureUserLocked(holder)
+	store.positions[holder][101] = 100
+	if _, ok := store.assetAcquiredAt[holder]; !ok {
+		store.assetAcquiredAt[holder] = make(map[int64]int64)
+	}
+	store.assetAcquiredAt[holder][101] = now.Add(-10 * 24 * time.Hour).UnixMilli()
+	store.balances[state.UserID][defaultCurrency] = 10_000_000
+	report := CompanyFinancialReport{
+		CompanyID:     101,
+		FiscalYear:    2026,
+		FiscalQuarter: 2,
+		NetIncome:     1_000_000_000,
+		EPS:           10,
+		PublishedAt:   now.UnixMilli(),
+	}
+	beforeCompany := store.balances[state.UserID][defaultCurrency]
+	beforeHolder := store.balances[holder][defaultCurrency]
+	store.queueCompanyDividendLocked(state, report, report.NetIncome, now)
+	if got := len(store.companyDividends[101]); got != 0 {
+		store.mu.Unlock()
+		t.Fatalf("expected no settled dividends yet, got %d", got)
+	}
+	if got := len(store.pendingCompanyDividends[101]); got == 0 {
+		store.mu.Unlock()
+		t.Fatalf("expected pending dividend entry")
+	}
+	store.settlePendingCompanyDividendsLocked(state, now.Add(companyDividendSettlementWait+time.Minute))
+	afterCompany := store.balances[state.UserID][defaultCurrency]
+	afterHolder := store.balances[holder][defaultCurrency]
+	store.mu.Unlock()
+
+	if afterCompany >= beforeCompany {
+		t.Fatalf("expected company cash to decrease on settlement")
+	}
+	if afterHolder <= beforeHolder {
+		t.Fatalf("expected holder cash to increase on settlement")
+	}
+}
+
+func TestCompanyCapexTriggerInitiatesFinancing(t *testing.T) {
+	store := NewMarketStore()
+	store.mu.Lock()
+	state := store.companyStates[101]
+	if state == nil {
+		store.mu.Unlock()
+		t.Fatal("expected company state for 101")
+	}
+	state.ActiveCapex = &capexProject{
+		RemainingQuarters: 2,
+		CapacityIncrease:  100,
+		Cost:              500_000,
+	}
+	store.balances[state.UserID][defaultCurrency] = 1
+	before := state.SharesOutstanding
+	store.evaluateFinancingLocked(state, CompanyDemandBreakdown{}, time.Now().UTC())
+	after := state.SharesOutstanding
+	store.mu.Unlock()
+
+	if after <= before {
+		t.Fatalf("expected financing to increase shares outstanding for capex shortfall")
+	}
+}

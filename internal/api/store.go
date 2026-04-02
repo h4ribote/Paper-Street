@@ -426,6 +426,7 @@ type MarketStore struct {
 	companyRecipes       map[int64][]ProductionRecipe
 	financialReports     map[int64][]CompanyFinancialReport
 	companyDividends     map[int64][]CompanyDividendRecord
+	pendingCompanyDividends map[int64][]pendingCompanyDividend
 	perpetualBonds       map[int64]PerpetualBondDefinition
 	bondCouponIndex      map[int64]int64
 	nextUserID           int64
@@ -503,6 +504,7 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 		companyRecipes:       make(map[int64][]ProductionRecipe),
 		financialReports:     make(map[int64][]CompanyFinancialReport),
 		companyDividends:     make(map[int64][]CompanyDividendRecord),
+		pendingCompanyDividends: make(map[int64][]pendingCompanyDividend),
 		perpetualBonds:       make(map[int64]PerpetualBondDefinition),
 		bondCouponIndex:      make(map[int64]int64),
 		nextUserID:           userIDSeed,
