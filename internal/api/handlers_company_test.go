@@ -168,3 +168,181 @@ func TestCompanyProcurementRespectsCashBalance(t *testing.T) {
 		t.Fatalf("expected input inventory to be fully consumed, got %d", inputBalance)
 	}
 }
+
+func TestCompanyDividendDistributionCoversSpotPoolAndMargin(t *testing.T) {
+	store := NewMarketStore()
+	now := time.Date(2026, time.March, 20, 0, 0, 0, 0, time.UTC)
+	store.mu.Lock()
+	state := store.companyStates[101]
+	if state == nil {
+		store.mu.Unlock()
+		t.Fatal("expected company state for 101")
+	}
+	state.MaxProductionCapacity = 1
+	state.OutputAssetID = 0
+	state.CurrentInventory = 0
+	store.companyRecipes[state.Company.ID] = []ProductionRecipe{{ID: 1, CompanyID: state.Company.ID, OutputAssetID: 0, OutputQuantity: 1}}
+	store.balances[state.UserID][defaultCurrency] = 10_000_000
+	spotUser := int64(3001)
+	poolUser := int64(3002)
+	store.ensureUserLocked(spotUser)
+	store.ensureUserLocked(poolUser)
+	store.positions[spotUser][101] = 100
+	store.assetAcquiredAt[spotUser][101] = now.Add(-45 * 24 * time.Hour).UnixMilli()
+	store.positions[poolUser][101] = 1_000
+	poolID := int64(0)
+	for id, pool := range store.marginPools {
+		if pool.AssetID == 101 {
+			poolID = id
+			pool.TotalAssets = 200
+			pool.BorrowedAssets = 40
+			pool.TotalCash = 100_000
+			pool.TotalAssetShares = 200
+			pool.TotalCashShares = 100_000
+			pool.CashRateBps, pool.AssetRateBps = marginRates(pool)
+			store.marginPools[id] = pool
+			break
+		}
+	}
+	if poolID == 0 {
+		store.mu.Unlock()
+		t.Fatal("expected margin pool for asset 101")
+	}
+	key := marginProviderKey{PoolID: poolID, UserID: poolUser}
+	store.marginProviders[key] = MarginProviderPosition{
+		ID:          9001,
+		PoolID:      poolID,
+		UserID:      poolUser,
+		CashShares:  100_000,
+		AssetShares: 200,
+		CreatedAt:   now.Add(-50 * 24 * time.Hour).UnixMilli(),
+	}
+	store.marginPositions[5001] = MarginPosition{
+		ID:             5001,
+		UserID:         4001,
+		AssetID:        101,
+		Side:           engine.SideBuy,
+		Quantity:       50,
+		EntryPrice:     10_000,
+		CurrentPrice:   10_000,
+		Leverage:       2,
+		MarginUsed:     5_000,
+		BorrowedAmount: 5_000,
+		CreatedAt:      now.Add(-20 * 24 * time.Hour).UnixMilli(),
+		UpdatedAt:      now.Add(-20 * 24 * time.Hour).UnixMilli(),
+	}
+	store.marginPositions[5002] = MarginPosition{
+		ID:             5002,
+		UserID:         4002,
+		AssetID:        101,
+		Side:           engine.SideSell,
+		Quantity:       30,
+		EntryPrice:     10_000,
+		CurrentPrice:   10_000,
+		Leverage:       2,
+		MarginUsed:     5_000,
+		BorrowedAmount: 30,
+		CreatedAt:      now.Add(-20 * 24 * time.Hour).UnixMilli(),
+		UpdatedAt:      now.Add(-20 * 24 * time.Hour).UnixMilli(),
+	}
+	companyStartCash := store.balances[state.UserID][defaultCurrency]
+	spotStartCash := store.balances[spotUser][defaultCurrency]
+	longStartMargin := store.marginPositions[5001].MarginUsed
+	shortStartFees := store.marginPositions[5002].AccumulatedFees
+	poolStartCash := store.marginPools[poolID].TotalCash
+	store.mu.Unlock()
+
+	result, err := store.SimulateCompanyQuarter(101, now)
+	if err != nil {
+		t.Fatalf("simulate company quarter: %v", err)
+	}
+	if result.NetIncome <= 0 {
+		t.Fatalf("expected positive net income, got %d", result.NetIncome)
+	}
+	store.mu.RLock()
+	records := store.companyDividends[101]
+	if len(records) == 0 {
+		store.mu.RUnlock()
+		t.Fatalf("expected dividend record for company 101")
+	}
+	record := records[len(records)-1]
+	if record.CompanyPayout <= 0 {
+		store.mu.RUnlock()
+		t.Fatalf("expected positive company payout, got %d", record.CompanyPayout)
+	}
+	if got := store.balances[101][defaultCurrency]; got >= companyStartCash {
+		store.mu.RUnlock()
+		t.Fatalf("expected company cash to decrease after dividends, start=%d got=%d", companyStartCash, got)
+	}
+	if got := store.balances[spotUser][defaultCurrency]; got <= spotStartCash {
+		store.mu.RUnlock()
+		t.Fatalf("expected spot holder to receive dividend, start=%d got=%d", spotStartCash, got)
+	}
+	if got := store.marginPositions[5001].MarginUsed; got <= longStartMargin {
+		store.mu.RUnlock()
+		t.Fatalf("expected margin long to receive dividend credit, start=%d got=%d", longStartMargin, got)
+	}
+	if got := store.marginPositions[5002].AccumulatedFees; got <= shortStartFees {
+		store.mu.RUnlock()
+		t.Fatalf("expected margin short to be charged dividend, start=%d got=%d", shortStartFees, got)
+	}
+	if got := store.marginPools[poolID].TotalCash; got <= poolStartCash {
+		store.mu.RUnlock()
+		t.Fatalf("expected margin pool cash to increase, start=%d got=%d", poolStartCash, got)
+	}
+	if record.PoolPayout <= 0 {
+		store.mu.RUnlock()
+		t.Fatalf("expected positive pool payout, got %d", record.PoolPayout)
+	}
+	if record.MarginLongPayout <= 0 {
+		store.mu.RUnlock()
+		t.Fatalf("expected positive margin long payout, got %d", record.MarginLongPayout)
+	}
+	if record.MarginShortCharge <= 0 {
+		store.mu.RUnlock()
+		t.Fatalf("expected positive margin short charge, got %d", record.MarginShortCharge)
+	}
+	store.mu.RUnlock()
+}
+
+func TestCompanyDividendsEndpoint(t *testing.T) {
+	store := NewMarketStore()
+	now := time.Date(2026, time.March, 20, 0, 0, 0, 0, time.UTC)
+	store.mu.Lock()
+	state := store.companyStates[101]
+	if state == nil {
+		store.mu.Unlock()
+		t.Fatal("expected company state for 101")
+	}
+	state.MaxProductionCapacity = 1
+	state.OutputAssetID = 0
+	store.companyRecipes[state.Company.ID] = []ProductionRecipe{{ID: 1, CompanyID: state.Company.ID, OutputAssetID: 0, OutputQuantity: 1}}
+	holder := int64(3101)
+	store.ensureUserLocked(holder)
+	store.positions[holder][101] = 10
+	store.assetAcquiredAt[holder][101] = now.Add(-10 * 24 * time.Hour).UnixMilli()
+	store.balances[state.UserID][defaultCurrency] = 1_000_000
+	store.mu.Unlock()
+
+	if _, err := store.SimulateCompanyQuarter(101, now); err != nil {
+		t.Fatalf("simulate company quarter: %v", err)
+	}
+	apiKeys := auth.NewAPIKeyCache()
+	if err := apiKeys.AddHex(testAPIKeyUser1); err != nil {
+		t.Fatalf("failed to add api key: %v", err)
+	}
+	store.RegisterAPIKey(testAPIKeyUser1, 1)
+	store.EnsureUser(1)
+	eng := engine.NewEngine(store)
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
+	defer server.Close()
+
+	var records []CompanyDividendRecord
+	getJSON(t, server.URL+"/companies/101/dividends", testAPIKeyUser1, &records)
+	if len(records) == 0 {
+		t.Fatalf("expected dividend records from endpoint")
+	}
+	if records[0].CompanyID != 101 {
+		t.Fatalf("expected company_id 101, got %d", records[0].CompanyID)
+	}
+}
