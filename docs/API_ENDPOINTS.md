@@ -156,6 +156,10 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
     *   資産ランキングを取得します。`limit` で件数を指定できます（デフォルト20）。
 
 ## 11. Indices (指数)
+*   `GET /indices/`
+    *   すべての指数定義と現在NAVを取得します。
+*   `GET /indices/{asset_id}`
+    *   指定した指数の定義と現在NAVを取得します。
 *   `POST /indices/{asset_id}/create`
     *   Index（指数）の構成銘柄（現物バスケット）を拠出し、Indexユニットを発行（Creation）します。
     *   **すべてのプレイヤーおよびBotが利用可能です。**
