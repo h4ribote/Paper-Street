@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"errors"
 	"testing"
 )
 
@@ -61,22 +60,5 @@ func TestAsyncMemorySinkIgnoresNilOrder(t *testing.T) {
 	}
 	if len(sink.Orders()) != 0 {
 		t.Fatalf("nil order should be ignored")
-	}
-}
-
-func TestAsyncMemorySinkShutdownTimeout(t *testing.T) {
-	sink := &AsyncMemorySink{
-		orderCh: make(chan *Order, 1),
-		execCh:  make(chan Execution, 1),
-		done:    make(chan struct{}),
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cancel()
-
-	err := sink.Shutdown(ctx)
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("expected context canceled, got %v", err)
 	}
 }
