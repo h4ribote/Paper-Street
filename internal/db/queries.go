@@ -15,6 +15,7 @@ import (
 const (
 	defaultRegionName   = "Arcadia"
 	defaultCountryName  = "Arcadia"
+	defaultSectorName   = "UNKNOWN"
 	defaultCurrencyName = "Arcadian Credit"
 	defaultUserRank     = "Shrimp"
 )
@@ -793,6 +794,10 @@ func ensureRegion(ctx context.Context, tx *sql.Tx, name string) (int64, error) {
 }
 
 func ensureCountry(ctx context.Context, tx *sql.Tx, name string, regionID int64) (int64, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = defaultCountryName
+	}
 	var countryID int64
 	err := tx.QueryRowContext(ctx, "SELECT country_id FROM countries WHERE name = ? LIMIT 1", name).Scan(&countryID)
 	if err == nil {
@@ -809,6 +814,10 @@ func ensureCountry(ctx context.Context, tx *sql.Tx, name string, regionID int64)
 }
 
 func ensureSector(ctx context.Context, tx *sql.Tx, name string) (int64, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = defaultSectorName
+	}
 	var sectorID int64
 	err := tx.QueryRowContext(ctx, "SELECT sector_id FROM sectors WHERE name = ? LIMIT 1", name).Scan(&sectorID)
 	if err == nil {
@@ -819,7 +828,7 @@ func ensureSector(ctx context.Context, tx *sql.Tx, name string) (int64, error) {
 	}
 	code := strings.ToUpper(strings.TrimSpace(name))
 	if code == "" {
-		code = "UNKNOWN"
+		code = defaultSectorName
 	}
 	result, err := tx.ExecContext(ctx, "INSERT INTO sectors (code, name) VALUES (?, ?)", code, name)
 	if err != nil {
@@ -876,25 +885,17 @@ func (q *Queries) UpsertCompany(ctx context.Context, record CompanyRecord) error
 	}
 	regionID, err := ensureRegion(ctx, tx, defaultRegionName)
 	if err != nil {
-		_ = tx.Rollback()
+		rollbackTx(tx)
 		return err
 	}
-	countryName := strings.TrimSpace(record.Country)
-	if countryName == "" {
-		countryName = defaultCountryName
-	}
-	countryID, err := ensureCountry(ctx, tx, countryName, regionID)
+	countryID, err := ensureCountry(ctx, tx, record.Country, regionID)
 	if err != nil {
-		_ = tx.Rollback()
+		rollbackTx(tx)
 		return err
 	}
-	sectorName := strings.TrimSpace(record.Sector)
-	if sectorName == "" {
-		sectorName = "UNKNOWN"
-	}
-	sectorID, err := ensureSector(ctx, tx, sectorName)
+	sectorID, err := ensureSector(ctx, tx, record.Sector)
 	if err != nil {
-		_ = tx.Rollback()
+		rollbackTx(tx)
 		return err
 	}
 	args := []interface{}{
@@ -929,7 +930,7 @@ func (q *Queries) UpsertCompany(ctx context.Context, record CompanyRecord) error
 			shares_outstanding = VALUES(shares_outstanding),
 			treasury_stock = VALUES(treasury_stock)
 	`, args...); err != nil {
-		_ = tx.Rollback()
+		rollbackTx(tx)
 		return err
 	}
 	return tx.Commit()
@@ -1740,12 +1741,12 @@ func (q *Queries) ReplaceMacroIndicators(ctx context.Context, records []MacroInd
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM macro_indicators"); err != nil {
-		_ = tx.Rollback()
+		rollbackTx(tx)
 		return err
 	}
 	regionID, err := ensureRegion(ctx, tx, defaultRegionName)
 	if err != nil {
-		_ = tx.Rollback()
+		rollbackTx(tx)
 		return err
 	}
 	for _, record := range records {
@@ -1761,16 +1762,23 @@ func (q *Queries) ReplaceMacroIndicators(ctx context.Context, records []MacroInd
 		}
 		countryID, err := ensureCountry(ctx, tx, country, regionID)
 		if err != nil {
-			_ = tx.Rollback()
+			rollbackTx(tx)
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO macro_indicators (country_id, type, value, published_at)
 			VALUES (?, ?, ?, ?)
 		`, countryID, kind, record.Value, record.PublishedAt); err != nil {
-			_ = tx.Rollback()
+			rollbackTx(tx)
 			return err
 		}
 	}
 	return tx.Commit()
+}
+
+func rollbackTx(tx *sql.Tx) {
+	if tx == nil {
+		return
+	}
+	_ = tx.Rollback()
 }
