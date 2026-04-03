@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS currencies (
 CREATE TABLE IF NOT EXISTS macro_indicators (
     indicator_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     country_id INT NOT NULL,
-    type ENUM('GDP_GROWTH', 'CPI', 'INTEREST_RATE', 'UNEMPLOYMENT') NOT NULL,
+    type ENUM('GDP_GROWTH', 'CPI', 'INTEREST_RATE', 'UNEMPLOYMENT', 'CONSUMER_CONFIDENCE') NOT NULL,
     value BIGINT NOT NULL COMMENT 'Scaled value: 550 = 5.50%',
     published_at BIGINT NOT NULL,
     FOREIGN KEY (country_id) REFERENCES countries(country_id),

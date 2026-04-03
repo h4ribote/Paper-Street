@@ -808,6 +808,26 @@ func ensureCountry(ctx context.Context, tx *sql.Tx, name string, regionID int64)
 	return result.LastInsertId()
 }
 
+func ensureSector(ctx context.Context, tx *sql.Tx, name string) (int64, error) {
+	var sectorID int64
+	err := tx.QueryRowContext(ctx, "SELECT sector_id FROM sectors WHERE name = ? LIMIT 1", name).Scan(&sectorID)
+	if err == nil {
+		return sectorID, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+	code := strings.ToUpper(strings.TrimSpace(name))
+	if code == "" {
+		code = "UNKNOWN"
+	}
+	result, err := tx.ExecContext(ctx, "INSERT INTO sectors (code, name) VALUES (?, ?)", code, name)
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
+}
+
 func (q *Queries) ListCompanies(ctx context.Context) ([]CompanyRecord, error) {
 	rows, err := q.Conn.DB.QueryContext(ctx, `
 		SELECT c.company_id, c.name, c.ticker_symbol,
@@ -850,8 +870,37 @@ func (q *Queries) UpsertCompany(ctx context.Context, record CompanyRecord) error
 	if record.CompanyID == 0 {
 		return errors.New("company id required")
 	}
+	tx, err := q.Conn.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	regionID, err := ensureRegion(ctx, tx, defaultRegionName)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	countryName := strings.TrimSpace(record.Country)
+	if countryName == "" {
+		countryName = defaultCountryName
+	}
+	countryID, err := ensureCountry(ctx, tx, countryName, regionID)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	sectorName := strings.TrimSpace(record.Sector)
+	if sectorName == "" {
+		sectorName = "UNKNOWN"
+	}
+	sectorID, err := ensureSector(ctx, tx, sectorName)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
 	args := []interface{}{
 		record.CompanyID,
+		countryID,
+		sectorID,
 		strings.TrimSpace(record.Name),
 		strings.TrimSpace(record.Symbol),
 		record.UserID,
@@ -862,12 +911,14 @@ func (q *Queries) UpsertCompany(ctx context.Context, record CompanyRecord) error
 		record.SharesOutstanding,
 		record.TreasuryStock,
 	}
-	_, err := q.Conn.DB.ExecContext(ctx, `
+	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO companies (
 			company_id, country_id, sector_id, name, ticker_symbol, description, user_id,
 			max_production_capacity, current_inventory, last_capex_at, shares_issued, shares_outstanding, treasury_stock
-		) VALUES (?, NULL, NULL, ?, ?, '', ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
+			country_id = VALUES(country_id),
+			sector_id = VALUES(sector_id),
 			name = VALUES(name),
 			ticker_symbol = VALUES(ticker_symbol),
 			user_id = VALUES(user_id),
@@ -877,8 +928,11 @@ func (q *Queries) UpsertCompany(ctx context.Context, record CompanyRecord) error
 			shares_issued = VALUES(shares_issued),
 			shares_outstanding = VALUES(shares_outstanding),
 			treasury_stock = VALUES(treasury_stock)
-	`, args...)
-	return err
+	`, args...); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
 }
 
 func (q *Queries) ListProductionRecipes(ctx context.Context) ([]ProductionRecipeRecord, error) {
@@ -1701,7 +1755,7 @@ func (q *Queries) ReplaceMacroIndicators(ctx context.Context, records []MacroInd
 			continue
 		}
 		switch kind {
-		case "GDP_GROWTH", "CPI", "INTEREST_RATE", "UNEMPLOYMENT":
+		case "GDP_GROWTH", "CPI", "INTEREST_RATE", "UNEMPLOYMENT", "CONSUMER_CONFIDENCE":
 		default:
 			continue
 		}
