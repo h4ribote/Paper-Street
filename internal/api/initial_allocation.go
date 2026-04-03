@@ -138,14 +138,12 @@ func (s *MarketStore) applyCompanyAllocationsLocked(companies []*companyState) [
 		}
 		user := s.users[userID]
 		if user.ID == 0 {
-			user = models.User{ID: userID, Username: stringOrDefault(state.Company.Name, "company"), Role: "bot", Rank: defaultRankName}
+			user = models.User{ID: userID, Username: stringOrDefault(state.Company.Name, "company"), Role: "bot", RankID: 1, Rank: defaultRankName}
 		}
 		if user.Role == "" || !strings.EqualFold(user.Role, "bot") {
 			user.Role = "bot"
 		}
-		if user.Rank == "" {
-			user.Rank = defaultRankName
-		}
+		user = normalizeUserRank(user)
 		s.users[userID] = user
 		if _, ok := s.balances[userID]; !ok {
 			s.balances[userID] = make(map[string]int64)
@@ -330,14 +328,12 @@ func (s *MarketStore) applyRoleSeedLocked(seed roleSeed) seededUser {
 	user := s.users[userID]
 	if user.ID == 0 {
 		username := stringOrDefault(seed.Username, role)
-		user = models.User{ID: userID, Username: username, Role: "bot", Rank: defaultRankName}
+		user = models.User{ID: userID, Username: username, Role: "bot", RankID: 1, Rank: defaultRankName}
 	}
 	if user.Role == "" || !strings.EqualFold(user.Role, "bot") {
 		user.Role = "bot"
 	}
-	if user.Rank == "" {
-		user.Rank = defaultRankName
-	}
+	user = normalizeUserRank(user)
 	if user.Username == "" {
 		user.Username = stringOrDefault(seed.Username, role)
 	}

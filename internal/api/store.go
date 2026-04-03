@@ -721,6 +721,7 @@ func (s *MarketStore) AddUser(username string) models.User {
 		ID:       s.nextUserID,
 		Username: stringOrDefault(username, fmt.Sprintf("user-%d", s.nextUserID)),
 		Role:     "player",
+		RankID:   1,
 		Rank:     defaultRankName,
 	}
 	s.users[user.ID] = user
@@ -1596,12 +1597,10 @@ func (s *MarketStore) ensureUserLocked(userID int64) models.User {
 	}
 	user, ok := s.users[userID]
 	if !ok {
-		user = models.User{ID: userID, Username: fmt.Sprintf("user-%d", userID), Role: "player", Rank: defaultRankName}
+		user = models.User{ID: userID, Username: fmt.Sprintf("user-%d", userID), Role: "player", RankID: 1, Rank: defaultRankName}
 		s.users[userID] = user
 	}
-	if user.Rank == "" {
-		user.Rank = defaultRankName
-	}
+	user = normalizeUserRank(user)
 	isBot := strings.EqualFold(user.Role, "bot")
 	cashBalance := defaultCashBalance
 	altBalance := defaultAltBalance
@@ -1925,7 +1924,7 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 	for _, user := range users {
 		user = normalizeUser(user, user.ID)
 		if user.XP == 0 {
-			if rankDef, ok := rankDefinitionByName(user.Rank); ok {
+			if rankDef, ok := rankDefinitionByID(user.RankID); ok {
 				user.XP = rankDef.RequiredXP
 			}
 		}
@@ -2292,9 +2291,7 @@ func normalizeUser(user models.User, fallbackID int64) models.User {
 	if user.Role == "" {
 		user.Role = "player"
 	}
-	if user.Rank == "" {
-		user.Rank = defaultRankName
-	}
+	user = normalizeUserRank(user)
 	return user
 }
 

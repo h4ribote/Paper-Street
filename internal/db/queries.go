@@ -17,7 +17,7 @@ const (
 	defaultCountryName  = "Arcadia"
 	defaultSectorName   = "UNKNOWN"
 	defaultCurrencyName = "Arcadian Credit"
-	defaultUserRank     = "Shrimp"
+	defaultUserRankID   = 1
 )
 
 type Queries struct {
@@ -340,20 +340,24 @@ func (q *Queries) UpsertUser(ctx context.Context, user models.User, createdAt ti
 	if createdAt.IsZero() {
 		createdAt = time.Now().UTC()
 	}
-	rank := strings.TrimSpace(user.Rank)
-	if rank == "" {
-		rank = defaultUserRank
+	rankID := user.RankID
+	if rankID <= 0 {
+		rankID = defaultUserRankID
 	}
 	_, err := q.Conn.DB.ExecContext(ctx, `
-		INSERT INTO users (user_id, username, rank, created_at)
+		INSERT INTO users (user_id, username, rank_id, created_at)
 		VALUES (?, ?, ?, ?)
-		ON DUPLICATE KEY UPDATE username = VALUES(username), rank = VALUES(rank)
-	`, user.ID, strings.TrimSpace(user.Username), rank, createdAt.UnixMilli())
+		ON DUPLICATE KEY UPDATE username = VALUES(username), rank_id = VALUES(rank_id)
+	`, user.ID, strings.TrimSpace(user.Username), rankID, createdAt.UnixMilli())
 	return err
 }
 
 func (q *Queries) ListUsers(ctx context.Context) ([]models.User, error) {
-	rows, err := q.Conn.DB.QueryContext(ctx, "SELECT user_id, username, rank FROM users")
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT u.user_id, u.username, u.rank_id, rd.name
+		FROM users u
+		INNER JOIN rank_definitions rd ON rd.rank_id = u.rank_id
+	`)
 	if err != nil {
 		return nil, err
 	}
@@ -361,7 +365,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]models.User, error) {
 	var users []models.User
 	for rows.Next() {
 		var user models.User
-		if err := rows.Scan(&user.ID, &user.Username, &user.Rank); err != nil {
+		if err := rows.Scan(&user.ID, &user.Username, &user.RankID, &user.Rank); err != nil {
 			return nil, err
 		}
 		user.Role = "player"

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/h4ribote/Paper-Street/internal/models"
@@ -47,6 +48,22 @@ var rankDefinitions = []RankDefinition{
 	{ID: 3, Name: "Shark", RequiredXP: 2_500, MakerFeeBps10: 10, TakerFeeBps10: 50, InterestDiscountBps: 1_000, FXFeeDiscountBps: 0},
 	{ID: 4, Name: "Whale", RequiredXP: 15_000, MakerFeeBps10: 0, TakerFeeBps10: 25, InterestDiscountBps: 2_000, FXFeeDiscountBps: 0},
 	{ID: 5, Name: "Leviathan", RequiredXP: 50_000, MakerFeeBps10: 0, TakerFeeBps10: 0, InterestDiscountBps: 5_000, FXFeeDiscountBps: 5_000},
+}
+
+var (
+	rankDefinitionsByID     map[int]RankDefinition
+	rankDefinitionsByIDOnce sync.Once
+)
+
+func getRankDefinitionsByID() map[int]RankDefinition {
+	rankDefinitionsByIDOnce.Do(func() {
+		result := make(map[int]RankDefinition, len(rankDefinitions))
+		for _, rank := range rankDefinitions {
+			result[rank.ID] = rank
+		}
+		rankDefinitionsByID = result
+	})
+	return rankDefinitionsByID
 }
 
 type UserRankInfo struct {
@@ -150,6 +167,11 @@ func rankDefinitionByName(name string) (RankDefinition, bool) {
 	return RankDefinition{}, false
 }
 
+func rankDefinitionByID(id int) (RankDefinition, bool) {
+	rank, ok := getRankDefinitionsByID()[id]
+	return rank, ok
+}
+
 func rankDefinitionForXP(xp int64) RankDefinition {
 	current := rankDefinitions[0]
 	for _, rank := range rankDefinitions {
@@ -162,10 +184,23 @@ func rankDefinitionForXP(xp int64) RankDefinition {
 
 func resolveUserRank(user models.User) RankDefinition {
 	rank := rankDefinitionForXP(user.XP)
-	if def, ok := rankDefinitionByName(user.Rank); ok {
+	if def, ok := rankDefinitionByID(user.RankID); ok {
 		rank = def
 	}
 	return rank
+}
+
+func normalizeUserRank(user models.User) models.User {
+	if user.RankID <= 0 {
+		user.RankID = rankDefinitions[0].ID
+	}
+	if rankDef, ok := rankDefinitionByID(user.RankID); ok {
+		user.Rank = rankDef.Name
+		return user
+	}
+	user.RankID = rankDefinitions[0].ID
+	user.Rank = rankDefinitions[0].Name
+	return user
 }
 
 func nextRankXP(rank RankDefinition) int64 {
@@ -263,6 +298,7 @@ func (s *MarketStore) AddXP(userID, amount int64) (UserRankInfo, error) {
 	user := s.ensureUserLocked(userID)
 	user.XP += amount
 	rank := rankDefinitionForXP(user.XP)
+	user.RankID = rank.ID
 	user.Rank = rank.Name
 	s.users[userID] = user
 	info := s.userRankInfoLocked(userID)
@@ -421,6 +457,7 @@ func (s *MarketStore) CompleteDailyMission(userID int64, missionID string, date 
 				user := s.users[userID]
 				user.XP += rewardValue.XP
 				rank := rankDefinitionForXP(user.XP)
+				user.RankID = rank.ID
 				user.Rank = rank.Name
 				s.users[userID] = user
 			}
@@ -844,6 +881,7 @@ func (s *MarketStore) DeliverContract(userID, contractID, quantity int64) (Contr
 	if xpReward > 0 {
 		user.XP += xpReward
 		rank := rankDefinitionForXP(user.XP)
+		user.RankID = rank.ID
 		user.Rank = rank.Name
 		s.users[userID] = user
 	}
