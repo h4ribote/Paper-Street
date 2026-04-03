@@ -290,6 +290,7 @@ func (o orderRequest) toOrder(defaultUserID int64) (*engine.Order, error) {
 type marketCooldownKey struct {
 	userID int64
 	side   engine.Side
+	assetID int64
 }
 
 func (s *Server) checkAndSetMarketCooldown(order *engine.Order) (time.Time, bool, error) {
@@ -297,7 +298,7 @@ func (s *Server) checkAndSetMarketCooldown(order *engine.Order) (time.Time, bool
 		return time.Time{}, false, nil
 	}
 	now := time.Now()
-	key := marketCooldownKey{userID: order.UserID, side: order.Side}
+	key := marketCooldownKey{userID: order.UserID, side: order.Side, assetID: order.AssetID}
 	s.marketCooldownMu.Lock()
 	defer s.marketCooldownMu.Unlock()
 	if s.marketCooldown == nil {
@@ -317,7 +318,7 @@ func (s *Server) restoreMarketCooldown(order *engine.Order, previous time.Time, 
 	if s == nil || order == nil || order.Type != engine.OrderTypeMarket {
 		return
 	}
-	key := marketCooldownKey{userID: order.UserID, side: order.Side}
+	key := marketCooldownKey{userID: order.UserID, side: order.Side, assetID: order.AssetID}
 	s.marketCooldownMu.Lock()
 	defer s.marketCooldownMu.Unlock()
 	if !hadPrevious {

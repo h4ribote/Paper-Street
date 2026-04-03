@@ -30,6 +30,7 @@ func TestAuthCallbackIssuesAPIKey(t *testing.T) {
 		clientID     = "client-id"
 		clientSecret = "client-secret"
 		redirectURI  = "http://localhost:8000/auth/callback"
+		oauthState   = "paper-street-state"
 	)
 	discordServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -67,6 +68,7 @@ func TestAuthCallbackIssuesAPIKey(t *testing.T) {
 	t.Setenv("DISCORD_CLIENT_ID", clientID)
 	t.Setenv("DISCORD_CLIENT_SECRET", clientSecret)
 	t.Setenv("DISCORD_REDIRECT_URI", redirectURI)
+	t.Setenv("DISCORD_OAUTH_STATE", oauthState)
 	t.Setenv("DISCORD_API_BASE_URL", discordServer.URL+"/api")
 
 	store := NewMarketStore()
@@ -75,7 +77,7 @@ func TestAuthCallbackIssuesAPIKey(t *testing.T) {
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, "admin"))
 	defer server.Close()
 
-	resp, err := http.Get(server.URL + "/auth/callback?code=" + tokenCode)
+	resp, err := http.Get(server.URL + "/auth/callback?code=" + tokenCode + "&state=" + oauthState)
 	if err != nil {
 		t.Fatalf("failed to call auth callback: %v", err)
 	}
@@ -105,7 +107,7 @@ func TestAuthCallbackIssuesAPIKey(t *testing.T) {
 		t.Fatalf("expected username %q, got %q", displayName, user.Username)
 	}
 
-	resp2, err := http.Get(server.URL + "/auth/callback?code=" + tokenCode)
+	resp2, err := http.Get(server.URL + "/auth/callback?code=" + tokenCode + "&state=" + oauthState)
 	if err != nil {
 		t.Fatalf("failed to call auth callback again: %v", err)
 	}
@@ -116,6 +118,28 @@ func TestAuthCallbackIssuesAPIKey(t *testing.T) {
 	}
 	if payload2.APIKey != payload.APIKey {
 		t.Fatalf("expected api key to be reused")
+	}
+}
+
+func TestAuthCallbackRejectsMissingState(t *testing.T) {
+	t.Setenv("DISCORD_CLIENT_ID", "client-id")
+	t.Setenv("DISCORD_CLIENT_SECRET", "client-secret")
+	t.Setenv("DISCORD_REDIRECT_URI", "http://localhost:8000/auth/callback")
+	t.Setenv("DISCORD_OAUTH_STATE", "required-state")
+
+	store := NewMarketStore()
+	apiKeys := auth.NewAPIKeyCache()
+	eng := engine.NewEngine(store)
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, "admin"))
+	defer server.Close()
+
+	resp, err := http.Get(server.URL + "/auth/callback?code=test-code")
+	if err != nil {
+		t.Fatalf("failed to call auth callback: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", resp.StatusCode)
 	}
 }
 
@@ -390,8 +414,10 @@ func TestWebSocketTickerSubscription(t *testing.T) {
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?api_key=" + testAPIKeyUser1
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+	header := http.Header{}
+	header.Set(apiKeyHeader, testAPIKeyUser1)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, header)
 	if err != nil {
 		t.Fatalf("failed to dial websocket: %v", err)
 	}
@@ -432,8 +458,10 @@ func TestWebSocketOrderBookDelta(t *testing.T) {
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?api_key=" + testAPIKeyUser1
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+	header := http.Header{}
+	header.Set(apiKeyHeader, testAPIKeyUser1)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, header)
 	if err != nil {
 		t.Fatalf("failed to dial websocket: %v", err)
 	}
