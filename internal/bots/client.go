@@ -13,6 +13,8 @@ import (
 	"github.com/h4ribote/Paper-Street/internal/engine"
 )
 
+const maxAPIErrorBodyBytes = 4096
+
 type APIClient struct {
 	baseURL string
 	apiKey  string
@@ -142,7 +144,7 @@ func decodeAPIError(resp *http.Response) error {
 	if resp == nil {
 		return fmt.Errorf("api error: no response")
 	}
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxAPIErrorBodyBytes))
 	if err != nil {
 		return fmt.Errorf("api error: status %d", resp.StatusCode)
 	}
