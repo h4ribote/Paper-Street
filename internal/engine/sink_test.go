@@ -65,16 +65,17 @@ func TestAsyncMemorySinkIgnoresNilOrder(t *testing.T) {
 }
 
 func TestAsyncMemorySinkShutdownTimeout(t *testing.T) {
-	sink := NewAsyncMemorySink(1)
-	sink.mu.Lock()
-	sink.execCh <- Execution{AssetID: 1}
+	sink := &AsyncMemorySink{
+		orderCh: make(chan *Order, 1),
+		execCh:  make(chan Execution, 1),
+		done:    make(chan struct{}),
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cancel()
 
 	err := sink.Shutdown(ctx)
-	sink.mu.Unlock()
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context canceled, got %v", err)
 	}

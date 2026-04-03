@@ -21,7 +21,7 @@ func TestClientSendAndMessagesCopy(t *testing.T) {
 	messages[0].Topic = "mutated"
 	latest := client.Messages()
 	if latest[0].Topic != first.Topic {
-		t.Fatalf("expected internal messages to stay immutable copy, got %s", latest[0].Topic)
+		t.Fatalf("expected internal messages to stay an immutable copy, got %s", latest[0].Topic)
 	}
 }
 
