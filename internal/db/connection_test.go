@@ -7,4 +7,3 @@ func TestNewConnectionRequiresDSN(t *testing.T) {
 		t.Fatal("expected error for empty dsn")
 	}
 }
-
