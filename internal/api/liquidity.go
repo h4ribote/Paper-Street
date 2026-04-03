@@ -187,6 +187,10 @@ func (s *MarketStore) CreatePoolPosition(poolID, userID, baseAmount, quoteAmount
 	pool.Liquidity += baseAmount + quoteAmount
 	s.pools[poolID] = pool
 	s.poolPositions[position.ID] = position
+	poolSnapshot := pool
+	positionSnapshot := position
+	go s.persistLiquidityPool(poolSnapshot)
+	go s.persistPoolPosition(positionSnapshot)
 	return position, nil
 }
 
@@ -212,6 +216,9 @@ func (s *MarketStore) ClosePoolPosition(userID, positionID int64) (PoolPosition,
 	s.balances[position.UserID][pool.BaseCurrency] += position.BaseAmount
 	s.balances[position.UserID][pool.QuoteCurrency] += position.QuoteAmount
 	delete(s.poolPositions, positionID)
+	poolSnapshot := pool
+	go s.persistLiquidityPool(poolSnapshot)
+	go s.deletePoolPosition(positionID)
 	return position, nil
 }
 
@@ -246,6 +253,8 @@ func (s *MarketStore) SwapPool(poolID, userID int64, fromCurrency, toCurrency st
 			s.balances[userID][step.to] += step.amountOut
 			s.pools[step.pool.ID] = step.updatedPool
 			s.distributePoolFeesLocked(step.updatedPool, step.from, step.feeAmount)
+			poolSnapshot := s.pools[step.pool.ID]
+			go s.persistLiquidityPool(poolSnapshot)
 		}
 		return PoolSwapResult{
 			PoolID:       0,
@@ -277,6 +286,8 @@ func (s *MarketStore) SwapPool(poolID, userID int64, fromCurrency, toCurrency st
 	s.balances[userID][to] += result.AmountOut
 	s.pools[poolID] = updatedPool
 	s.distributePoolFeesLocked(updatedPool, from, result.FeeAmount)
+	poolSnapshot := s.pools[poolID]
+	go s.persistLiquidityPool(poolSnapshot)
 	return result, nil
 }
 
@@ -373,6 +384,8 @@ func (s *MarketStore) distributePoolFeesLocked(pool LiquidityPool, feeCurrency s
 			position.QuoteAmount += candidate.share
 		}
 		s.poolPositions[candidate.id] = position
+		positionSnapshot := position
+		go s.persistPoolPosition(positionSnapshot)
 	}
 }
 
@@ -555,6 +568,10 @@ func (s *MarketStore) updateMarginPool(poolID, userID, cashAmount, assetAmount i
 	pool.CashRateBps, pool.AssetRateBps = marginRates(pool)
 	s.marginProviders[positionKey] = position
 	s.marginPools[poolID] = pool
+	poolSnapshot := pool
+	positionSnapshot := position
+	go s.persistMarginPool(poolSnapshot)
+	go s.persistMarginProvider(positionSnapshot)
 	return MarginSupplyResult{Pool: pool, Position: position}, nil
 }
 
@@ -669,9 +686,14 @@ func (s *MarketStore) seedPools() {
 		}
 		poolID += 2
 		for _, pool := range pools {
+			if _, exists := s.pools[pool.ID]; exists {
+				continue
+			}
 			s.pools[pool.ID] = pool
 			s.currencies[pool.BaseCurrency] = struct{}{}
 			s.currencies[pool.QuoteCurrency] = struct{}{}
+			poolSnapshot := pool
+			go s.persistLiquidityPool(poolSnapshot)
 		}
 	}
 }
@@ -710,7 +732,13 @@ func (s *MarketStore) seedMarginPools() {
 		}
 		pool = normalizeMarginPoolShares(pool)
 		pool.CashRateBps, pool.AssetRateBps = marginRates(pool)
+		if _, exists := s.marginPools[pool.ID]; exists {
+			poolID++
+			continue
+		}
 		s.marginPools[pool.ID] = pool
+		poolSnapshot := pool
+		go s.persistMarginPool(poolSnapshot)
 		poolID++
 	}
 }

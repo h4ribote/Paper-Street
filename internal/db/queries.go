@@ -144,6 +144,117 @@ type CompanyDividendRecord struct {
 	CreatedAt          int64
 }
 
+type LiquidityPoolRecord struct {
+	PoolID         int64
+	QuoteCurrency  string
+	FeeBps         int64
+	CurrentTick    int64
+	Liquidity      int64
+	CreatedAt      int64
+	TickSpacing    int64
+	FeeGrowthBase  int64
+	FeeGrowthQuote int64
+}
+
+type LiquidityPositionRecord struct {
+	ID          int64
+	PoolID      int64
+	UserID      int64
+	LowerTick   int64
+	UpperTick   int64
+	BaseAmount  int64
+	QuoteAmount int64
+	Liquidity   int64
+	CreatedAt   int64
+	UpdatedAt   int64
+}
+
+type MarginPoolRecord struct {
+	PoolID            int64
+	AssetID           int64
+	Currency          string
+	TotalCash         int64
+	BorrowedCash      int64
+	TotalAssets       int64
+	BorrowedAssets    int64
+	CashRateBps       int64
+	AssetRateBps      int64
+	TotalCashShares   int64
+	TotalAssetShares  int64
+	UpdatedAt         int64
+}
+
+type MarginPoolProviderRecord struct {
+	ID          int64
+	PoolID      int64
+	UserID      int64
+	CashShares  int64
+	AssetShares int64
+	UpdatedAt   int64
+}
+
+type MarginPositionRecord struct {
+	ID           int64
+	UserID       int64
+	AssetID      int64
+	Side         string
+	Quantity     int64
+	EntryPrice   int64
+	CurrentPrice int64
+	Leverage     int64
+	MarginUsed   int64
+	UnrealizedPL int64
+	CreatedAt    int64
+	UpdatedAt    int64
+}
+
+type ContractRecord struct {
+	ID            int64
+	Title         string
+	Description   string
+	AssetID       int64
+	TotalRequired int64
+	Delivered     int64
+	UnitPrice     int64
+	XPPerUnit     int64
+	MinRank       string
+	Status        string
+	StartAt       int64
+	ExpiresAt     int64
+}
+
+type ContractDeliveryRecord struct {
+	ID           int64
+	ContractID   int64
+	UserID       int64
+	Quantity     int64
+	PayoutAmount int64
+	XPGained     int64
+	DeliveredAt  int64
+}
+
+type SeasonRecord struct {
+	ID       int64
+	Name     string
+	Theme    string
+	StartAt  int64
+	EndAt    int64
+	IsActive bool
+}
+
+type RegionRecord struct {
+	ID          int64
+	Name        string
+	Description string
+}
+
+type MacroIndicatorRecord struct {
+	Country     string
+	Type        string
+	Value       int64
+	PublishedAt int64
+}
+
 func NewQueries(conn *Connection) *Queries {
 	return &Queries{Conn: conn}
 }
@@ -994,4 +1105,573 @@ func (q *Queries) UpsertIndexConstituents(ctx context.Context, indexAssetID int6
 		}
 	}
 	return nil
+}
+
+func (q *Queries) ListLiquidityPools(ctx context.Context) ([]LiquidityPoolRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT lp.pool_id, c.code, lp.fee_tier_bp, lp.current_tick, lp.liquidity, lp.created_at, lp.tick_spacing, lp.fee_growth_global_0, lp.fee_growth_global_1
+		FROM liquidity_pools lp
+		JOIN currencies c ON c.currency_id = lp.currency_id
+		ORDER BY lp.pool_id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	records := make([]LiquidityPoolRecord, 0)
+	for rows.Next() {
+		var record LiquidityPoolRecord
+		if err := rows.Scan(
+			&record.PoolID,
+			&record.QuoteCurrency,
+			&record.FeeBps,
+			&record.CurrentTick,
+			&record.Liquidity,
+			&record.CreatedAt,
+			&record.TickSpacing,
+			&record.FeeGrowthBase,
+			&record.FeeGrowthQuote,
+		); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) UpsertLiquidityPool(ctx context.Context, record LiquidityPoolRecord, now time.Time) error {
+	if record.PoolID == 0 {
+		return errors.New("pool id required")
+	}
+	quote := strings.TrimSpace(strings.ToUpper(record.QuoteCurrency))
+	if quote == "" {
+		return errors.New("quote currency required")
+	}
+	currencyID, err := q.EnsureDefaultCurrency(ctx, quote)
+	if err != nil {
+		return err
+	}
+	createdAt := record.CreatedAt
+	if createdAt == 0 {
+		createdAt = now.UTC().UnixMilli()
+	}
+	tickSpacing := record.TickSpacing
+	if tickSpacing == 0 {
+		tickSpacing = 1
+	}
+	_, err = q.Conn.DB.ExecContext(ctx, `
+		INSERT INTO liquidity_pools (
+			pool_id, currency_id, fee_tier_bp, current_tick, tick_spacing, liquidity, fee_growth_global_0, fee_growth_global_1, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+			currency_id = VALUES(currency_id),
+			fee_tier_bp = VALUES(fee_tier_bp),
+			current_tick = VALUES(current_tick),
+			tick_spacing = VALUES(tick_spacing),
+			liquidity = VALUES(liquidity),
+			fee_growth_global_0 = VALUES(fee_growth_global_0),
+			fee_growth_global_1 = VALUES(fee_growth_global_1)
+	`, record.PoolID, currencyID, record.FeeBps, record.CurrentTick, tickSpacing, record.Liquidity, record.FeeGrowthBase, record.FeeGrowthQuote, createdAt)
+	return err
+}
+
+func (q *Queries) ListLiquidityPositions(ctx context.Context) ([]LiquidityPositionRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT position_id, pool_id, user_id, tick_lower, tick_upper, liquidity, tokens_owed_0, tokens_owed_1, created_at, updated_at
+		FROM liquidity_positions
+		ORDER BY position_id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	records := make([]LiquidityPositionRecord, 0)
+	for rows.Next() {
+		var record LiquidityPositionRecord
+		if err := rows.Scan(
+			&record.ID,
+			&record.PoolID,
+			&record.UserID,
+			&record.LowerTick,
+			&record.UpperTick,
+			&record.Liquidity,
+			&record.BaseAmount,
+			&record.QuoteAmount,
+			&record.CreatedAt,
+			&record.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) UpsertLiquidityPosition(ctx context.Context, record LiquidityPositionRecord, now time.Time) error {
+	if record.ID == 0 {
+		return errors.New("position id required")
+	}
+	if record.PoolID == 0 || record.UserID == 0 {
+		return errors.New("pool id and user id required")
+	}
+	createdAt := record.CreatedAt
+	if createdAt == 0 {
+		createdAt = now.UTC().UnixMilli()
+	}
+	updatedAt := record.UpdatedAt
+	if updatedAt == 0 {
+		updatedAt = now.UTC().UnixMilli()
+	}
+	liquidity := record.Liquidity
+	_, err := q.Conn.DB.ExecContext(ctx, `
+		INSERT INTO liquidity_positions (
+			position_id, pool_id, user_id, tick_lower, tick_upper, liquidity,
+			fee_growth_inside_0_last, fee_growth_inside_1_last, tokens_owed_0, tokens_owed_1,
+			is_limit_order, status, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?, FALSE, 'ACTIVE', ?, ?)
+		ON DUPLICATE KEY UPDATE
+			pool_id = VALUES(pool_id),
+			user_id = VALUES(user_id),
+			tick_lower = VALUES(tick_lower),
+			tick_upper = VALUES(tick_upper),
+			liquidity = IF(VALUES(liquidity)=0, liquidity, VALUES(liquidity)),
+			tokens_owed_0 = VALUES(tokens_owed_0),
+			tokens_owed_1 = VALUES(tokens_owed_1),
+			updated_at = VALUES(updated_at)
+	`, record.ID, record.PoolID, record.UserID, record.LowerTick, record.UpperTick, liquidity, record.BaseAmount, record.QuoteAmount, createdAt, updatedAt)
+	return err
+}
+
+func (q *Queries) DeleteLiquidityPosition(ctx context.Context, positionID int64) error {
+	if positionID == 0 {
+		return nil
+	}
+	_, err := q.Conn.DB.ExecContext(ctx, "DELETE FROM liquidity_positions WHERE position_id = ?", positionID)
+	return err
+}
+
+func (q *Queries) ListMarginPools(ctx context.Context) ([]MarginPoolRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT mp.pool_id, mp.asset_id, c.code,
+		       mp.total_cash, mp.borrowed_cash, mp.total_assets, mp.borrowed_assets,
+		       mp.borrow_rate, mp.short_fee, mp.total_cash_shares, mp.total_asset_shares, mp.updated_at
+		FROM margin_pools mp
+		JOIN currencies c ON c.currency_id = mp.currency_id
+		ORDER BY mp.pool_id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	records := make([]MarginPoolRecord, 0)
+	for rows.Next() {
+		var record MarginPoolRecord
+		if err := rows.Scan(
+			&record.PoolID,
+			&record.AssetID,
+			&record.Currency,
+			&record.TotalCash,
+			&record.BorrowedCash,
+			&record.TotalAssets,
+			&record.BorrowedAssets,
+			&record.CashRateBps,
+			&record.AssetRateBps,
+			&record.TotalCashShares,
+			&record.TotalAssetShares,
+			&record.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) UpsertMarginPool(ctx context.Context, record MarginPoolRecord, now time.Time) error {
+	if record.PoolID == 0 || record.AssetID == 0 {
+		return errors.New("pool id and asset id required")
+	}
+	currencyCode := strings.TrimSpace(strings.ToUpper(record.Currency))
+	if currencyCode == "" {
+		currencyCode = "ARC"
+	}
+	currencyID, err := q.EnsureDefaultCurrency(ctx, currencyCode)
+	if err != nil {
+		return err
+	}
+	updatedAt := record.UpdatedAt
+	if updatedAt == 0 {
+		updatedAt = now.UTC().UnixMilli()
+	}
+	_, err = q.Conn.DB.ExecContext(ctx, `
+		INSERT INTO margin_pools (
+			pool_id, asset_id, currency_id, total_cash, borrowed_cash, total_assets, borrowed_assets,
+			borrow_rate, short_fee, total_cash_shares, total_asset_shares, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+			asset_id = VALUES(asset_id),
+			currency_id = VALUES(currency_id),
+			total_cash = VALUES(total_cash),
+			borrowed_cash = VALUES(borrowed_cash),
+			total_assets = VALUES(total_assets),
+			borrowed_assets = VALUES(borrowed_assets),
+			borrow_rate = VALUES(borrow_rate),
+			short_fee = VALUES(short_fee),
+			total_cash_shares = VALUES(total_cash_shares),
+			total_asset_shares = VALUES(total_asset_shares),
+			updated_at = VALUES(updated_at)
+	`, record.PoolID, record.AssetID, currencyID, record.TotalCash, record.BorrowedCash, record.TotalAssets, record.BorrowedAssets, record.CashRateBps, record.AssetRateBps, record.TotalCashShares, record.TotalAssetShares, updatedAt)
+	return err
+}
+
+func (q *Queries) ListMarginPoolProviders(ctx context.Context) ([]MarginPoolProviderRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT provider_id, pool_id, user_id, cash_shares, asset_shares, updated_at
+		FROM margin_pool_providers
+		ORDER BY provider_id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	records := make([]MarginPoolProviderRecord, 0)
+	for rows.Next() {
+		var record MarginPoolProviderRecord
+		if err := rows.Scan(&record.ID, &record.PoolID, &record.UserID, &record.CashShares, &record.AssetShares, &record.UpdatedAt); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) UpsertMarginPoolProvider(ctx context.Context, record MarginPoolProviderRecord, now time.Time) error {
+	if record.PoolID == 0 || record.UserID == 0 {
+		return errors.New("pool id and user id required")
+	}
+	updatedAt := record.UpdatedAt
+	if updatedAt == 0 {
+		updatedAt = now.UTC().UnixMilli()
+	}
+	_, err := q.Conn.DB.ExecContext(ctx, `
+		INSERT INTO margin_pool_providers (pool_id, user_id, cash_shares, asset_shares, updated_at)
+		VALUES (?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+			cash_shares = VALUES(cash_shares),
+			asset_shares = VALUES(asset_shares),
+			updated_at = VALUES(updated_at)
+	`, record.PoolID, record.UserID, record.CashShares, record.AssetShares, updatedAt)
+	return err
+}
+
+func (q *Queries) ListMarginPositions(ctx context.Context) ([]MarginPositionRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT position_id, user_id, asset_id, side, quantity, entry_price, current_price, leverage, margin_used, unrealized_pl, created_at, updated_at
+		FROM positions
+		ORDER BY position_id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	records := make([]MarginPositionRecord, 0)
+	for rows.Next() {
+		var record MarginPositionRecord
+		if err := rows.Scan(
+			&record.ID, &record.UserID, &record.AssetID, &record.Side, &record.Quantity,
+			&record.EntryPrice, &record.CurrentPrice, &record.Leverage, &record.MarginUsed, &record.UnrealizedPL, &record.CreatedAt, &record.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) UpsertMarginPosition(ctx context.Context, record MarginPositionRecord) error {
+	if record.ID == 0 || record.UserID == 0 || record.AssetID == 0 {
+		return errors.New("position id, user id and asset id required")
+	}
+	if strings.TrimSpace(record.Side) == "" {
+		return errors.New("position side required")
+	}
+	side := strings.ToUpper(strings.TrimSpace(record.Side))
+	switch side {
+	case "BUY", "LONG":
+		side = "LONG"
+	case "SELL", "SHORT":
+		side = "SHORT"
+	default:
+		return errors.New("invalid position side")
+	}
+	_, err := q.Conn.DB.ExecContext(ctx, `
+		INSERT INTO positions (
+			position_id, user_id, season_id, asset_id, side, quantity, entry_price, current_price, leverage, margin_used, unrealized_pl, created_at, updated_at
+		) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+			user_id = VALUES(user_id),
+			asset_id = VALUES(asset_id),
+			side = VALUES(side),
+			quantity = VALUES(quantity),
+			entry_price = VALUES(entry_price),
+			current_price = VALUES(current_price),
+			leverage = VALUES(leverage),
+			margin_used = VALUES(margin_used),
+			unrealized_pl = VALUES(unrealized_pl),
+			updated_at = VALUES(updated_at)
+	`, record.ID, record.UserID, record.AssetID, side, record.Quantity, record.EntryPrice, record.CurrentPrice, record.Leverage, record.MarginUsed, record.UnrealizedPL, record.CreatedAt, record.UpdatedAt)
+	return err
+}
+
+func (q *Queries) DeleteMarginPosition(ctx context.Context, positionID int64) error {
+	if positionID == 0 {
+		return nil
+	}
+	_, err := q.Conn.DB.ExecContext(ctx, "DELETE FROM positions WHERE position_id = ?", positionID)
+	return err
+}
+
+func (q *Queries) ListContracts(ctx context.Context) ([]ContractRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT contract_id, title, COALESCE(description,''), target_asset_id, total_required_quantity, current_delivered_quantity,
+		       unit_price, xp_reward_per_unit, min_rank_required, status, start_at, expires_at
+		FROM contracts
+		ORDER BY contract_id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	records := make([]ContractRecord, 0)
+	for rows.Next() {
+		var record ContractRecord
+		if err := rows.Scan(
+			&record.ID, &record.Title, &record.Description, &record.AssetID, &record.TotalRequired, &record.Delivered,
+			&record.UnitPrice, &record.XPPerUnit, &record.MinRank, &record.Status, &record.StartAt, &record.ExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) UpsertContract(ctx context.Context, record ContractRecord, now time.Time) error {
+	if record.ID == 0 || record.AssetID == 0 {
+		return errors.New("contract id and asset id required")
+	}
+	if strings.TrimSpace(record.Title) == "" {
+		return errors.New("contract title required")
+	}
+	status := strings.TrimSpace(strings.ToUpper(record.Status))
+	if status == "" {
+		status = "ACTIVE"
+	}
+	startAt := record.StartAt
+	if startAt == 0 {
+		startAt = now.UTC().UnixMilli()
+	}
+	_, err := q.Conn.DB.ExecContext(ctx, `
+		INSERT INTO contracts (
+			contract_id, company_id, country_id, title, description, target_asset_id, total_required_quantity, current_delivered_quantity,
+			unit_price, xp_reward_per_unit, min_rank_required, status, start_at, expires_at
+		) VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+			title = VALUES(title),
+			description = VALUES(description),
+			target_asset_id = VALUES(target_asset_id),
+			total_required_quantity = VALUES(total_required_quantity),
+			current_delivered_quantity = VALUES(current_delivered_quantity),
+			unit_price = VALUES(unit_price),
+			xp_reward_per_unit = VALUES(xp_reward_per_unit),
+			min_rank_required = VALUES(min_rank_required),
+			status = VALUES(status),
+			start_at = VALUES(start_at),
+			expires_at = VALUES(expires_at)
+	`, record.ID, record.Title, record.Description, record.AssetID, record.TotalRequired, record.Delivered, record.UnitPrice, record.XPPerUnit, record.MinRank, status, startAt, record.ExpiresAt)
+	return err
+}
+
+func (q *Queries) DeleteContract(ctx context.Context, contractID int64) error {
+	if contractID == 0 {
+		return nil
+	}
+	_, err := q.Conn.DB.ExecContext(ctx, "DELETE FROM contracts WHERE contract_id = ?", contractID)
+	return err
+}
+
+func (q *Queries) InsertContractDelivery(ctx context.Context, record ContractDeliveryRecord, now time.Time) error {
+	if record.ContractID == 0 || record.UserID == 0 || record.Quantity <= 0 {
+		return errors.New("invalid contract delivery record")
+	}
+	deliveredAt := record.DeliveredAt
+	if deliveredAt == 0 {
+		deliveredAt = now.UTC().UnixMilli()
+	}
+	id := record.ID
+	if id == 0 {
+		id = deliveredAt
+	}
+	_, err := q.Conn.DB.ExecContext(ctx, `
+		INSERT INTO contract_deliveries (delivery_id, contract_id, user_id, quantity, payout_amount, xp_gained, delivered_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, id, record.ContractID, record.UserID, record.Quantity, record.PayoutAmount, record.XPGained, deliveredAt)
+	return err
+}
+
+func (q *Queries) ListContractDeliveries(ctx context.Context) ([]ContractDeliveryRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT delivery_id, contract_id, user_id, quantity, payout_amount, xp_gained, delivered_at
+		FROM contract_deliveries
+		ORDER BY delivery_id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	records := make([]ContractDeliveryRecord, 0)
+	for rows.Next() {
+		var record ContractDeliveryRecord
+		if err := rows.Scan(&record.ID, &record.ContractID, &record.UserID, &record.Quantity, &record.PayoutAmount, &record.XPGained, &record.DeliveredAt); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) ListSeasons(ctx context.Context) ([]SeasonRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT season_id, name, COALESCE(theme_code,''), COALESCE(start_at,0), COALESCE(end_at,0), is_active
+		FROM seasons
+		ORDER BY season_id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	records := make([]SeasonRecord, 0)
+	for rows.Next() {
+		var record SeasonRecord
+		if err := rows.Scan(&record.ID, &record.Name, &record.Theme, &record.StartAt, &record.EndAt, &record.IsActive); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) UpsertSeason(ctx context.Context, record SeasonRecord) error {
+	if record.ID == 0 || strings.TrimSpace(record.Name) == "" {
+		return errors.New("season id and name required")
+	}
+	_, err := q.Conn.DB.ExecContext(ctx, `
+		INSERT INTO seasons (season_id, name, theme_code, start_at, end_at, is_active)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+			name = VALUES(name),
+			theme_code = VALUES(theme_code),
+			start_at = VALUES(start_at),
+			end_at = VALUES(end_at),
+			is_active = VALUES(is_active)
+	`, record.ID, record.Name, record.Theme, record.StartAt, record.EndAt, record.IsActive)
+	return err
+}
+
+func (q *Queries) ListRegions(ctx context.Context) ([]RegionRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT region_id, name, COALESCE(description,'')
+		FROM regions
+		ORDER BY region_id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	records := make([]RegionRecord, 0)
+	for rows.Next() {
+		var record RegionRecord
+		if err := rows.Scan(&record.ID, &record.Name, &record.Description); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) UpsertRegion(ctx context.Context, record RegionRecord) error {
+	if record.ID == 0 || strings.TrimSpace(record.Name) == "" {
+		return errors.New("region id and name required")
+	}
+	_, err := q.Conn.DB.ExecContext(ctx, `
+		INSERT INTO regions (region_id, name, description)
+		VALUES (?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+			name = VALUES(name),
+			description = VALUES(description)
+	`, record.ID, record.Name, record.Description)
+	return err
+}
+
+func (q *Queries) ListMacroIndicators(ctx context.Context) ([]MacroIndicatorRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT co.name, mi.type, mi.value, mi.published_at
+		FROM macro_indicators mi
+		JOIN countries co ON co.country_id = mi.country_id
+		ORDER BY mi.indicator_id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	records := make([]MacroIndicatorRecord, 0)
+	for rows.Next() {
+		var record MacroIndicatorRecord
+		if err := rows.Scan(&record.Country, &record.Type, &record.Value, &record.PublishedAt); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) ReplaceMacroIndicators(ctx context.Context, records []MacroIndicatorRecord) error {
+	tx, err := q.Conn.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM macro_indicators"); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	regionID, err := ensureRegion(ctx, tx, defaultRegionName)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	for _, record := range records {
+		country := strings.TrimSpace(record.Country)
+		kind := strings.TrimSpace(record.Type)
+		if country == "" || kind == "" {
+			continue
+		}
+		switch kind {
+		case "GDP_GROWTH", "CPI", "INTEREST_RATE", "UNEMPLOYMENT":
+		default:
+			continue
+		}
+		countryID, err := ensureCountry(ctx, tx, country, regionID)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO macro_indicators (country_id, type, value, published_at)
+			VALUES (?, ?, ?, ?)
+		`, countryID, kind, record.Value, record.PublishedAt); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+	return tx.Commit()
 }
