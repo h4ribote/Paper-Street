@@ -170,20 +170,14 @@ func TestPoolPositionLifecycle(t *testing.T) {
 
 func TestHandleCurrentUserReturnsNotFoundForUnknownUser(t *testing.T) {
 	store := NewMarketStore()
-	apiKeys := auth.NewAPIKeyCache()
-	if err := apiKeys.AddHex(testAPIKeyUser1); err != nil {
-		t.Fatalf("failed to add api key: %v", err)
-	}
-	store.RegisterAPIKey(testAPIKeyUser1, 9999)
 	eng := engine.NewEngine(store)
-	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
+	server := httptest.NewServer(NewRouter(eng, nil, store, ""))
 	defer server.Close()
 
-	req, err := http.NewRequest(http.MethodGet, server.URL+"/users/me", nil)
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/users/me?user_id=9999", nil)
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
-	req.Header.Set(apiKeyHeader, testAPIKeyUser1)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)

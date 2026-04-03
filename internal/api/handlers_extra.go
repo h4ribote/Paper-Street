@@ -195,7 +195,7 @@ func (s *Server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
 		respondError(w, status, message)
 		return
 	}
-	user, ok := s.Store.User(userID)
+	user, ok := s.Store.UserByID(userID)
 	if !ok || user.ID == 0 {
 		respondError(w, http.StatusNotFound, "user not found")
 		return
