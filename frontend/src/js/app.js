@@ -3,7 +3,7 @@ import { RealtimeClient } from './ws.js';
 
 const state = {
   baseUrl: localStorage.getItem('paperstreet.baseUrl') || `${location.protocol}//${location.hostname}:8000`,
-  apiKey: localStorage.getItem('paperstreet.apiKey') || '',
+  apiKey: '',
   user: null,
   assets: [],
   assetsById: new Map(),
@@ -108,7 +108,6 @@ function updateApiKey(value) {
   const trimmed = String(value || '').trim();
   state.apiKey = trimmed;
   el.apiKey.value = trimmed;
-  localStorage.setItem('paperstreet.apiKey', trimmed);
 }
 
 function fmtNumber(v) {
@@ -263,8 +262,8 @@ function renderPortfolio() {
 
   const positions = (state.marginPositions || []).map((p) => {
     const side = p.side || '-';
-    const pnl = Number(p.unrealized_loss || 0);
-    return makeLi(`#${p.id} ${side} ${p.asset_id} x${fmtNumber(p.quantity)} loss:${fmtNumber(pnl)}`);
+    const pnl = -Number(p.unrealized_loss || 0);
+    return makeLi(`#${p.id} ${side} ${p.asset_id} x${fmtNumber(p.quantity)} P&L:${fmtNumber(pnl)}`);
   });
   el.positionsList.replaceChildren(...positions);
 }
