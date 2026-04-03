@@ -191,7 +191,7 @@ CREATE TABLE IF NOT EXISTS rank_definitions (
 CREATE TABLE IF NOT EXISTS users (
     user_id BIGINT PRIMARY KEY, -- Discord Snowflake ID (BIGINT)
     username VARCHAR(50) NOT NULL,
-    rank_id INT NOT NULL DEFAULT 1,
+    rank_id INT NOT NULL,
     created_at BIGINT DEFAULT 0,
     FOREIGN KEY (rank_id) REFERENCES rank_definitions(rank_id)
 );

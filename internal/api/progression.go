@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/h4ribote/Paper-Street/internal/models"
@@ -49,13 +50,21 @@ var rankDefinitions = []RankDefinition{
 	{ID: 5, Name: "Leviathan", RequiredXP: 50_000, MakerFeeBps10: 0, TakerFeeBps10: 0, InterestDiscountBps: 5_000, FXFeeDiscountBps: 5_000},
 }
 
-var rankDefinitionsByID = func() map[int]RankDefinition {
-	result := make(map[int]RankDefinition, len(rankDefinitions))
-	for _, rank := range rankDefinitions {
-		result[rank.ID] = rank
-	}
-	return result
-}()
+var (
+	rankDefinitionsByID     map[int]RankDefinition
+	rankDefinitionsByIDOnce sync.Once
+)
+
+func getRankDefinitionsByID() map[int]RankDefinition {
+	rankDefinitionsByIDOnce.Do(func() {
+		result := make(map[int]RankDefinition, len(rankDefinitions))
+		for _, rank := range rankDefinitions {
+			result[rank.ID] = rank
+		}
+		rankDefinitionsByID = result
+	})
+	return rankDefinitionsByID
+}
 
 type UserRankInfo struct {
 	UserID              int64  `json:"user_id"`
@@ -159,7 +168,7 @@ func rankDefinitionByName(name string) (RankDefinition, bool) {
 }
 
 func rankDefinitionByID(id int) (RankDefinition, bool) {
-	rank, ok := rankDefinitionsByID[id]
+	rank, ok := getRankDefinitionsByID()[id]
 	return rank, ok
 }
 
