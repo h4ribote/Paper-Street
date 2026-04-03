@@ -209,7 +209,7 @@ func (s *MarketStore) ClosePoolPosition(userID, positionID int64) (PoolPosition,
 	}
 	pool, ok := s.pools[position.PoolID]
 	if !ok {
-		return PoolPosition{}, errors.New("pool not found for position")
+		return PoolPosition{}, fmt.Errorf("pool %d not found for position %d", position.PoolID, positionID)
 	}
 	pool.Liquidity -= position.BaseAmount + position.QuoteAmount
 	s.pools[position.PoolID] = pool

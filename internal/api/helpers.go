@@ -29,18 +29,27 @@ func parseUserID(r *http.Request) int64 {
 
 func (s *Server) resolveUserID(r *http.Request, requestedUserID int64, required bool) (int64, int, string) {
 	authenticatedUserID := s.userIDFromRequest(r)
-	apiKeyProvided := false
-	if r != nil {
-		apiKeyProvided = strings.TrimSpace(r.Header.Get(apiKeyHeader)) != ""
-	}
+	apiKey := strings.TrimSpace(r.Header.Get(apiKeyHeader))
 	if authenticatedUserID != 0 {
 		if requestedUserID != 0 && requestedUserID != authenticatedUserID {
 			return 0, http.StatusUnauthorized, "user_id does not match authenticated user"
 		}
 		return authenticatedUserID, 0, ""
 	}
-	if apiKeyProvided && s != nil && s.APIKeys != nil {
-		return 0, http.StatusUnauthorized, "authenticated user not found"
+	if apiKey != "" && s != nil && s.APIKeys != nil {
+		if !s.APIKeys.ContainsHex(apiKey) {
+			return 0, http.StatusUnauthorized, "invalid API key"
+		}
+		if s.Store != nil {
+			user, ok := s.Store.UserForAPIKey(apiKey)
+			if ok && user.ID != 0 {
+				if requestedUserID != 0 && requestedUserID != user.ID {
+					return 0, http.StatusUnauthorized, "user_id does not match authenticated user"
+				}
+				return user.ID, 0, ""
+			}
+		}
+		return 0, http.StatusUnauthorized, "authenticated user not found for api key"
 	}
 	if requestedUserID != 0 {
 		return requestedUserID, 0, ""

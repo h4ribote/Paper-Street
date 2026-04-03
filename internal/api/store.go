@@ -783,7 +783,7 @@ func (s *MarketStore) UserByID(userID int64) (models.User, bool) {
 	s.mu.RLock()
 	user, ok := s.users[userID]
 	s.mu.RUnlock()
-	if !ok || user.ID == 0 {
+	if !ok {
 		return models.User{}, false
 	}
 	return user, true
