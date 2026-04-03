@@ -1600,15 +1600,7 @@ func (s *MarketStore) ensureUserLocked(userID int64) models.User {
 		user = models.User{ID: userID, Username: fmt.Sprintf("user-%d", userID), Role: "player", RankID: 1, Rank: defaultRankName}
 		s.users[userID] = user
 	}
-	if user.RankID <= 0 {
-		user.RankID = 1
-	}
-	if rankDef, ok := rankDefinitionByID(user.RankID); ok {
-		user.Rank = rankDef.Name
-	} else {
-		user.RankID = 1
-		user.Rank = defaultRankName
-	}
+	user = normalizeUserRank(user)
 	isBot := strings.EqualFold(user.Role, "bot")
 	cashBalance := defaultCashBalance
 	altBalance := defaultAltBalance
@@ -2299,15 +2291,7 @@ func normalizeUser(user models.User, fallbackID int64) models.User {
 	if user.Role == "" {
 		user.Role = "player"
 	}
-	if user.RankID <= 0 {
-		user.RankID = 1
-	}
-	if rankDef, ok := rankDefinitionByID(user.RankID); ok {
-		user.Rank = rankDef.Name
-	} else {
-		user.RankID = 1
-		user.Rank = defaultRankName
-	}
+	user = normalizeUserRank(user)
 	return user
 }
 

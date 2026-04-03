@@ -143,15 +143,7 @@ func (s *MarketStore) applyCompanyAllocationsLocked(companies []*companyState) [
 		if user.Role == "" || !strings.EqualFold(user.Role, "bot") {
 			user.Role = "bot"
 		}
-		if user.RankID <= 0 {
-			user.RankID = 1
-			user.Rank = defaultRankName
-		} else if rankDef, ok := rankDefinitionByID(user.RankID); ok {
-			user.Rank = rankDef.Name
-		} else {
-			user.RankID = 1
-			user.Rank = defaultRankName
-		}
+		user = normalizeUserRank(user)
 		s.users[userID] = user
 		if _, ok := s.balances[userID]; !ok {
 			s.balances[userID] = make(map[string]int64)
@@ -341,15 +333,7 @@ func (s *MarketStore) applyRoleSeedLocked(seed roleSeed) seededUser {
 	if user.Role == "" || !strings.EqualFold(user.Role, "bot") {
 		user.Role = "bot"
 	}
-	if user.RankID <= 0 {
-		user.RankID = 1
-		user.Rank = defaultRankName
-	} else if rankDef, ok := rankDefinitionByID(user.RankID); ok {
-		user.Rank = rankDef.Name
-	} else {
-		user.RankID = 1
-		user.Rank = defaultRankName
-	}
+	user = normalizeUserRank(user)
 	if user.Username == "" {
 		user.Username = stringOrDefault(seed.Username, role)
 	}

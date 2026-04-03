@@ -49,6 +49,14 @@ var rankDefinitions = []RankDefinition{
 	{ID: 5, Name: "Leviathan", RequiredXP: 50_000, MakerFeeBps10: 0, TakerFeeBps10: 0, InterestDiscountBps: 5_000, FXFeeDiscountBps: 5_000},
 }
 
+var rankDefinitionsByID = func() map[int]RankDefinition {
+	result := make(map[int]RankDefinition, len(rankDefinitions))
+	for _, rank := range rankDefinitions {
+		result[rank.ID] = rank
+	}
+	return result
+}()
+
 type UserRankInfo struct {
 	UserID              int64  `json:"user_id"`
 	RankID              int    `json:"rank_id"`
@@ -151,12 +159,8 @@ func rankDefinitionByName(name string) (RankDefinition, bool) {
 }
 
 func rankDefinitionByID(id int) (RankDefinition, bool) {
-	for _, rank := range rankDefinitions {
-		if rank.ID == id {
-			return rank, true
-		}
-	}
-	return RankDefinition{}, false
+	rank, ok := rankDefinitionsByID[id]
+	return rank, ok
 }
 
 func rankDefinitionForXP(xp int64) RankDefinition {
@@ -175,6 +179,19 @@ func resolveUserRank(user models.User) RankDefinition {
 		rank = def
 	}
 	return rank
+}
+
+func normalizeUserRank(user models.User) models.User {
+	if user.RankID <= 0 {
+		user.RankID = rankDefinitions[0].ID
+	}
+	if rankDef, ok := rankDefinitionByID(user.RankID); ok {
+		user.Rank = rankDef.Name
+		return user
+	}
+	user.RankID = rankDefinitions[0].ID
+	user.Rank = rankDefinitions[0].Name
+	return user
 }
 
 func nextRankXP(rank RankDefinition) int64 {
