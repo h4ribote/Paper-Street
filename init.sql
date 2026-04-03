@@ -343,6 +343,15 @@ CREATE TABLE IF NOT EXISTS news_feed (
     related_country_id INT
 );
 
+-- ワールドイベント
+CREATE TABLE IF NOT EXISTS world_events (
+    event_id BIGINT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    starts_at BIGINT NOT NULL,
+    ends_at BIGINT NOT NULL
+);
+
 -- --------------------------------------------------------
 -- 5. Liquidity Pools (FX Market)
 -- --------------------------------------------------------

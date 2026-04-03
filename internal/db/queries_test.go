@@ -133,3 +133,53 @@ func TestListNewsFeed(t *testing.T) {
 		t.Fatalf("expectations: %v", err)
 	}
 }
+
+func TestUpsertWorldEvent(t *testing.T) {
+	queries, mock, cleanup := newMockQueries(t)
+	defer cleanup()
+
+	record := WorldEventRecord{
+		ID:          7,
+		Name:        "Arcadia Privacy Act",
+		Description: "New data privacy law impacts ad-tech.",
+		StartsAt:    1710000000000,
+		EndsAt:      1710003600000,
+	}
+
+	mock.ExpectExec("INSERT INTO world_events").
+		WithArgs(record.ID, record.Name, record.Description, record.StartsAt, record.EndsAt).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	if err := queries.UpsertWorldEvent(context.Background(), record); err != nil {
+		t.Fatalf("UpsertWorldEvent error: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("expectations: %v", err)
+	}
+}
+
+func TestListWorldEvents(t *testing.T) {
+	queries, mock, cleanup := newMockQueries(t)
+	defer cleanup()
+
+	rows := sqlmock.NewRows([]string{"event_id", "name", "description", "starts_at", "ends_at"}).
+		AddRow(int64(1), "Central Bank Briefing", "Liquidity outlook update.", int64(1710000000000), int64(1710003600000)).
+		AddRow(int64(2), "Tech Bubble Burst", "Accounting irregularities trigger selloff.", int64(1710007200000), int64(1710010800000))
+
+	mock.ExpectQuery("SELECT event_id, name, COALESCE\\(description,''\\), starts_at, ends_at\\s+FROM world_events\\s+ORDER BY event_id").
+		WillReturnRows(rows)
+
+	records, err := queries.ListWorldEvents(context.Background())
+	if err != nil {
+		t.Fatalf("ListWorldEvents error: %v", err)
+	}
+	if len(records) != 2 {
+		t.Fatalf("expected 2 world events, got %d", len(records))
+	}
+	if records[1].Name != "Tech Bubble Burst" {
+		t.Fatalf("unexpected second event name: %s", records[1].Name)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("expectations: %v", err)
+	}
+}
