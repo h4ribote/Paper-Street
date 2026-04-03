@@ -776,6 +776,19 @@ func (s *MarketStore) User(userID int64) (models.User, bool) {
 	return user, true
 }
 
+func (s *MarketStore) UserByID(userID int64) (models.User, bool) {
+	if userID == 0 {
+		return models.User{}, false
+	}
+	s.mu.RLock()
+	user, ok := s.users[userID]
+	s.mu.RUnlock()
+	if !ok {
+		return models.User{}, false
+	}
+	return user, true
+}
+
 func (s *MarketStore) Assets(filter AssetFilter) []models.Asset {
 	s.mu.RLock()
 	assets := make([]models.Asset, 0, len(s.assets))
