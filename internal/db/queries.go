@@ -827,9 +827,6 @@ func ensureSector(ctx context.Context, tx *sql.Tx, name string) (int64, error) {
 		return 0, err
 	}
 	code := strings.ToUpper(strings.TrimSpace(name))
-	if code == "" {
-		code = defaultSectorName
-	}
 	result, err := tx.ExecContext(ctx, "INSERT INTO sectors (code, name) VALUES (?, ?)", code, name)
 	if err != nil {
 		return 0, err
