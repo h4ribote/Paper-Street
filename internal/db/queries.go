@@ -248,6 +248,14 @@ type RegionRecord struct {
 	Description string
 }
 
+type WorldEventRecord struct {
+	ID          int64
+	Name        string
+	Description string
+	StartsAt    int64
+	EndsAt      int64
+}
+
 type MacroIndicatorRecord struct {
 	Country     string
 	Type        string
@@ -1610,6 +1618,43 @@ func (q *Queries) UpsertRegion(ctx context.Context, record RegionRecord) error {
 			name = VALUES(name),
 			description = VALUES(description)
 	`, record.ID, record.Name, record.Description)
+	return err
+}
+
+func (q *Queries) ListWorldEvents(ctx context.Context) ([]WorldEventRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT event_id, name, COALESCE(description,''), starts_at, ends_at
+		FROM world_events
+		ORDER BY event_id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	records := make([]WorldEventRecord, 0)
+	for rows.Next() {
+		var record WorldEventRecord
+		if err := rows.Scan(&record.ID, &record.Name, &record.Description, &record.StartsAt, &record.EndsAt); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) UpsertWorldEvent(ctx context.Context, record WorldEventRecord) error {
+	if record.ID == 0 || strings.TrimSpace(record.Name) == "" {
+		return errors.New("event id and name required")
+	}
+	_, err := q.Conn.DB.ExecContext(ctx, `
+		INSERT INTO world_events (event_id, name, description, starts_at, ends_at)
+		VALUES (?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+			name = VALUES(name),
+			description = VALUES(description),
+			starts_at = VALUES(starts_at),
+			ends_at = VALUES(ends_at)
+	`, record.ID, record.Name, record.Description, record.StartsAt, record.EndsAt)
 	return err
 }
 

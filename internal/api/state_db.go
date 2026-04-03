@@ -195,6 +195,22 @@ func (s *MarketStore) loadWorldFromDB(ctx context.Context) error {
 			})
 		}
 	}
+	events, err := s.queries.ListWorldEvents(ctx)
+	if err != nil {
+		return err
+	}
+	if len(events) > 0 {
+		s.worldEvents = make([]WorldEvent, 0, len(events))
+		for _, event := range events {
+			s.worldEvents = append(s.worldEvents, WorldEvent{
+				ID:          event.ID,
+				Name:        event.Name,
+				Description: event.Description,
+				StartsAt:    event.StartsAt,
+				EndsAt:      event.EndsAt,
+			})
+		}
+	}
 	return nil
 }
 
@@ -459,6 +475,18 @@ func (s *MarketStore) persistWorldState() {
 		}
 		if err := s.queries.UpsertRegion(ctx, record); err != nil {
 			log.Printf("db upsert region %d: %v", record.ID, err)
+		}
+	}
+	for _, event := range s.worldEvents {
+		record := db.WorldEventRecord{
+			ID:          event.ID,
+			Name:        event.Name,
+			Description: event.Description,
+			StartsAt:    event.StartsAt,
+			EndsAt:      event.EndsAt,
+		}
+		if err := s.queries.UpsertWorldEvent(ctx, record); err != nil {
+			log.Printf("db upsert world event %d: %v", record.ID, err)
 		}
 	}
 }
