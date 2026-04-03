@@ -150,6 +150,15 @@ func rankDefinitionByName(name string) (RankDefinition, bool) {
 	return RankDefinition{}, false
 }
 
+func rankDefinitionByID(id int) (RankDefinition, bool) {
+	for _, rank := range rankDefinitions {
+		if rank.ID == id {
+			return rank, true
+		}
+	}
+	return RankDefinition{}, false
+}
+
 func rankDefinitionForXP(xp int64) RankDefinition {
 	current := rankDefinitions[0]
 	for _, rank := range rankDefinitions {
@@ -162,7 +171,7 @@ func rankDefinitionForXP(xp int64) RankDefinition {
 
 func resolveUserRank(user models.User) RankDefinition {
 	rank := rankDefinitionForXP(user.XP)
-	if def, ok := rankDefinitionByName(user.Rank); ok {
+	if def, ok := rankDefinitionByID(user.RankID); ok {
 		rank = def
 	}
 	return rank
@@ -263,6 +272,7 @@ func (s *MarketStore) AddXP(userID, amount int64) (UserRankInfo, error) {
 	user := s.ensureUserLocked(userID)
 	user.XP += amount
 	rank := rankDefinitionForXP(user.XP)
+	user.RankID = rank.ID
 	user.Rank = rank.Name
 	s.users[userID] = user
 	info := s.userRankInfoLocked(userID)
@@ -421,6 +431,7 @@ func (s *MarketStore) CompleteDailyMission(userID int64, missionID string, date 
 				user := s.users[userID]
 				user.XP += rewardValue.XP
 				rank := rankDefinitionForXP(user.XP)
+				user.RankID = rank.ID
 				user.Rank = rank.Name
 				s.users[userID] = user
 			}
@@ -844,6 +855,7 @@ func (s *MarketStore) DeliverContract(userID, contractID, quantity int64) (Contr
 	if xpReward > 0 {
 		user.XP += xpReward
 		rank := rankDefinitionForXP(user.XP)
+		user.RankID = rank.ID
 		user.Rank = rank.Name
 		s.users[userID] = user
 	}

@@ -178,11 +178,22 @@ CREATE TABLE IF NOT EXISTS perpetual_bonds (
 
 -- ユーザー
 -- user_id < 10000 はBotとして予約
+CREATE TABLE IF NOT EXISTS rank_definitions (
+    rank_id INT PRIMARY KEY,
+    name VARCHAR(20) UNIQUE NOT NULL,
+    required_xp BIGINT NOT NULL,
+    maker_fee_bps10 BIGINT NOT NULL,
+    taker_fee_bps10 BIGINT NOT NULL,
+    interest_discount_bps BIGINT NOT NULL,
+    fx_fee_discount_bps BIGINT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS users (
     user_id BIGINT PRIMARY KEY, -- Discord Snowflake ID (BIGINT)
     username VARCHAR(50) NOT NULL,
-    rank ENUM('Shrimp', 'Fish', 'Shark', 'Whale', 'Leviathan') DEFAULT 'Shrimp',
-    created_at BIGINT DEFAULT 0
+    rank_id INT NOT NULL DEFAULT 1,
+    created_at BIGINT DEFAULT 0,
+    FOREIGN KEY (rank_id) REFERENCES rank_definitions(rank_id)
 );
 
 -- APIキー管理
@@ -552,4 +563,11 @@ SET FOREIGN_KEY_CHECKS = 1;
 
 -- System Accounts
 -- user_id=1: Insurance Fund (Receives fees, Covers bankruptcies)
-INSERT INTO users (user_id, username, rank, created_at) VALUES (1, 'Paper Street Insurance Fund', 'Leviathan', 0);
+INSERT INTO rank_definitions (rank_id, name, required_xp, maker_fee_bps10, taker_fee_bps10, interest_discount_bps, fx_fee_discount_bps) VALUES
+    (1, 'Shrimp', 0, 40, 100, 0, 0),
+    (2, 'Fish', 500, 20, 75, 500, 0),
+    (3, 'Shark', 2500, 10, 50, 1000, 0),
+    (4, 'Whale', 15000, 0, 25, 2000, 0),
+    (5, 'Leviathan', 50000, 0, 0, 5000, 5000);
+
+INSERT INTO users (user_id, username, rank_id, created_at) VALUES (1, 'Paper Street Insurance Fund', 5, 0);
