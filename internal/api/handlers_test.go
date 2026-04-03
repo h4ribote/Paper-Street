@@ -171,6 +171,108 @@ func TestHandleOrderByIDRequiresAssetID(t *testing.T) {
 	}
 }
 
+func TestHandleOrderByIDRejectsOtherUserOrderAccess(t *testing.T) {
+	store := NewMarketStore()
+	apiKeys := auth.NewAPIKeyCache()
+	if err := apiKeys.AddHex(testAPIKeyUser1); err != nil {
+		t.Fatalf("failed to add api key: %v", err)
+	}
+	if err := apiKeys.AddHex(testAPIKeyUser2); err != nil {
+		t.Fatalf("failed to add api key: %v", err)
+	}
+	store.RegisterAPIKey(testAPIKeyUser1, 1)
+	store.RegisterAPIKey(testAPIKeyUser2, 2)
+	store.EnsureUser(1)
+	store.EnsureUser(2)
+
+	eng := engine.NewEngine(store)
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	created, err := eng.SubmitOrder(ctx, &engine.Order{
+		AssetID:  101,
+		UserID:   1,
+		Side:     engine.SideBuy,
+		Type:     engine.OrderTypeLimit,
+		Quantity: 1,
+		Price:    100,
+	})
+	if err != nil {
+		t.Fatalf("failed to create order: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/orders/%d?asset_id=101", server.URL, created.Order.ID), nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set(apiKeyHeader, testAPIKeyUser2)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandleOrderByIDRejectsOtherUserOrderCancel(t *testing.T) {
+	store := NewMarketStore()
+	apiKeys := auth.NewAPIKeyCache()
+	if err := apiKeys.AddHex(testAPIKeyUser1); err != nil {
+		t.Fatalf("failed to add api key: %v", err)
+	}
+	if err := apiKeys.AddHex(testAPIKeyUser2); err != nil {
+		t.Fatalf("failed to add api key: %v", err)
+	}
+	store.RegisterAPIKey(testAPIKeyUser1, 1)
+	store.RegisterAPIKey(testAPIKeyUser2, 2)
+	store.EnsureUser(1)
+	store.EnsureUser(2)
+
+	eng := engine.NewEngine(store)
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	created, err := eng.SubmitOrder(ctx, &engine.Order{
+		AssetID:  101,
+		UserID:   1,
+		Side:     engine.SideBuy,
+		Type:     engine.OrderTypeLimit,
+		Quantity: 1,
+		Price:    100,
+	})
+	if err != nil {
+		t.Fatalf("failed to create order: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s/orders/%d?asset_id=101", server.URL, created.Order.ID), nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set(apiKeyHeader, testAPIKeyUser2)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", resp.StatusCode)
+	}
+
+	order, ok := eng.FindOrder(101, created.Order.ID)
+	if !ok || order == nil {
+		t.Fatalf("order should remain after unauthorized cancel attempt")
+	}
+	if order.Status != engine.OrderStatusOpen {
+		t.Fatalf("order status should remain open, got %s", order.Status)
+	}
+}
+
 func TestHandleOrdersRejectsMismatchedQueryUserID(t *testing.T) {
 	store := NewMarketStore()
 	apiKeys := auth.NewAPIKeyCache()

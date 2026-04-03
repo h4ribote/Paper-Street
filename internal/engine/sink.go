@@ -23,12 +23,13 @@ func (d *DiscardSink) Shutdown(ctx context.Context) error {
 
 // AsyncMemorySink captures events in-memory for tests or diagnostics.
 type AsyncMemorySink struct {
-	orders     []*Order
-	executions []Execution
-	orderCh    chan *Order
-	execCh     chan Execution
-	done       chan struct{}
-	mu         sync.Mutex
+	orders       []*Order
+	executions   []Execution
+	orderCh      chan *Order
+	execCh       chan Execution
+	done         chan struct{}
+	mu           sync.Mutex
+	shutdownOnce sync.Once
 }
 
 func NewAsyncMemorySink(buffer int) *AsyncMemorySink {
@@ -64,8 +65,10 @@ func (s *AsyncMemorySink) EnqueueExecution(execution Execution) {
 }
 
 func (s *AsyncMemorySink) Shutdown(ctx context.Context) error {
-	close(s.orderCh)
-	close(s.execCh)
+	s.shutdownOnce.Do(func() {
+		close(s.orderCh)
+		close(s.execCh)
+	})
 	select {
 	case <-s.done:
 		return nil

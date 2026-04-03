@@ -110,6 +110,11 @@ func (s *Server) handleOrderByID(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid order id")
 		return
 	}
+	requestUserID, authStatus, message := s.resolveUserID(r, parseUserID(r), true)
+	if authStatus != 0 {
+		respondError(w, authStatus, message)
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		assetID := parseQueryInt64(r, "asset_id")
@@ -125,11 +130,27 @@ func (s *Server) handleOrderByID(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusNotFound, "order not found or does not belong to asset")
 			return
 		}
+		if order.UserID != requestUserID {
+			respondError(w, http.StatusUnauthorized, "order does not belong to authenticated user")
+			return
+		}
 		respondJSON(w, http.StatusOK, order)
 	case http.MethodDelete:
 		assetID := parseQueryInt64(r, "asset_id")
 		if assetID == 0 {
 			respondError(w, http.StatusBadRequest, "asset_id required")
+			return
+		}
+		order, ok := s.Engine.FindOrder(assetID, id)
+		if !ok && s.Store != nil {
+			order, ok = s.Store.OrderForAsset(id, assetID)
+		}
+		if !ok {
+			respondError(w, http.StatusNotFound, "order not found or does not belong to asset")
+			return
+		}
+		if order.UserID != requestUserID {
+			respondError(w, http.StatusUnauthorized, "order does not belong to authenticated user")
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
@@ -288,8 +309,8 @@ func (o orderRequest) toOrder(defaultUserID int64) (*engine.Order, error) {
 }
 
 type marketCooldownKey struct {
-	userID int64
-	side   engine.Side
+	userID  int64
+	side    engine.Side
 	assetID int64
 }
 

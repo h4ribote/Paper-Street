@@ -62,3 +62,13 @@ func TestAsyncMemorySinkIgnoresNilOrder(t *testing.T) {
 		t.Fatalf("nil order should be ignored")
 	}
 }
+
+func TestAsyncMemorySinkShutdownIsIdempotent(t *testing.T) {
+	sink := NewAsyncMemorySink(1)
+	if err := sink.Shutdown(context.Background()); err != nil {
+		t.Fatalf("first shutdown should succeed, got error: %v", err)
+	}
+	if err := sink.Shutdown(context.Background()); err != nil {
+		t.Fatalf("second shutdown should succeed, got error: %v", err)
+	}
+}
