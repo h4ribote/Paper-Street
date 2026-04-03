@@ -208,10 +208,11 @@ func (s *MarketStore) ClosePoolPosition(userID, positionID int64) (PoolPosition,
 		return PoolPosition{}, errors.New("position does not belong to user")
 	}
 	pool, ok := s.pools[position.PoolID]
-	if ok {
-		pool.Liquidity -= position.BaseAmount + position.QuoteAmount
-		s.pools[position.PoolID] = pool
+	if !ok {
+		return PoolPosition{}, errors.New("pool not found for position")
 	}
+	pool.Liquidity -= position.BaseAmount + position.QuoteAmount
+	s.pools[position.PoolID] = pool
 	s.ensureUserLocked(position.UserID)
 	s.balances[position.UserID][pool.BaseCurrency] += position.BaseAmount
 	s.balances[position.UserID][pool.QuoteCurrency] += position.QuoteAmount

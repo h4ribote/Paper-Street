@@ -27,12 +27,9 @@ func (s *Server) handleUserRank(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "store unavailable")
 		return
 	}
-	userID := parseUserID(r)
-	if userID == 0 {
-		userID = s.userIDFromRequest(r)
-	}
-	if userID == 0 {
-		respondError(w, http.StatusBadRequest, "user_id required")
+	userID, status, message := s.resolveUserID(r, parseUserID(r), true)
+	if status != 0 {
+		respondError(w, status, message)
 		return
 	}
 	info, ok := s.Store.UserRankInfo(userID)
@@ -52,12 +49,9 @@ func (s *Server) handleDailyMissions(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "store unavailable")
 		return
 	}
-	userID := parseUserID(r)
-	if userID == 0 {
-		userID = s.userIDFromRequest(r)
-	}
-	if userID == 0 {
-		respondError(w, http.StatusBadRequest, "user_id required")
+	userID, status, message := s.resolveUserID(r, parseUserID(r), true)
+	if status != 0 {
+		respondError(w, status, message)
 		return
 	}
 	now := time.Now().UTC()
@@ -106,12 +100,9 @@ func (s *Server) handleMissionByID(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid json body")
 		return
 	}
-	userID := payload.UserID
-	if userID == 0 {
-		userID = s.userIDFromRequest(r)
-	}
-	if userID == 0 {
-		respondError(w, http.StatusBadRequest, "user_id required")
+	userID, status, message := s.resolveUserID(r, payload.UserID, true)
+	if status != 0 {
+		respondError(w, status, message)
 		return
 	}
 	result, err := s.Store.CompleteDailyMission(userID, missionID, time.Now().UTC())
@@ -131,9 +122,10 @@ func (s *Server) handleContracts(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, []ContractStatus{})
 		return
 	}
-	userID := parseUserID(r)
-	if userID == 0 {
-		userID = s.userIDFromRequest(r)
+	userID, status, message := s.resolveUserID(r, parseUserID(r), false)
+	if status != 0 {
+		respondError(w, status, message)
+		return
 	}
 	respondJSON(w, http.StatusOK, s.Store.Contracts(userID))
 }
@@ -157,9 +149,10 @@ func (s *Server) handleContractByID(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
-		userID := parseUserID(r)
-		if userID == 0 {
-			userID = s.userIDFromRequest(r)
+		userID, status, message := s.resolveUserID(r, parseUserID(r), false)
+		if status != 0 {
+			respondError(w, status, message)
+			return
 		}
 		contract, ok := s.Store.Contract(contractID, userID)
 		if !ok {
@@ -180,12 +173,9 @@ func (s *Server) handleContractByID(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusBadRequest, "invalid json body")
 			return
 		}
-		userID := payload.UserID
-		if userID == 0 {
-			userID = s.userIDFromRequest(r)
-		}
-		if userID == 0 {
-			respondError(w, http.StatusBadRequest, "user_id required")
+		userID, status, message := s.resolveUserID(r, payload.UserID, true)
+		if status != 0 {
+			respondError(w, status, message)
 			return
 		}
 		result, err := s.Store.DeliverContract(userID, contractID, payload.Quantity)

@@ -65,9 +65,10 @@ func (s *Server) handleOrders(w http.ResponseWriter, r *http.Request) {
 		s.handleCreateOrder(w, r)
 	case http.MethodGet:
 		statusFilter := strings.TrimSpace(r.URL.Query().Get("status"))
-		userID := parseUserID(r)
-		if userID == 0 {
-			userID = s.userIDFromRequest(r)
+		userID, authStatus, message := s.resolveUserID(r, parseUserID(r), false)
+		if authStatus != 0 {
+			respondError(w, authStatus, message)
+			return
 		}
 		assetID := parseQueryInt64(r, "asset_id")
 		var status engine.OrderStatus
@@ -150,12 +151,12 @@ func (s *Server) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid json body")
 		return
 	}
-	defaultUserID := s.userIDFromRequest(r)
-	if defaultUserID != 0 && payload.UserID != 0 && payload.UserID != defaultUserID {
-		respondError(w, http.StatusUnauthorized, "user_id does not match authenticated user")
+	userID, status, message := s.resolveUserID(r, payload.UserID, true)
+	if status != 0 {
+		respondError(w, status, message)
 		return
 	}
-	order, err := payload.toOrder(defaultUserID)
+	order, err := payload.toOrder(userID)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return

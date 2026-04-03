@@ -190,15 +190,16 @@ func (s *Server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "store unavailable")
 		return
 	}
-	userID := parseUserID(r)
-	if userID == 0 {
-		userID = s.userIDFromRequest(r)
-	}
-	if userID == 0 {
-		respondError(w, http.StatusBadRequest, "user_id required")
+	userID, status, message := s.resolveUserID(r, parseUserID(r), true)
+	if status != 0 {
+		respondError(w, status, message)
 		return
 	}
-	user, _ := s.Store.User(userID)
+	user, ok := s.Store.User(userID)
+	if !ok || user.ID == 0 {
+		respondError(w, http.StatusNotFound, "user not found")
+		return
+	}
 	respondJSON(w, http.StatusOK, user)
 }
 
@@ -459,9 +460,10 @@ func (s *Server) handlePortfolioBalances(w http.ResponseWriter, r *http.Request)
 		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	userID := parseUserID(r)
-	if userID == 0 {
-		userID = s.userIDFromRequest(r)
+	userID, status, message := s.resolveUserID(r, parseUserID(r), false)
+	if status != 0 {
+		respondError(w, status, message)
+		return
 	}
 	if s.Store == nil {
 		respondJSON(w, http.StatusOK, []interface{}{})
@@ -475,9 +477,10 @@ func (s *Server) handlePortfolioAssets(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	userID := parseUserID(r)
-	if userID == 0 {
-		userID = s.userIDFromRequest(r)
+	userID, status, message := s.resolveUserID(r, parseUserID(r), false)
+	if status != 0 {
+		respondError(w, status, message)
+		return
 	}
 	if s.Store == nil {
 		respondJSON(w, http.StatusOK, []interface{}{})
@@ -491,9 +494,10 @@ func (s *Server) handlePortfolioPositions(w http.ResponseWriter, r *http.Request
 		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	userID := parseUserID(r)
-	if userID == 0 {
-		userID = s.userIDFromRequest(r)
+	userID, status, message := s.resolveUserID(r, parseUserID(r), false)
+	if status != 0 {
+		respondError(w, status, message)
+		return
 	}
 	if s.Store == nil {
 		respondJSON(w, http.StatusOK, []interface{}{})
@@ -507,9 +511,10 @@ func (s *Server) handlePortfolioHistory(w http.ResponseWriter, r *http.Request) 
 		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	userID := parseUserID(r)
-	if userID == 0 {
-		userID = s.userIDFromRequest(r)
+	userID, status, message := s.resolveUserID(r, parseUserID(r), false)
+	if status != 0 {
+		respondError(w, status, message)
+		return
 	}
 	if s.Store == nil {
 		respondJSON(w, http.StatusOK, []interface{}{})
@@ -524,9 +529,10 @@ func (s *Server) handlePortfolioPerformance(w http.ResponseWriter, r *http.Reque
 		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	userID := parseUserID(r)
-	if userID == 0 {
-		userID = s.userIDFromRequest(r)
+	userID, status, message := s.resolveUserID(r, parseUserID(r), false)
+	if status != 0 {
+		respondError(w, status, message)
+		return
 	}
 	if s.Store == nil {
 		respondJSON(w, http.StatusOK, []interface{}{})
@@ -585,9 +591,10 @@ func (s *Server) handlePoolByID(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusBadRequest, "invalid json body")
 			return
 		}
-		userID := payload.UserID
-		if userID == 0 {
-			userID = s.userIDFromRequest(r)
+		userID, status, message := s.resolveUserID(r, payload.UserID, true)
+		if status != 0 {
+			respondError(w, status, message)
+			return
 		}
 		position, err := s.Store.CreatePoolPosition(poolID, userID, payload.BaseAmount, payload.QuoteAmount, payload.LowerTick, payload.UpperTick)
 		if err != nil {
@@ -609,9 +616,10 @@ func (s *Server) handlePoolByID(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusBadRequest, "invalid json body")
 			return
 		}
-		userID := payload.UserID
-		if userID == 0 {
-			userID = s.userIDFromRequest(r)
+		userID, status, message := s.resolveUserID(r, payload.UserID, true)
+		if status != 0 {
+			respondError(w, status, message)
+			return
 		}
 		result, err := s.Store.SwapPool(poolID, userID, payload.FromCurrency, payload.ToCurrency, payload.Amount)
 		if err != nil {
@@ -633,9 +641,10 @@ func (s *Server) handlePoolPositions(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, []PoolPosition{})
 		return
 	}
-	userID := parseUserID(r)
-	if userID == 0 {
-		userID = s.userIDFromRequest(r)
+	userID, status, message := s.resolveUserID(r, parseUserID(r), false)
+	if status != 0 {
+		respondError(w, status, message)
+		return
 	}
 	respondJSON(w, http.StatusOK, s.Store.PoolPositions(userID))
 }
@@ -654,9 +663,10 @@ func (s *Server) handlePoolPositionByID(w http.ResponseWriter, r *http.Request) 
 		respondError(w, http.StatusInternalServerError, "store unavailable")
 		return
 	}
-	userID := parseUserID(r)
-	if userID == 0 {
-		userID = s.userIDFromRequest(r)
+	userID, status, message := s.resolveUserID(r, parseUserID(r), true)
+	if status != 0 {
+		respondError(w, status, message)
+		return
 	}
 	position, err := s.Store.ClosePoolPosition(userID, positionID)
 	if err != nil {
@@ -675,9 +685,10 @@ func (s *Server) handleMarginPools(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, []MarginPool{})
 		return
 	}
-	userID := parseUserID(r)
-	if userID == 0 {
-		userID = s.userIDFromRequest(r)
+	userID, status, message := s.resolveUserID(r, parseUserID(r), false)
+	if status != 0 {
+		respondError(w, status, message)
+		return
 	}
 	if userID != 0 {
 		respondJSON(w, http.StatusOK, s.Store.MarginPoolsForUser(userID))
@@ -701,9 +712,10 @@ func (s *Server) handleMarginPoolByID(w http.ResponseWriter, r *http.Request) {
 			respondJSON(w, http.StatusOK, MarginPool{})
 			return
 		}
-		userID := parseUserID(r)
-		if userID == 0 {
-			userID = s.userIDFromRequest(r)
+		userID, status, message := s.resolveUserID(r, parseUserID(r), false)
+		if status != 0 {
+			respondError(w, status, message)
+			return
 		}
 		pool, ok := s.Store.MarginPoolForUser(poolID, userID)
 		if !ok {
@@ -728,9 +740,10 @@ func (s *Server) handleMarginPoolByID(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusBadRequest, "invalid json body")
 			return
 		}
-		userID := payload.UserID
-		if userID == 0 {
-			userID = s.userIDFromRequest(r)
+		userID, status, message := s.resolveUserID(r, payload.UserID, true)
+		if status != 0 {
+			respondError(w, status, message)
+			return
 		}
 		result, err := s.Store.SupplyMarginPool(poolID, userID, payload.CashAmount, payload.AssetAmount)
 		if err != nil {
@@ -752,9 +765,10 @@ func (s *Server) handleMarginPoolByID(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusBadRequest, "invalid json body")
 			return
 		}
-		userID := payload.UserID
-		if userID == 0 {
-			userID = s.userIDFromRequest(r)
+		userID, status, message := s.resolveUserID(r, payload.UserID, true)
+		if status != 0 {
+			respondError(w, status, message)
+			return
 		}
 		result, err := s.Store.WithdrawMarginPool(poolID, userID, payload.CashAmount, payload.AssetAmount)
 		if err != nil {
@@ -776,9 +790,10 @@ func (s *Server) handleMarginPositions(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, []MarginPosition{})
 		return
 	}
-	userID := parseUserID(r)
-	if userID == 0 {
-		userID = s.userIDFromRequest(r)
+	userID, status, message := s.resolveUserID(r, parseUserID(r), false)
+	if status != 0 {
+		respondError(w, status, message)
+		return
 	}
 	respondJSON(w, http.StatusOK, s.Store.MarginPositions(userID))
 }
@@ -808,9 +823,10 @@ func (s *Server) handleMarginPositionByID(w http.ResponseWriter, r *http.Request
 			respondError(w, http.StatusBadRequest, "invalid json body")
 			return
 		}
-		userID := payload.UserID
-		if userID == 0 {
-			userID = s.userIDFromRequest(r)
+		userID, status, message := s.resolveUserID(r, payload.UserID, true)
+		if status != 0 {
+			respondError(w, status, message)
+			return
 		}
 		position, err := s.Store.AddMargin(userID, positionID, payload.Amount)
 		if err != nil {
@@ -832,9 +848,10 @@ func (s *Server) handleMarginLiquidations(w http.ResponseWriter, r *http.Request
 		respondJSON(w, http.StatusOK, []MarginLiquidation{})
 		return
 	}
-	userID := parseUserID(r)
-	if userID == 0 {
-		userID = s.userIDFromRequest(r)
+	userID, status, message := s.resolveUserID(r, parseUserID(r), false)
+	if status != 0 {
+		respondError(w, status, message)
+		return
 	}
 	respondJSON(w, http.StatusOK, s.Store.MarginLiquidations(userID))
 }
@@ -969,9 +986,10 @@ func (s *Server) handleIndices(w http.ResponseWriter, r *http.Request) {
 		if quantity == 0 {
 			quantity = 1
 		}
-		userID := payload.UserID
-		if userID == 0 {
-			userID = s.userIDFromRequest(r)
+		userID, status, message := s.resolveUserID(r, payload.UserID, true)
+		if status != 0 {
+			respondError(w, status, message)
+			return
 		}
 		var result IndexActionResult
 		var err error

@@ -27,6 +27,30 @@ func parseUserID(r *http.Request) int64 {
 	return parseQueryInt64(r, "user_id")
 }
 
+func (s *Server) resolveUserID(r *http.Request, requestedUserID int64, required bool) (int64, int, string) {
+	authenticatedUserID := s.userIDFromRequest(r)
+	apiKeyProvided := false
+	if r != nil {
+		apiKeyProvided = strings.TrimSpace(r.Header.Get(apiKeyHeader)) != ""
+	}
+	if authenticatedUserID != 0 {
+		if requestedUserID != 0 && requestedUserID != authenticatedUserID {
+			return 0, http.StatusUnauthorized, "user_id does not match authenticated user"
+		}
+		return authenticatedUserID, 0, ""
+	}
+	if apiKeyProvided && s != nil && s.APIKeys != nil {
+		return 0, http.StatusUnauthorized, "authenticated user not found"
+	}
+	if requestedUserID != 0 {
+		return requestedUserID, 0, ""
+	}
+	if required {
+		return 0, http.StatusBadRequest, "user_id required"
+	}
+	return 0, 0, ""
+}
+
 func parseLimit(r *http.Request, fallback int) int {
 	if r == nil {
 		return fallback

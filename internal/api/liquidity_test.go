@@ -134,3 +134,42 @@ func TestPoolPositionCollectsFeesOnClose(t *testing.T) {
 		t.Fatalf("expected quote balance to return to original amount, got %d", store.balances[1][pool.QuoteCurrency])
 	}
 }
+
+func TestClosePoolPositionFailsWhenPoolMissing(t *testing.T) {
+	store := NewMarketStore()
+	store.EnsureUser(1)
+	pool := store.pools[1]
+	spacing := tickSpacingForFee(pool.FeeBps)
+	lower := pool.CurrentTick - spacing*2
+	upper := pool.CurrentTick + spacing*2
+
+	store.mu.Lock()
+	store.balances[1][pool.BaseCurrency] = 10_000
+	store.balances[1][pool.QuoteCurrency] = 10_000
+	store.mu.Unlock()
+
+	position, err := store.CreatePoolPosition(pool.ID, 1, 1_000, 1_000, lower, upper)
+	if err != nil {
+		t.Fatalf("create pool position failed: %v", err)
+	}
+
+	store.mu.Lock()
+	delete(store.pools, pool.ID)
+	baseBefore := store.balances[1][pool.BaseCurrency]
+	quoteBefore := store.balances[1][pool.QuoteCurrency]
+	store.mu.Unlock()
+
+	_, err = store.ClosePoolPosition(1, position.ID)
+	if err == nil {
+		t.Fatalf("expected error when pool is missing")
+	}
+
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+	if store.balances[1][pool.BaseCurrency] != baseBefore {
+		t.Fatalf("expected base balance unchanged, got %d", store.balances[1][pool.BaseCurrency])
+	}
+	if store.balances[1][pool.QuoteCurrency] != quoteBefore {
+		t.Fatalf("expected quote balance unchanged, got %d", store.balances[1][pool.QuoteCurrency])
+	}
+}
