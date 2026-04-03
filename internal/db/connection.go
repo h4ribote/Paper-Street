@@ -32,6 +32,12 @@ func NewConnection(dsn string) (*Connection, error) {
 	db.SetMaxOpenConns(defaultMaxOpenConns)
 	db.SetMaxIdleConns(defaultMaxIdleConns)
 	db.SetConnMaxLifetime(defaultConnMaxAge)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	return &Connection{DSN: dsn, DB: db}, nil
 }
 

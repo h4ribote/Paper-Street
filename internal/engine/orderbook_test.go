@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -210,5 +211,13 @@ func TestFindOrderRoutesByAssetID(t *testing.T) {
 	}
 	if _, ok := eng.FindOrder(2, first.Order.ID); ok {
 		t.Fatalf("expected asset-scoped lookup to reject wrong asset")
+	}
+}
+
+func TestSubmitOrderRejectsNilOrder(t *testing.T) {
+	eng := NewEngine(NewDiscardSink())
+	_, err := eng.SubmitOrder(context.Background(), nil)
+	if !errors.Is(err, ErrOrderRequired) {
+		t.Fatalf("expected ErrOrderRequired, got %v", err)
 	}
 }

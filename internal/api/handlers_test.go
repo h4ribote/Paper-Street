@@ -361,6 +361,76 @@ func TestMarketOrderCooldown(t *testing.T) {
 	}
 }
 
+func TestMarketOrderCooldownIsAssetScoped(t *testing.T) {
+	store := NewMarketStore()
+	apiKeys := auth.NewAPIKeyCache()
+	if err := apiKeys.AddHex(testAPIKeyUser1); err != nil {
+		t.Fatalf("failed to add api key: %v", err)
+	}
+	if err := apiKeys.AddHex(testAPIKeyUser2); err != nil {
+		t.Fatalf("failed to add api key: %v", err)
+	}
+	store.RegisterAPIKey(testAPIKeyUser1, 1)
+	store.RegisterAPIKey(testAPIKeyUser2, 2)
+	store.EnsureUser(1)
+	store.EnsureUser(2)
+
+	eng := engine.NewEngine(store)
+	handler := NewRouter(eng, apiKeys, store, "")
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	submitOrder(t, server.URL, testAPIKeyUser2, orderRequest{
+		AssetID:  101,
+		UserID:   2,
+		Side:     "SELL",
+		Type:     "LIMIT",
+		Quantity: 10,
+		Price:    100,
+	})
+	submitOrder(t, server.URL, testAPIKeyUser2, orderRequest{
+		AssetID:  102,
+		UserID:   2,
+		Side:     "SELL",
+		Type:     "LIMIT",
+		Quantity: 10,
+		Price:    100,
+	})
+
+	submitOrder(t, server.URL, testAPIKeyUser1, orderRequest{
+		AssetID:  101,
+		UserID:   1,
+		Side:     "BUY",
+		Type:     "MARKET",
+		Quantity: 1,
+	})
+
+	payload, err := json.Marshal(orderRequest{
+		AssetID:  102,
+		UserID:   1,
+		Side:     "BUY",
+		Type:     "MARKET",
+		Quantity: 1,
+	})
+	if err != nil {
+		t.Fatalf("failed to marshal order: %v", err)
+	}
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/orders", bytes.NewReader(payload))
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(apiKeyHeader, testAPIKeyUser1)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200 for different asset, got %d", resp.StatusCode)
+	}
+}
+
 func TestHandleOrderBookMethodNotAllowed(t *testing.T) {
 	store := NewMarketStore()
 	apiKeys := auth.NewAPIKeyCache()

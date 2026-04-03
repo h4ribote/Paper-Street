@@ -7,6 +7,7 @@ import (
 )
 
 var ErrOrderBookNotFound = errors.New("orderbook not found")
+var ErrOrderRequired = errors.New("order required")
 
 // EventSink persists order and execution updates asynchronously.
 type EventSink interface {
@@ -45,6 +46,9 @@ func (e *Engine) OrderBook(assetID int64) *OrderBook {
 }
 
 func (e *Engine) SubmitOrder(ctx context.Context, order *Order) (OrderResult, error) {
+	if order == nil {
+		return OrderResult{}, ErrOrderRequired
+	}
 	book := e.OrderBook(order.AssetID)
 	return book.Submit(ctx, order)
 }

@@ -136,6 +136,20 @@ func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "code required")
 		return
 	}
+	expectedState := strings.TrimSpace(os.Getenv("DISCORD_OAUTH_STATE"))
+	if expectedState == "" {
+		respondError(w, http.StatusInternalServerError, "discord oauth state not configured")
+		return
+	}
+	state := strings.TrimSpace(r.URL.Query().Get("state"))
+	if state == "" {
+		respondError(w, http.StatusBadRequest, "state required")
+		return
+	}
+	if !subtleCompare(expectedState, state) {
+		respondError(w, http.StatusBadRequest, "invalid oauth state")
+		return
+	}
 	clientID := strings.TrimSpace(os.Getenv("DISCORD_CLIENT_ID"))
 	clientSecret := strings.TrimSpace(os.Getenv("DISCORD_CLIENT_SECRET"))
 	redirectURI := strings.TrimSpace(os.Getenv("DISCORD_REDIRECT_URI"))

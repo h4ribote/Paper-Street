@@ -466,19 +466,16 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.WSHub.Start(wsDefaultBroadcastEvery)
-	apiKey := strings.TrimSpace(r.URL.Query().Get("api_key"))
-	if apiKey == "" {
-		apiKey = strings.TrimSpace(r.Header.Get(apiKeyHeader))
+	apiKey := strings.TrimSpace(r.Header.Get(apiKeyHeader))
+	if apiKey == "" || !s.APIKeys.ContainsHex(apiKey) {
+		respondError(w, http.StatusUnauthorized, "invalid api key")
+		return
 	}
 	upgrader := gws.Upgrader{
 		CheckOrigin: wsCheckOrigin,
 	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		return
-	}
-	if apiKey == "" || !s.APIKeys.ContainsHex(apiKey) {
-		writeWSClose(conn, wsCloseInvalidToken, "invalid api key")
 		return
 	}
 	var userID int64
