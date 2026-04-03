@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 )
 
 func TestDiscardSinkNoop(t *testing.T) {
@@ -67,12 +66,16 @@ func TestAsyncMemorySinkIgnoresNilOrder(t *testing.T) {
 
 func TestAsyncMemorySinkShutdownTimeout(t *testing.T) {
 	sink := NewAsyncMemorySink(1)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
-	defer cancel()
+	sink.mu.Lock()
+	sink.execCh <- Execution{AssetID: 1}
 
-	time.Sleep(2 * time.Nanosecond)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cancel()
+
 	err := sink.Shutdown(ctx)
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("expected deadline exceeded, got %v", err)
+	sink.mu.Unlock()
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context canceled, got %v", err)
 	}
 }
