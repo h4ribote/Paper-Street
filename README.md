@@ -59,14 +59,8 @@ cd deployments
 docker compose up --build
 ```
 
-ボットも起動する場合は以下を実行します。
-
-```bash
-cd deployments
-docker compose --profile bots up --build
-```
-
-ボット用には `ADMIN_PASSWORD` を設定してください。全ボットは 1 つのコンテナ内で起動し、役割ごとの `BOT_ROLE` は内部で付与されます。
+`ADMIN_PASSWORD` を設定すると、サーバー起動時にボットコンテナも同時に起動し、全ボットが 1 つのコンテナ内で常時動作します。
+各ボットは内部で固定 `BOT_ROLE` を使って `/auth/bot` から永続 `API_KEY` を取得・再利用します。
 `API_KEY_FILE` を指定すると取得した API キーをファイルに保存します。
 
 ## ドキュメント
