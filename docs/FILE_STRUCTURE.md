@@ -14,8 +14,10 @@ Paper Street の主要なディレクトリ構成と役割をまとめます。
 │   └── docker-compose.yml      # Compose 定義
 ├── docs/                       # ドキュメント
 ├── frontend/
-│   ├── public/                 # 静的ファイル (HTML)
-│   └── src/                    # JS/CSS などのフロント実装
+│   ├── index.html              # ルート (`/`) で配信されるエントリ HTML
+│   ├── css/
+│   │   └── style.css           # フロントスタイル
+│   └── js/                     # フロント実装 (ES Modules)
 ├── internal/                   # アプリ内部ロジック
 │   ├── api/                    # HTTP ハンドラ/ルーティング
 │   ├── bots/                   # ボットのロジック/戦略
@@ -31,5 +33,6 @@ Paper Street の主要なディレクトリ構成と役割をまとめます。
 
 - `cmd/` は実行バイナリ単位でディレクトリを切り、バイナリ名がそのままパスになります。
 - `configs/` は環境依存の設定テンプレートをまとめ、ルート直下の散在を防ぎます。
-- `frontend/` は `public` と `src` に分割し、将来のビルドツール導入を前提に整理しています。
+- `frontend/index.html` はバックエンドから `http://localhost:8000/` で直接配信されます。
+- `frontend/css/`, `frontend/js/` はそれぞれ `/css/*`, `/js/*` として配信されます。
 - `deployments/docker/` に Dockerfile を集約し、環境別の追加に備えます。
