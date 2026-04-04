@@ -30,12 +30,40 @@ func (s *Server) withAPIKeyAuth(next http.Handler) http.Handler {
 }
 
 func isPublicPath(path string) bool {
-	switch path {
+	cleanPath := normalizePath(path)
+	switch cleanPath {
 	case "/", "/index.html", "/health", "/auth/login", "/auth/bot", "/auth/callback", "/ws":
 		return true
 	}
-	if strings.HasPrefix(path, "/css/") || strings.HasPrefix(path, "/js/") {
+	if strings.HasPrefix(cleanPath, "/css/") || strings.HasPrefix(cleanPath, "/js/") {
 		return true
 	}
 	return false
+}
+
+func normalizePath(path string) string {
+	cleaned := path
+	if !strings.HasPrefix(cleaned, "/") {
+		cleaned = "/" + cleaned
+	}
+	cleaned = strings.ReplaceAll(cleaned, "\\", "/")
+	for strings.Contains(cleaned, "//") {
+		cleaned = strings.ReplaceAll(cleaned, "//", "/")
+	}
+	segments := strings.Split(cleaned, "/")
+	stack := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		switch segment {
+		case "", ".":
+			continue
+		case "..":
+			if len(stack) == 0 {
+				return ""
+			}
+			stack = stack[:len(stack)-1]
+		default:
+			stack = append(stack, segment)
+		}
+	}
+	return "/" + strings.Join(stack, "/")
 }
