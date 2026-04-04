@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/h4ribote/Paper-Street/internal/auth"
@@ -82,11 +83,11 @@ func registerFrontendRoutes(mux *http.ServeMux) {
 			http.ServeFile(w, r, filepath.Join(frontendAbs, "index.html"))
 			return
 		}
-		if filepath.Dir(r.URL.Path) == "/css" {
+		if path.Dir(r.URL.Path) == "/css" {
 			cssHandler.ServeHTTP(w, r)
 			return
 		}
-		if filepath.Dir(r.URL.Path) == "/js" {
+		if path.Dir(r.URL.Path) == "/js" {
 			jsHandler.ServeHTTP(w, r)
 			return
 		}
