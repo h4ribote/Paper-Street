@@ -1931,9 +1931,6 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if len(users) == 0 {
-		s.needsInitialAlloc = true
-	}
 	for _, user := range users {
 		user = normalizeUser(user, user.ID)
 		if user.XP == 0 {
@@ -1972,6 +1969,9 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 			s.positions[balance.UserID] = make(map[int64]int64)
 		}
 		s.positions[balance.UserID][balance.AssetID] = balance.Quantity
+	}
+	if s.shouldSeedInitialAllocations(users, len(currencyBalances), len(assetBalances)) {
+		s.needsInitialAlloc = true
 	}
 
 	orders, err := s.queries.ListOrders(ctx)
@@ -2019,6 +2019,19 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 	}
 	s.refreshMarketStatsLocked()
 	return nil
+}
+
+func (s *MarketStore) shouldSeedInitialAllocations(users []models.User, currencyBalanceCount, assetBalanceCount int) bool {
+	if len(users) == 0 {
+		return true
+	}
+	if len(users) != 1 {
+		return false
+	}
+	if len(s.roleToAPIKey) != 0 || currencyBalanceCount != 0 || assetBalanceCount != 0 {
+		return false
+	}
+	return users[0].ID == 1
 }
 
 func (s *MarketStore) loadNewsFromDB(ctx context.Context) error {
