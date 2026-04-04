@@ -1164,7 +1164,7 @@ func (q *Queries) UpsertIndexConstituents(ctx context.Context, indexAssetID int6
 	if err != nil {
 		return err
 	}
-	_, err := q.Conn.DB.ExecContext(ctx, `DELETE FROM index_constituents WHERE index_asset_id = ?`, indexAssetID)
+	_, err = q.Conn.DB.ExecContext(ctx, `DELETE FROM index_constituents WHERE index_asset_id = ?`, indexAssetID)
 	if err != nil {
 		return err
 	}
