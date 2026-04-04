@@ -25,7 +25,7 @@ func TestDailyMissionCompletionAwardsReward(t *testing.T) {
 	defer server.Close()
 
 	var response DailyMissionResponse
-	getJSON(t, server.URL+"/missions/daily?user_id=1", testAPIKeyUser1, &response)
+	getJSON(t, server.URL+"/api/missions/daily?user_id=1", testAPIKeyUser1, &response)
 	if len(response.Missions) < 2 {
 		t.Fatalf("expected missions, got %+v", response.Missions)
 	}
@@ -44,13 +44,13 @@ func TestDailyMissionCompletionAwardsReward(t *testing.T) {
 	}
 
 	var firstComplete MissionCompletionResult
-	postJSON(t, server.URL+"/missions/"+firstID+"/complete", testAPIKeyUser1, missionCompleteRequest{UserID: 1}, &firstComplete)
+	postJSON(t, server.URL+"/api/missions/"+firstID+"/complete", testAPIKeyUser1, missionCompleteRequest{UserID: 1}, &firstComplete)
 	if firstComplete.Reward != nil {
 		t.Fatalf("expected no reward on first completion, got %+v", firstComplete.Reward)
 	}
 
 	var secondComplete MissionCompletionResult
-	postJSON(t, server.URL+"/missions/"+secondID+"/complete", testAPIKeyUser1, missionCompleteRequest{UserID: 1}, &secondComplete)
+	postJSON(t, server.URL+"/api/missions/"+secondID+"/complete", testAPIKeyUser1, missionCompleteRequest{UserID: 1}, &secondComplete)
 	if secondComplete.Reward == nil {
 		t.Fatalf("expected reward on pair completion")
 	}
@@ -62,7 +62,7 @@ func TestDailyMissionCompletionAwardsReward(t *testing.T) {
 	}
 
 	var balances []models.Balance
-	getJSON(t, server.URL+"/portfolio/balances?user_id=1", testAPIKeyUser1, &balances)
+	getJSON(t, server.URL+"/api/portfolio/balances?user_id=1", testAPIKeyUser1, &balances)
 	cash := balanceAmount(balances, defaultCurrency)
 	if cash != defaultCashBalance+400 {
 		t.Fatalf("expected cash %d, got %d", defaultCashBalance+400, cash)
@@ -83,7 +83,7 @@ func TestContractDeliveryAwardsXP(t *testing.T) {
 	defer server.Close()
 
 	var contracts []ContractStatus
-	getJSON(t, server.URL+"/contracts?user_id=1", testAPIKeyUser1, &contracts)
+	getJSON(t, server.URL+"/api/contracts?user_id=1", testAPIKeyUser1, &contracts)
 	if len(contracts) == 0 {
 		t.Fatalf("expected contracts, got %v", contracts)
 	}
@@ -105,7 +105,7 @@ func TestContractDeliveryAwardsXP(t *testing.T) {
 	store.positions[1][target.AssetID] = 25
 	store.mu.Unlock()
 
-	postJSON(t, server.URL+"/contracts/"+fmt.Sprint(target.ID)+"/deliver", testAPIKeyUser1, contractDeliveryRequest{UserID: 1, Quantity: 10}, &delivery)
+	postJSON(t, server.URL+"/api/contracts/"+fmt.Sprint(target.ID)+"/deliver", testAPIKeyUser1, contractDeliveryRequest{UserID: 1, Quantity: 10}, &delivery)
 
 	if delivery.Quantity != 10 {
 		t.Fatalf("expected quantity 10, got %d", delivery.Quantity)

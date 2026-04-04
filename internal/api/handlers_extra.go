@@ -226,7 +226,7 @@ func (s *Server) handleAssetByID(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "store unavailable")
 		return
 	}
-	id, err := parseID(strings.TrimPrefix(r.URL.Path, "/assets/"))
+	id, err := parseID(strings.TrimPrefix(r.URL.Path, "/api/assets/"))
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid asset id")
 		return
@@ -252,7 +252,7 @@ func (s *Server) handleBonds(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleBondOperations(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/bonds/")
+	path := strings.TrimPrefix(r.URL.Path, "/api/bonds/")
 	segments := strings.Split(strings.Trim(path, "/"), "/")
 	if len(segments) < 1 || strings.TrimSpace(segments[0]) == "" {
 		respondError(w, http.StatusBadRequest, "bond id required")
@@ -385,7 +385,7 @@ func (s *Server) handleTrades(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, []interface{}{})
 		return
 	}
-	assetID, err := parseID(strings.TrimPrefix(r.URL.Path, "/market/trades/"))
+	assetID, err := parseID(strings.TrimPrefix(r.URL.Path, "/api/market/trades/"))
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid asset id")
 		return
@@ -403,7 +403,7 @@ func (s *Server) handleCandles(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, []Candle{})
 		return
 	}
-	assetID, err := parseID(strings.TrimPrefix(r.URL.Path, "/market/candles/"))
+	assetID, err := parseID(strings.TrimPrefix(r.URL.Path, "/api/market/candles/"))
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid asset id")
 		return
@@ -568,7 +568,7 @@ func (s *Server) handlePools(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePoolByID(w http.ResponseWriter, r *http.Request) {
-	poolID, segments, err := parsePathID(r.URL.Path, "/pools/")
+	poolID, segments, err := parsePathID(r.URL.Path, "/api/pools/")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid pool id")
 		return
@@ -668,7 +668,7 @@ func (s *Server) handlePoolPositionByID(w http.ResponseWriter, r *http.Request) 
 		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	positionID, err := parseID(strings.TrimPrefix(r.URL.Path, "/pools/positions/"))
+	positionID, err := parseID(strings.TrimPrefix(r.URL.Path, "/api/pools/positions/"))
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid position id")
 		return
@@ -712,7 +712,7 @@ func (s *Server) handleMarginPools(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMarginPoolByID(w http.ResponseWriter, r *http.Request) {
-	poolID, segments, err := parsePathID(r.URL.Path, "/margin/pools/")
+	poolID, segments, err := parsePathID(r.URL.Path, "/api/margin/pools/")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid pool id")
 		return
@@ -813,7 +813,7 @@ func (s *Server) handleMarginPositions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMarginPositionByID(w http.ResponseWriter, r *http.Request) {
-	positionID, segments, err := parsePathID(r.URL.Path, "/margin/positions/")
+	positionID, segments, err := parsePathID(r.URL.Path, "/api/margin/positions/")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid position id")
 		return
@@ -937,7 +937,7 @@ func (s *Server) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleIndices(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/indices/")
+	path := strings.TrimPrefix(r.URL.Path, "/api/indices/")
 	segments := strings.Split(strings.Trim(path, "/"), "/")
 
 	// GET /indices/ — list all index definitions with current NAV.

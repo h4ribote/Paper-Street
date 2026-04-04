@@ -14,7 +14,7 @@ type companySimulationRequest struct {
 }
 
 func (s *Server) handleCompanyOperations(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/companies/")
+	path := strings.TrimPrefix(r.URL.Path, "/api/companies/")
 	segments := strings.Split(strings.Trim(path, "/"), "/")
 	if len(segments) < 2 {
 		respondError(w, http.StatusBadRequest, "company id and action required")

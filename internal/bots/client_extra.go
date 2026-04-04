@@ -13,7 +13,7 @@ func (c *APIClient) Assets(ctx context.Context, assetType, sector string) ([]Ass
 	if c == nil {
 		return nil, fmt.Errorf("api client is nil")
 	}
-	endpoint := fmt.Sprintf("%s/assets", c.baseURL)
+	endpoint := fmt.Sprintf("%s/api/assets", c.baseURL)
 	query := url.Values{}
 	if assetType != "" {
 		query.Set("type", assetType)
@@ -38,7 +38,7 @@ func (c *APIClient) Candles(ctx context.Context, assetID int64, timeframe string
 	if assetID <= 0 {
 		return nil, fmt.Errorf("asset_id must be positive")
 	}
-	endpoint := fmt.Sprintf("%s/market/candles/%d", c.baseURL, assetID)
+	endpoint := fmt.Sprintf("%s/api/market/candles/%d", c.baseURL, assetID)
 	query := url.Values{}
 	if timeframe != "" {
 		query.Set("timeframe", timeframe)
@@ -61,7 +61,7 @@ func (c *APIClient) Bonds(ctx context.Context) ([]PerpetualBondInfo, error) {
 		return nil, fmt.Errorf("api client is nil")
 	}
 	var bonds []PerpetualBondInfo
-	if err := c.getJSON(ctx, fmt.Sprintf("%s/bonds", c.baseURL), &bonds); err != nil {
+	if err := c.getJSON(ctx, fmt.Sprintf("%s/api/bonds", c.baseURL), &bonds); err != nil {
 		return nil, err
 	}
 	return bonds, nil
@@ -72,7 +72,7 @@ func (c *APIClient) MacroIndicators(ctx context.Context) ([]MacroIndicator, erro
 		return nil, fmt.Errorf("api client is nil")
 	}
 	var indicators []MacroIndicator
-	if err := c.getJSON(ctx, fmt.Sprintf("%s/macro/indicators", c.baseURL), &indicators); err != nil {
+	if err := c.getJSON(ctx, fmt.Sprintf("%s/api/macro/indicators", c.baseURL), &indicators); err != nil {
 		return nil, err
 	}
 	return indicators, nil
@@ -83,7 +83,7 @@ func (c *APIClient) TheoreticalFXRates(ctx context.Context) ([]TheoreticalFXRate
 		return nil, fmt.Errorf("api client is nil")
 	}
 	var rates []TheoreticalFXRate
-	if err := c.getJSON(ctx, fmt.Sprintf("%s/fx/theoretical", c.baseURL), &rates); err != nil {
+	if err := c.getJSON(ctx, fmt.Sprintf("%s/api/fx/theoretical", c.baseURL), &rates); err != nil {
 		return nil, err
 	}
 	return rates, nil
@@ -94,7 +94,7 @@ func (c *APIClient) Pools(ctx context.Context) ([]LiquidityPool, error) {
 		return nil, fmt.Errorf("api client is nil")
 	}
 	var pools []LiquidityPool
-	if err := c.getJSON(ctx, fmt.Sprintf("%s/pools", c.baseURL), &pools); err != nil {
+	if err := c.getJSON(ctx, fmt.Sprintf("%s/api/pools", c.baseURL), &pools); err != nil {
 		return nil, err
 	}
 	return pools, nil
@@ -107,9 +107,9 @@ func (c *APIClient) SwapPool(ctx context.Context, poolID int64, request PoolSwap
 	if poolID < 0 {
 		return nil, fmt.Errorf("pool_id must be non-negative")
 	}
-	endpoint := fmt.Sprintf("%s/pools/%d/swap", c.baseURL, poolID)
+	endpoint := fmt.Sprintf("%s/api/pools/%d/swap", c.baseURL, poolID)
 	if poolID == 0 {
-		endpoint = fmt.Sprintf("%s/pools/0/swap", c.baseURL)
+		endpoint = fmt.Sprintf("%s/api/pools/0/swap", c.baseURL)
 	}
 	payload, err := json.Marshal(request)
 	if err != nil {
@@ -132,7 +132,7 @@ func (c *APIClient) IndexAction(ctx context.Context, assetID int64, action strin
 	if action == "" {
 		return nil, fmt.Errorf("action required")
 	}
-	endpoint := fmt.Sprintf("%s/indices/%d/%s", c.baseURL, assetID, action)
+	endpoint := fmt.Sprintf("%s/api/indices/%d/%s", c.baseURL, assetID, action)
 	payload, err := json.Marshal(request)
 	if err != nil {
 		return nil, err
@@ -148,7 +148,7 @@ func (c *APIClient) Balances(ctx context.Context, userID int64) ([]Balance, erro
 	if c == nil {
 		return nil, fmt.Errorf("api client is nil")
 	}
-	endpoint := fmt.Sprintf("%s/portfolio/balances", c.baseURL)
+	endpoint := fmt.Sprintf("%s/api/portfolio/balances", c.baseURL)
 	if userID != 0 {
 		endpoint = fmt.Sprintf("%s?user_id=%d", endpoint, userID)
 	}

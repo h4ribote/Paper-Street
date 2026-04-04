@@ -71,7 +71,7 @@ func (s *Server) handleUserMissions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMissionByID(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/missions/")
+	path := strings.TrimPrefix(r.URL.Path, "/api/missions/")
 	path = strings.Trim(path, "/")
 	if path == "" || path == "daily" {
 		respondError(w, http.StatusNotFound, "mission not found")
@@ -135,7 +135,7 @@ func (s *Server) handleUserContracts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleContractByID(w http.ResponseWriter, r *http.Request) {
-	contractID, segments, err := parsePathID(r.URL.Path, "/contracts/")
+	contractID, segments, err := parsePathID(r.URL.Path, "/api/contracts/")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid contract id")
 		return

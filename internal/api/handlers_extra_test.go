@@ -166,18 +166,18 @@ func TestPoolPositionLifecycle(t *testing.T) {
 		UpperTick:   10,
 	}
 	var position PoolPosition
-	postJSON(t, server.URL+"/pools/1/positions", testAPIKeyUser1, request, &position)
+	postJSON(t, server.URL+"/api/pools/1/positions", testAPIKeyUser1, request, &position)
 	if position.ID == 0 || position.PoolID != 1 {
 		t.Fatalf("unexpected position response: %+v", position)
 	}
 
 	var positions []PoolPosition
-	getJSON(t, server.URL+"/pools/positions?user_id=1", testAPIKeyUser1, &positions)
+	getJSON(t, server.URL+"/api/pools/positions?user_id=1", testAPIKeyUser1, &positions)
 	if len(positions) == 0 || positions[0].ID != position.ID {
 		t.Fatalf("expected position in list, got %+v", positions)
 	}
 
-	req, err := http.NewRequest(http.MethodDelete, server.URL+"/pools/positions/"+strconv.FormatInt(position.ID, 10), nil)
+	req, err := http.NewRequest(http.MethodDelete, server.URL+"/api/pools/positions/"+strconv.FormatInt(position.ID, 10), nil)
 	if err != nil {
 		t.Fatalf("failed to build delete request: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestHandleCurrentUserReturnsNotFoundForUnknownUser(t *testing.T) {
 	server := httptest.NewServer(NewRouter(eng, nil, store, ""))
 	defer server.Close()
 
-	req, err := http.NewRequest(http.MethodGet, server.URL+"/users/me?user_id=9999", nil)
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/api/users/me?user_id=9999", nil)
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
@@ -225,7 +225,7 @@ func TestPortfolioRejectsMismatchedUserID(t *testing.T) {
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
-	req, err := http.NewRequest(http.MethodGet, server.URL+"/portfolio/balances?user_id=2", nil)
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/api/portfolio/balances?user_id=2", nil)
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
@@ -270,7 +270,7 @@ func TestIndexCreateRedeem(t *testing.T) {
 	defer server.Close()
 
 	var createResult IndexActionResult
-	postJSON(t, server.URL+"/indices/201/create", testAPIKeyUser1, indexActionRequest{UserID: 1, Quantity: 2}, &createResult)
+	postJSON(t, server.URL+"/api/indices/201/create", testAPIKeyUser1, indexActionRequest{UserID: 1, Quantity: 2}, &createResult)
 	if createResult.AssetID != 201 || createResult.Quantity != 2 {
 		t.Fatalf("unexpected create response: %+v", createResult)
 	}
@@ -286,7 +286,7 @@ func TestIndexCreateRedeem(t *testing.T) {
 	store.mu.RUnlock()
 
 	var assets []PortfolioAsset
-	getJSON(t, server.URL+"/portfolio/assets?user_id=1", testAPIKeyUser1, &assets)
+	getJSON(t, server.URL+"/api/portfolio/assets?user_id=1", testAPIKeyUser1, &assets)
 	found := false
 	for _, asset := range assets {
 		if asset.Asset.ID == 201 && asset.Quantity == 2 {
@@ -303,7 +303,7 @@ func TestIndexCreateRedeem(t *testing.T) {
 	store.mu.Unlock()
 
 	var redeemResult IndexActionResult
-	postJSON(t, server.URL+"/indices/201/redeem", testAPIKeyUser1, indexActionRequest{UserID: 1, Quantity: 1}, &redeemResult)
+	postJSON(t, server.URL+"/api/indices/201/redeem", testAPIKeyUser1, indexActionRequest{UserID: 1, Quantity: 1}, &redeemResult)
 	if redeemResult.Quantity != 1 {
 		t.Fatalf("unexpected redeem response: %+v", redeemResult)
 	}
@@ -355,7 +355,7 @@ func TestIndexGetEndpoints(t *testing.T) {
 
 	// GET /indices/ — list all indexes.
 	var indexes []IndexInfo
-	getJSON(t, server.URL+"/indices/", testAPIKeyUser1, &indexes)
+	getJSON(t, server.URL+"/api/indices/", testAPIKeyUser1, &indexes)
 	if len(indexes) == 0 {
 		t.Fatal("expected at least one index in list")
 	}
@@ -375,7 +375,7 @@ func TestIndexGetEndpoints(t *testing.T) {
 
 	// GET /indices/201 — get specific index.
 	var info IndexInfo
-	getJSON(t, server.URL+"/indices/201", testAPIKeyUser1, &info)
+	getJSON(t, server.URL+"/api/indices/201", testAPIKeyUser1, &info)
 	if info.Definition.AssetID != 201 {
 		t.Fatalf("expected index asset_id 201, got %d", info.Definition.AssetID)
 	}
@@ -387,7 +387,7 @@ func TestIndexGetEndpoints(t *testing.T) {
 	}
 
 	// GET /indices/9999 — unknown index should return 404.
-	req, err := http.NewRequest(http.MethodGet, server.URL+"/indices/9999", nil)
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/api/indices/9999", nil)
 	if err != nil {
 		t.Fatalf("build request: %v", err)
 	}

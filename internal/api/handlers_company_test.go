@@ -23,7 +23,7 @@ func TestCompanyCapitalStructureEndpoint(t *testing.T) {
 	defer server.Close()
 
 	var structure CompanyCapitalStructure
-	getJSON(t, server.URL+"/companies/101/capital-structure", testAPIKeyUser1, &structure)
+	getJSON(t, server.URL+"/api/companies/101/capital-structure", testAPIKeyUser1, &structure)
 	store.mu.RLock()
 	state := store.companyStates[101]
 	expectedIssued := int64(0)
@@ -67,7 +67,7 @@ func TestCompanyFinancingAndBuybackEndpoints(t *testing.T) {
 	defer server.Close()
 
 	var finance CompanyFinancingResult
-	postJSON(t, server.URL+"/companies/101/financing/initiate", testAPIKeyUser1, CompanyFinancingRequest{TargetAmount: 1000000}, &finance)
+	postJSON(t, server.URL+"/api/companies/101/financing/initiate", testAPIKeyUser1, CompanyFinancingRequest{TargetAmount: 1000000}, &finance)
 	if finance.SharesOutstanding <= 0 {
 		t.Fatalf("expected financing to increase outstanding shares")
 	}
@@ -90,7 +90,7 @@ func TestCompanyFinancingAndBuybackEndpoints(t *testing.T) {
 	})
 
 	var buyback CompanyBuybackResult
-	postJSON(t, server.URL+"/companies/101/buyback/authorize", testAPIKeyUser1, CompanyBuybackRequest{Budget: 100000}, &buyback)
+	postJSON(t, server.URL+"/api/companies/101/buyback/authorize", testAPIKeyUser1, CompanyBuybackRequest{Budget: 100000}, &buyback)
 	if buyback.SharesRepurchased <= 0 {
 		t.Fatalf("expected buyback to repurchase shares, got %d", buyback.SharesRepurchased)
 	}
@@ -109,7 +109,7 @@ func TestCompanySimulationEndpoint(t *testing.T) {
 	defer server.Close()
 
 	var result CompanySimulationResult
-	postJSON(t, server.URL+"/companies/101/simulate", testAPIKeyUser1, companySimulationRequest{Quarters: 1}, &result)
+	postJSON(t, server.URL+"/api/companies/101/simulate", testAPIKeyUser1, companySimulationRequest{Quarters: 1}, &result)
 	if result.CompanyID != 101 {
 		t.Fatalf("expected company id 101, got %d", result.CompanyID)
 	}
@@ -370,7 +370,7 @@ func TestCompanyDividendsEndpoint(t *testing.T) {
 	defer server.Close()
 
 	var records []CompanyDividendRecord
-	getJSON(t, server.URL+"/companies/101/dividends", testAPIKeyUser1, &records)
+	getJSON(t, server.URL+"/api/companies/101/dividends", testAPIKeyUser1, &records)
 	if len(records) == 0 {
 		t.Fatalf("expected dividend records from endpoint")
 	}

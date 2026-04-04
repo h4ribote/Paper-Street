@@ -58,7 +58,7 @@ func TestTradeFlowUpdatesMarketData(t *testing.T) {
 	})
 
 	var trades []engine.Execution
-	getJSON(t, server.URL+"/market/trades/101?limit=1", testAPIKeyUser1, &trades)
+	getJSON(t, server.URL+"/api/market/trades/101?limit=1", testAPIKeyUser1, &trades)
 	if len(trades) != 1 {
 		t.Fatalf("expected 1 trade, got %d", len(trades))
 	}
@@ -67,7 +67,7 @@ func TestTradeFlowUpdatesMarketData(t *testing.T) {
 	}
 
 	var balances []models.Balance
-	getJSON(t, server.URL+"/portfolio/balances?user_id=1", testAPIKeyUser1, &balances)
+	getJSON(t, server.URL+"/api/portfolio/balances?user_id=1", testAPIKeyUser1, &balances)
 	usd := balanceAmount(balances, defaultCurrency)
 	expectedCash := defaultCashBalance - 100*10 - 1
 	if usd != expectedCash {
@@ -75,7 +75,7 @@ func TestTradeFlowUpdatesMarketData(t *testing.T) {
 	}
 
 	var assets []PortfolioAsset
-	getJSON(t, server.URL+"/portfolio/assets?user_id=1", testAPIKeyUser1, &assets)
+	getJSON(t, server.URL+"/api/portfolio/assets?user_id=1", testAPIKeyUser1, &assets)
 	if len(assets) == 0 || assets[0].Quantity != 10 {
 		t.Fatalf("expected asset quantity 10, got %+v", assets)
 	}
@@ -107,13 +107,13 @@ func TestHandleOrdersPagination(t *testing.T) {
 	}
 
 	var all []engine.Order
-	getJSON(t, server.URL+"/orders", testAPIKeyUser1, &all)
+	getJSON(t, server.URL+"/api/orders", testAPIKeyUser1, &all)
 	if len(all) < 3 {
 		t.Fatalf("expected at least 3 orders, got %d", len(all))
 	}
 
 	var page []engine.Order
-	getJSON(t, server.URL+"/orders?limit=1&offset=1", testAPIKeyUser1, &page)
+	getJSON(t, server.URL+"/api/orders?limit=1&offset=1", testAPIKeyUser1, &page)
 	if len(page) != 1 {
 		t.Fatalf("expected 1 paged order, got %d", len(page))
 	}
@@ -287,7 +287,7 @@ func TestHandleOrdersRejectsMismatchedQueryUserID(t *testing.T) {
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
-	req, err := http.NewRequest(http.MethodGet, server.URL+"/orders?user_id=2", nil)
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/api/orders?user_id=2", nil)
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
@@ -327,7 +327,7 @@ func TestHandleCreateOrderRejectsMismatchedPayloadUserID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal order: %v", err)
 	}
-	req, err := http.NewRequest(http.MethodPost, server.URL+"/orders", bytes.NewReader(payload))
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/api/orders", bytes.NewReader(payload))
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
@@ -379,7 +379,7 @@ func TestHandleOrderBookDepthLimit(t *testing.T) {
 	}
 
 	var snapshot engine.OrderBookSnapshot
-	getJSON(t, server.URL+"/market/orderbook/101?depth=9999", testAPIKeyUser1, &snapshot)
+	getJSON(t, server.URL+"/api/market/orderbook/101?depth=9999", testAPIKeyUser1, &snapshot)
 	if len(snapshot.Bids) != maxOrderBookDepth {
 		t.Fatalf("expected %d bid levels, got %d", maxOrderBookDepth, len(snapshot.Bids))
 	}
@@ -433,7 +433,7 @@ func TestMarketOrderCooldown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal order: %v", err)
 	}
-	req, err := http.NewRequest(http.MethodPost, server.URL+"/orders", bytes.NewReader(payload))
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/api/orders", bytes.NewReader(payload))
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
@@ -517,7 +517,7 @@ func TestMarketOrderCooldownIsAssetScoped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal order: %v", err)
 	}
-	req, err := http.NewRequest(http.MethodPost, server.URL+"/orders", bytes.NewReader(payload))
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/api/orders", bytes.NewReader(payload))
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
@@ -543,7 +543,7 @@ func TestHandleOrderBookMethodNotAllowed(t *testing.T) {
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
-	req, err := http.NewRequest(http.MethodPost, server.URL+"/market/orderbook/101", nil)
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/api/market/orderbook/101", nil)
 	if err != nil {
 		t.Fatalf("failed to build request: %v", err)
 	}
@@ -585,7 +585,7 @@ func submitOrder(t *testing.T, baseURL, apiKey string, order orderRequest) {
 	if err != nil {
 		t.Fatalf("failed to marshal order: %v", err)
 	}
-	req, err := http.NewRequest(http.MethodPost, baseURL+"/orders", bytes.NewReader(payload))
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/orders", bytes.NewReader(payload))
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}

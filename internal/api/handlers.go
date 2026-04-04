@@ -105,7 +105,7 @@ func (s *Server) handleOrders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleOrderByID(w http.ResponseWriter, r *http.Request) {
-	id, err := parseID(strings.TrimPrefix(r.URL.Path, "/orders/"))
+	id, err := parseID(strings.TrimPrefix(r.URL.Path, "/api/orders/"))
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid order id")
 		return
@@ -203,7 +203,7 @@ func (s *Server) handleOrderBook(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	id, err := parseID(strings.TrimPrefix(r.URL.Path, "/market/orderbook/"))
+	id, err := parseID(strings.TrimPrefix(r.URL.Path, "/api/market/orderbook/"))
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid asset id")
 		return
