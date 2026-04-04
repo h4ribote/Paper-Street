@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/h4ribote/Paper-Street/internal/auth"
 	"github.com/h4ribote/Paper-Street/internal/engine"
@@ -69,26 +70,73 @@ func registerFrontendRoutes(mux *http.ServeMux) {
 	if !ok {
 		return
 	}
-	fileServer := http.FileServer(http.Dir(frontendDir))
+	frontendAbs, err := filepath.Abs(frontendDir)
+	if err != nil {
+		return
+	}
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			http.ServeFile(w, r, filepath.Join(frontendDir, "index.html"))
+		if r.URL.Path == "/" || r.URL.Path == "/index.html" {
+			http.ServeFile(w, r, filepath.Join(frontendAbs, "index.html"))
 			return
 		}
-		fileServer.ServeHTTP(w, r)
+		cleanPath := filepath.Clean(strings.TrimPrefix(r.URL.Path, "/"))
+		if cleanPath == "." || strings.HasPrefix(cleanPath, "..") {
+			http.NotFound(w, r)
+			return
+		}
+		targetPath := filepath.Join(frontendAbs, cleanPath)
+		if !isWithinDir(frontendAbs, targetPath) {
+			http.NotFound(w, r)
+			return
+		}
+		info, statErr := os.Stat(targetPath)
+		if statErr != nil || info.IsDir() {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeFile(w, r, targetPath)
 	})
 }
 
 func resolveFrontendDir() (string, bool) {
-	candidates := []string{
-		"frontend",
-		filepath.Join("..", "..", "frontend"),
+	if dir, ok := findFrontendFrom("."); ok {
+		return dir, true
 	}
-	for _, candidate := range candidates {
+	if wd, err := os.Getwd(); err == nil {
+		if dir, ok := findFrontendFrom(wd); ok {
+			return dir, true
+		}
+	}
+	if exePath, err := os.Executable(); err == nil {
+		if dir, ok := findFrontendFrom(filepath.Dir(exePath)); ok {
+			return dir, true
+		}
+	}
+	return "", false
+}
+
+func findFrontendFrom(base string) (string, bool) {
+	current := base
+	for i := 0; i < 8; i++ {
+		candidate := filepath.Join(current, "frontend")
 		indexPath := filepath.Join(candidate, "index.html")
 		if info, err := os.Stat(indexPath); err == nil && !info.IsDir() {
 			return candidate, true
 		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			break
+		}
+		current = parent
 	}
 	return "", false
+}
+
+func isWithinDir(dir, target string) bool {
+	dirClean := filepath.Clean(dir)
+	targetClean := filepath.Clean(target)
+	if dirClean == targetClean {
+		return true
+	}
+	return strings.HasPrefix(targetClean, dirClean+string(os.PathSeparator))
 }
