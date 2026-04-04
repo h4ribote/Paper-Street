@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +16,12 @@ import (
 	"github.com/h4ribote/Paper-Street/internal/auth"
 	"github.com/h4ribote/Paper-Street/internal/db"
 	"github.com/h4ribote/Paper-Street/internal/engine"
+)
+
+const (
+	dbInitTimeout       = 60 * time.Second
+	dbRetryInterval     = 2 * time.Second
+	dbStartupPingTimout = 5 * time.Second
 )
 
 func main() {
@@ -83,11 +90,11 @@ func createStore() *api.MarketStore {
 	if dsn == "" {
 		return api.NewMarketStore()
 	}
-	conn, err := db.NewConnection(dsn)
+	conn, err := waitForDBConnection(dsn, dbInitTimeout, dbRetryInterval)
 	if err != nil {
 		log.Fatalf("db connection error: %v", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), dbStartupPingTimout)
 	defer cancel()
 	if err := conn.Ping(ctx); err != nil {
 		log.Fatalf("db ping error: %v", err)
@@ -98,6 +105,32 @@ func createStore() *api.MarketStore {
 		log.Fatalf("db store error: %v", err)
 	}
 	return store
+}
+
+func waitForDBConnection(dsn string, timeout, interval time.Duration) (*db.Connection, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	attempt := 1
+	var lastErr error
+	for {
+		conn, err := db.NewConnection(dsn)
+		if err == nil {
+			return conn, nil
+		}
+		lastErr = err
+		log.Printf("db not ready yet (attempt %d): %v", attempt, err)
+
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("db did not become ready within %s: %w", timeout, lastErr)
+		case <-ticker.C:
+			attempt++
+		}
+	}
 }
 
 func envDuration(key string, fallback time.Duration) time.Duration {
