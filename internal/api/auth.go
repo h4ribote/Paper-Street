@@ -12,7 +12,7 @@ func (s *Server) withAPIKeyAuth(next http.Handler) http.Handler {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/health" || r.URL.Path == "/auth/login" || r.URL.Path == "/auth/bot" || r.URL.Path == "/auth/callback" || r.URL.Path == "/ws" {
+		if isPublicPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -27,4 +27,15 @@ func (s *Server) withAPIKeyAuth(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func isPublicPath(path string) bool {
+	switch path {
+	case "/", "/index.html", "/health", "/auth/login", "/auth/bot", "/auth/callback", "/ws":
+		return true
+	}
+	if strings.HasPrefix(path, "/css/") || strings.HasPrefix(path, "/js/") {
+		return true
+	}
+	return false
 }

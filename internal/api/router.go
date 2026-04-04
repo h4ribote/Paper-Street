@@ -2,6 +2,8 @@ package api
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/h4ribote/Paper-Street/internal/auth"
 	"github.com/h4ribote/Paper-Street/internal/engine"
@@ -58,5 +60,35 @@ func NewRouter(e *engine.Engine, apiKeys *auth.APIKeyCache, store *MarketStore, 
 	mux.HandleFunc("/companies/", srv.handleCompanyOperations)
 	mux.HandleFunc("/indices/", srv.handleIndices)
 	mux.HandleFunc("/ws", srv.handleWebSocket)
+	registerFrontendRoutes(mux)
 	return srv.withAPIKeyAuth(mux)
+}
+
+func registerFrontendRoutes(mux *http.ServeMux) {
+	frontendDir, ok := resolveFrontendDir()
+	if !ok {
+		return
+	}
+	fileServer := http.FileServer(http.Dir(frontendDir))
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			http.ServeFile(w, r, filepath.Join(frontendDir, "index.html"))
+			return
+		}
+		fileServer.ServeHTTP(w, r)
+	})
+}
+
+func resolveFrontendDir() (string, bool) {
+	candidates := []string{
+		"frontend",
+		filepath.Join("..", "..", "frontend"),
+	}
+	for _, candidate := range candidates {
+		indexPath := filepath.Join(candidate, "index.html")
+		if info, err := os.Stat(indexPath); err == nil && !info.IsDir() {
+			return candidate, true
+		}
+	}
+	return "", false
 }
