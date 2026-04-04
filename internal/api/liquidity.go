@@ -764,6 +764,14 @@ func (s *MarketStore) seedIndexes() {
 	}
 	s.indexes[indexAsset.ID] = definition
 	s.basePrices[indexAsset.ID] = s.indexUnitPriceLocked(definition)
+	if s.queries != nil {
+		ctx, cancel := s.dbContext()
+		defer cancel()
+		if err := s.queries.UpsertAsset(ctx, indexAsset, s.basePrices[indexAsset.ID]); err != nil {
+			log.Printf("db upsert asset %d: %v", indexAsset.ID, err)
+			return
+		}
+	}
 	s.persistIndex(definition)
 }
 
