@@ -59,7 +59,7 @@ cd deployments
 docker compose up --build
 ```
 
-`ADMIN_PASSWORD` を設定すると、サーバー起動時にボットコンテナも同時に起動し、全ボットが 1 つのコンテナ内で常時動作します。
+`ADMIN_PASSWORD` を設定した状態で `docker compose up --build` を実行すると、サーバーと同時にボットコンテナも起動し、全ボットが 1 つのコンテナ内で常時動作します（`ADMIN_PASSWORD` はボットの `/auth/bot` 認証に必須）。
 各ボットは内部で固定 `BOT_ROLE` を使って `/auth/bot` から永続 `API_KEY` を取得・再利用します。
 `API_KEY_FILE` を指定すると取得した API キーをファイルに保存します。
 
