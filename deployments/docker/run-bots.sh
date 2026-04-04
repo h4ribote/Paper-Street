@@ -51,7 +51,7 @@ terminate() {
 
 trap terminate INT TERM
 
-wait_for_server
+wait_for_server || exit 1
 
 start_bot "market_maker" ./market_maker BOT_ROLE=market_maker
 start_bot "news_reactor" ./news_reactor BOT_ROLE=news_reactor
