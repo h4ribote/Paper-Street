@@ -210,3 +210,28 @@ func TestListIndexConstituentsOrdersByInsertSequence(t *testing.T) {
 		t.Fatalf("expectations: %v", err)
 	}
 }
+
+func TestUpsertIndexConstituentsEnsuresParentAsset(t *testing.T) {
+	queries, mock, cleanup := newMockQueries(t)
+	defer cleanup()
+
+	mock.ExpectExec("INSERT INTO assets \\(asset_id, ticker, type, base_price, created_at\\)").
+		WithArgs(int64(201), "INDEX-201", "INDEX", int64(10_000), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("DELETE FROM index_constituents WHERE index_asset_id = ?").
+		WithArgs(int64(201)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("INSERT INTO index_constituents \\(index_asset_id, component_asset_id\\)").
+		WithArgs(int64(201), int64(101)).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO index_constituents \\(index_asset_id, component_asset_id\\)").
+		WithArgs(int64(201), int64(102)).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	if err := queries.UpsertIndexConstituents(context.Background(), 201, []int64{101, 102}); err != nil {
+		t.Fatalf("UpsertIndexConstituents error: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("expectations: %v", err)
+	}
+}

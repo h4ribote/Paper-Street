@@ -18,6 +18,7 @@ const (
 	defaultSectorName   = "UNKNOWN"
 	defaultCurrencyName = "Arcadian Credit"
 	defaultUserRankID   = 1
+	defaultAssetPrice   = int64(10_000)
 )
 
 type Queries struct {
@@ -1153,6 +1154,15 @@ func (q *Queries) ListIndexConstituents(ctx context.Context) ([]IndexConstituent
 func (q *Queries) UpsertIndexConstituents(ctx context.Context, indexAssetID int64, componentAssetIDs []int64) error {
 	if indexAssetID == 0 {
 		return errors.New("index asset id required")
+	}
+	createdAt := time.Now().UTC().UnixMilli()
+	_, err := q.Conn.DB.ExecContext(ctx, `
+		INSERT INTO assets (asset_id, ticker, type, base_price, created_at)
+		VALUES (?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE asset_id = asset_id
+	`, indexAssetID, fmt.Sprintf("INDEX-%d", indexAssetID), "INDEX", defaultAssetPrice, createdAt)
+	if err != nil {
+		return err
 	}
 	_, err := q.Conn.DB.ExecContext(ctx, `DELETE FROM index_constituents WHERE index_asset_id = ?`, indexAssetID)
 	if err != nil {
