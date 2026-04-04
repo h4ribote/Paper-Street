@@ -10,6 +10,20 @@ fi
 
 pids=""
 
+wait_for_server() {
+  echo "Waiting for server to become ready: ${API_BASE_URL}/health"
+  i=0
+  while [ "$i" -lt 60 ]; do
+    if wget -q -O /dev/null "${API_BASE_URL}/health"; then
+      return 0
+    fi
+    i=$((i + 1))
+    sleep 1
+  done
+  echo "Server did not become ready in time"
+  return 1
+}
+
 start_bot() {
   name="$1"
   cmd="$2"
@@ -36,6 +50,8 @@ terminate() {
 }
 
 trap terminate INT TERM
+
+wait_for_server || exit 1
 
 start_bot "market_maker" ./market_maker BOT_ROLE=market_maker
 start_bot "news_reactor" ./news_reactor BOT_ROLE=news_reactor

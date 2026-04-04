@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 	"sort"
 	"strings"
@@ -756,14 +757,23 @@ func (s *MarketStore) seedIndexes() {
 		Type:   "INDEX",
 		Sector: "MIXED",
 	}
-	s.assets[indexAsset.ID] = indexAsset
 	definition := IndexDefinition{
 		AssetID:    indexAsset.ID,
 		Components: []int64{101, 102, 103},
 		FeeBps:     indexFeeBps,
 	}
+	basePrice := s.indexUnitPriceLocked(definition)
+	if s.queries != nil {
+		ctx, cancel := s.dbContext()
+		defer cancel()
+		if err := s.queries.UpsertAsset(ctx, indexAsset, basePrice); err != nil {
+			log.Printf("db upsert asset %d: %v", indexAsset.ID, err)
+			return
+		}
+	}
+	s.assets[indexAsset.ID] = indexAsset
 	s.indexes[indexAsset.ID] = definition
-	s.basePrices[indexAsset.ID] = s.indexUnitPriceLocked(definition)
+	s.basePrices[indexAsset.ID] = basePrice
 	s.persistIndex(definition)
 }
 
