@@ -63,5 +63,7 @@ docker compose up --build
 各ボットは内部で固定 `BOT_ROLE` を使って `/auth/bot` から永続 `API_KEY` を取得・再利用します。
 `API_KEY_FILE` を指定すると取得した API キーをファイルに保存します。
 
+起動後、フロントエンドは `http://localhost:8000/` で `frontend/index.html` が表示されます。
+
 ## ドキュメント
 プロジェクトの詳細な仕様については [GAME_DESIGN.md](./docs/GAME_DESIGN.md) を参照してください。

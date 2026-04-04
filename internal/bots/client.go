@@ -55,7 +55,7 @@ func (c *APIClient) OrderBook(ctx context.Context, assetID int64, depth int) (en
 	if c == nil {
 		return engine.OrderBookSnapshot{}, fmt.Errorf("api client is nil")
 	}
-	url := fmt.Sprintf("%s/market/orderbook/%d", c.baseURL, assetID)
+	url := fmt.Sprintf("%s/api/market/orderbook/%d", c.baseURL, assetID)
 	if depth > 0 {
 		url = fmt.Sprintf("%s?depth=%d", url, depth)
 	}
@@ -87,7 +87,7 @@ func (c *APIClient) SubmitOrder(ctx context.Context, request OrderRequest) (*eng
 	if err != nil {
 		return nil, err
 	}
-	url := fmt.Sprintf("%s/orders", c.baseURL)
+	url := fmt.Sprintf("%s/api/orders", c.baseURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
 	if err != nil {
 		return nil, err
@@ -116,7 +116,7 @@ func (c *APIClient) CancelOrder(ctx context.Context, assetID int64, orderID int6
 	if assetID <= 0 {
 		return fmt.Errorf("asset_id must be a positive integer")
 	}
-	url := fmt.Sprintf("%s/orders/%d?asset_id=%d", c.baseURL, orderID, assetID)
+	url := fmt.Sprintf("%s/api/orders/%d?asset_id=%d", c.baseURL, orderID, assetID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return err

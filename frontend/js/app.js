@@ -281,7 +281,7 @@ function renderNews() {
 async function loadBootstrap() {
   setHttpStatus('loading', 'warn');
   const [assets, tickers, news] = await Promise.all([
-    api('/assets'), api('/market/ticker'), api('/news?limit=50'),
+    api('/api/assets'), api('/api/market/ticker'), api('/api/news?limit=50'),
   ]);
   state.assets = Array.isArray(assets) ? assets : [];
   state.assetsById = new Map(state.assets.map((a) => [Number(a.id), a]));
@@ -297,11 +297,11 @@ async function loadBootstrap() {
 async function loadUserAndPortfolio() {
   try {
     const [user, balances, assets, positions, orders] = await Promise.all([
-      api('/users/me'),
-      api('/portfolio/balances'),
-      api('/portfolio/assets'),
-      api('/margin/positions'),
-      api('/orders?status=OPEN&limit=200'),
+      api('/api/users/me'),
+      api('/api/portfolio/balances'),
+      api('/api/portfolio/assets'),
+      api('/api/margin/positions'),
+      api('/api/orders?status=OPEN&limit=200'),
     ]);
     state.user = user || null;
     state.balances = Array.isArray(balances) ? balances : [];
@@ -319,9 +319,9 @@ async function loadAssetDetail() {
   if (!state.selectedAssetId) return;
   try {
     const [orderbook, trades, candles] = await Promise.all([
-      api(`/market/orderbook/${state.selectedAssetId}?depth=20`),
-      api(`/market/trades/${state.selectedAssetId}?limit=100`),
-      api(`/market/candles/${state.selectedAssetId}?timeframe=1m&limit=120`),
+      api(`/api/market/orderbook/${state.selectedAssetId}?depth=20`),
+      api(`/api/market/trades/${state.selectedAssetId}?limit=100`),
+      api(`/api/market/candles/${state.selectedAssetId}?timeframe=1m&limit=120`),
     ]);
 
     state.orderbook = orderbook || { bids: [], asks: [] };
@@ -467,7 +467,7 @@ async function submitOrder(event) {
   if (stopPrice > 0) payload.stop_price = stopPrice;
 
   try {
-    await api('/orders', { method: 'POST', body: JSON.stringify(payload) });
+    await api('/api/orders', { method: 'POST', body: JSON.stringify(payload) });
     log('order submitted');
     await Promise.all([loadAssetDetail(), loadUserAndPortfolio()]);
   } catch (error) {
@@ -478,7 +478,7 @@ async function submitOrder(event) {
 async function cancelOrder(order) {
   if (!order?.id || !order?.asset_id) return;
   try {
-    await api(`/orders/${order.id}?asset_id=${order.asset_id}`, { method: 'DELETE' });
+    await api(`/api/orders/${order.id}?asset_id=${order.asset_id}`, { method: 'DELETE' });
     log(`order ${order.id} cancelled`);
     await loadUserAndPortfolio();
   } catch (error) {
