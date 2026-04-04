@@ -1133,7 +1133,7 @@ func (q *Queries) ListIndexConstituents(ctx context.Context) ([]IndexConstituent
 	rows, err := q.Conn.DB.QueryContext(ctx, `
 		SELECT index_asset_id, component_asset_id
 		FROM index_constituents
-		ORDER BY index_asset_id, component_asset_id
+		ORDER BY index_asset_id, id
 	`)
 	if err != nil {
 		return nil, err

@@ -183,3 +183,30 @@ func TestListWorldEvents(t *testing.T) {
 		t.Fatalf("expectations: %v", err)
 	}
 }
+
+func TestListIndexConstituentsOrdersByInsertSequence(t *testing.T) {
+	queries, mock, cleanup := newMockQueries(t)
+	defer cleanup()
+
+	rows := sqlmock.NewRows([]string{"index_asset_id", "component_asset_id"}).
+		AddRow(int64(201), int64(103)).
+		AddRow(int64(201), int64(101)).
+		AddRow(int64(202), int64(105))
+
+	mock.ExpectQuery("SELECT index_asset_id, component_asset_id\\s+FROM index_constituents\\s+ORDER BY index_asset_id, id").
+		WillReturnRows(rows)
+
+	records, err := queries.ListIndexConstituents(context.Background())
+	if err != nil {
+		t.Fatalf("ListIndexConstituents error: %v", err)
+	}
+	if len(records) != 3 {
+		t.Fatalf("expected 3 records, got %d", len(records))
+	}
+	if records[0].ComponentAssetID != 103 || records[1].ComponentAssetID != 101 {
+		t.Fatalf("expected preserved order [103,101], got [%d,%d]", records[0].ComponentAssetID, records[1].ComponentAssetID)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("expectations: %v", err)
+	}
+}
