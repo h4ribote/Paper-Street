@@ -150,7 +150,7 @@ func TestHandleOrderByIDRequiresAssetID(t *testing.T) {
 		t.Fatalf("failed to create order: %v", err)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/orders/%d", server.URL, created.Order.ID), nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/api/orders/%d", server.URL, created.Order.ID), nil)
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestHandleOrderByIDRequiresAssetID(t *testing.T) {
 	}
 
 	var fetched engine.Order
-	getJSON(t, fmt.Sprintf("%s/orders/%d?asset_id=101", server.URL, created.Order.ID), testAPIKeyUser1, &fetched)
+	getJSON(t, fmt.Sprintf("%s/api/orders/%d?asset_id=101", server.URL, created.Order.ID), testAPIKeyUser1, &fetched)
 	if fetched.ID != created.Order.ID || fetched.AssetID != 101 {
 		t.Fatalf("unexpected order returned %+v", fetched)
 	}
@@ -203,7 +203,7 @@ func TestHandleOrderByIDRejectsOtherUserOrderAccess(t *testing.T) {
 		t.Fatalf("failed to create order: %v", err)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/orders/%d?asset_id=101", server.URL, created.Order.ID), nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/api/orders/%d?asset_id=101", server.URL, created.Order.ID), nil)
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
@@ -250,7 +250,7 @@ func TestHandleOrderByIDRejectsOtherUserOrderCancel(t *testing.T) {
 		t.Fatalf("failed to create order: %v", err)
 	}
 
-	req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s/orders/%d?asset_id=101", server.URL, created.Order.ID), nil)
+	req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s/api/orders/%d?asset_id=101", server.URL, created.Order.ID), nil)
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
