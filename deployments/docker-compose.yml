@@ -43,8 +43,6 @@ services:
 
   bots:
     <<: *bot-base
-    profiles:
-      - bots
     environment:
       <<: *bot-env
 
