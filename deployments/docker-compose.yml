@@ -37,6 +37,9 @@ services:
       PORT: "8000"
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD environment variable is required}
       DATABASE_DSN: ${DATABASE_DSN:-root:${MYSQL_ROOT_PASSWORD}@tcp(db:3306)/${MYSQL_DATABASE:-paperstreet}?parseTime=true}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
+      DISCORD_REDIRECT_URI: ${DISCORD_REDIRECT_URI:-}
     depends_on:
       db:
         condition: service_healthy
