@@ -22,9 +22,11 @@ const pageConfig = {
   redirectIfAuthed: document.body?.dataset?.redirectIfAuthed === 'true',
 };
 
+const allowedPagePaths = new Set(['/dashboard.html', '/trade.html', '/portfolio.html', '/news.html']);
+
 const state = {
   baseUrl: localStorage.getItem('paperstreet.baseUrl') || `${location.protocol}//${location.hostname}:8000`,
-  apiKey: localStorage.getItem('paperstreet.apiKey') || '',
+  apiKey: '',
   user: null,
   assets: [],
   assetsById: new Map(),
@@ -130,14 +132,11 @@ function updateApiKey(value) {
   const trimmed = String(value || '').trim();
   state.apiKey = trimmed;
   el.apiKey.value = trimmed;
-  if (trimmed) localStorage.setItem('paperstreet.apiKey', trimmed);
-  else localStorage.removeItem('paperstreet.apiKey');
 }
 
 function readNextPath() {
-  const raw = new URLSearchParams(location.search).get('next') || '';
-  if (!raw.startsWith('/')) return '';
-  if (raw.includes('://')) return '';
+  const raw = String(new URLSearchParams(location.search).get('next') || '');
+  if (!allowedPagePaths.has(raw)) return '';
   return raw;
 }
 
@@ -383,7 +382,8 @@ async function loginBot() {
       state.user = payload.user || null;
       renderPortfolio();
       log('bot login succeeded');
-      location.href = readNextPath() || '/dashboard.html';
+      const next = readNextPath() || '/dashboard.html';
+      location.assign(next);
     } else {
       log('bot login response does not include api_key', 'error');
     }
@@ -396,7 +396,7 @@ function logout() {
   disconnectWS();
   updateApiKey('');
   state.user = null;
-  location.href = '/index.html';
+  location.assign('/index.html');
 }
 
 function connectWS() {
@@ -567,13 +567,15 @@ async function init() {
   state.chart.init();
 
   if (pageConfig.redirectIfAuthed && state.apiKey) {
-    location.href = '/dashboard.html';
+    location.assign('/dashboard.html');
     return;
   }
 
   if (pageConfig.requireAuth && !state.apiKey) {
-    const next = encodeURIComponent(location.pathname || '/dashboard.html');
-    location.href = `/index.html?next=${next}`;
+    const path = location.pathname || '/dashboard.html';
+    const nextPath = allowedPagePaths.has(path) ? path : '/dashboard.html';
+    const next = encodeURIComponent(nextPath);
+    location.assign(`/index.html?next=${next}`);
     return;
   }
 
