@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Paper Street | Portfolio</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body data-require-auth="true">
+  <div id="app" class="app">
+    <header class="panel header-panel">
+      <div class="header-left">
+        <h1>Paper Street Terminal</h1>
+        <p class="muted">Portfolio</p>
+      </div>
+      <div class="header-right">
+        <div class="status-item"><span>HTTP</span><strong id="http-status">-</strong></div>
+        <div class="status-item"><span>WS</span><strong id="ws-status">-</strong></div>
+      </div>
+    </header>
+
+    <section class="panel control-panel">
+      <div class="controls-grid">
+        <label>API Base URL
+          <input id="api-base-url" type="url" placeholder="http://localhost:8000" />
+        </label>
+        <label>API Key
+          <input id="api-key" type="text" placeholder="20-char hex" autocomplete="off" />
+        </label>
+        <label>Bot Role (optional)
+          <input id="bot-role" type="text" placeholder="market_maker" />
+        </label>
+        <label>Admin Password (for /auth/login)
+          <input id="admin-password" type="password" placeholder="admin password" />
+        </label>
+      </div>
+      <div class="controls-actions">
+        <button id="btn-login" type="button">Re-Login</button>
+        <button id="btn-connect" type="button">Connect WS</button>
+        <button id="btn-disconnect" type="button">Disconnect WS</button>
+        <button id="btn-refresh" type="button">Refresh</button>
+        <button id="btn-logout" type="button" class="secondary">Logout</button>
+      </div>
+      <div class="controls-actions page-links">
+        <a class="page-link" href="/dashboard.html">Dashboard</a>
+        <a class="page-link" href="/trade.html">Trade</a>
+        <a class="page-link" href="/portfolio.html">Portfolio</a>
+        <a class="page-link" href="/news.html">News</a>
+      </div>
+    </section>
+
+    <main class="grid">
+      <section class="panel" id="portfolio-panel">
+        <h2>Portfolio</h2>
+        <div class="portfolio-grid">
+          <div>
+            <h3>User</h3>
+            <pre id="user-card" class="mono">-</pre>
+          </div>
+          <div>
+            <h3>Balances</h3>
+            <ul id="balances-list"></ul>
+          </div>
+          <div>
+            <h3>Assets</h3>
+            <ul id="assets-list"></ul>
+          </div>
+          <div>
+            <h3>Margin Positions</h3>
+            <ul id="positions-list"></ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="orders-panel">
+        <h2>Open Orders</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>ID</th><th>Asset</th><th>Side</th><th>Type</th><th>Qty</th><th>Rem</th><th>Price</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody id="orders-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" id="log-panel">
+        <h2>Log</h2>
+        <pre id="log-output" class="mono log-output"></pre>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

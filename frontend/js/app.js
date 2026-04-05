@@ -1,9 +1,30 @@
 import { PriceChart } from './chart.js';
 import { RealtimeClient } from './ws.js';
 
+function createNullElement() {
+  return {
+    value: '',
+    textContent: '',
+    className: '',
+    disabled: false,
+    addEventListener() {},
+    replaceChildren() {},
+    appendChild() {},
+  };
+}
+
+function byId(id) {
+  return document.getElementById(id) || createNullElement();
+}
+
+const pageConfig = {
+  requireAuth: document.body?.dataset?.requireAuth === 'true',
+  redirectIfAuthed: document.body?.dataset?.redirectIfAuthed === 'true',
+};
+
 const state = {
   baseUrl: localStorage.getItem('paperstreet.baseUrl') || `${location.protocol}//${location.hostname}:8000`,
-  apiKey: '',
+  apiKey: localStorage.getItem('paperstreet.apiKey') || '',
   user: null,
   assets: [],
   assetsById: new Map(),
@@ -21,33 +42,34 @@ const state = {
 };
 
 const el = {
-  baseUrl: document.getElementById('api-base-url'),
-  apiKey: document.getElementById('api-key'),
-  botRole: document.getElementById('bot-role'),
-  adminPassword: document.getElementById('admin-password'),
-  httpStatus: document.getElementById('http-status'),
-  wsStatus: document.getElementById('ws-status'),
-  selectedAssetLabel: document.getElementById('selected-asset-label'),
-  marketWatchBody: document.getElementById('market-watch-body'),
-  orderAsset: document.getElementById('order-asset'),
-  orderForm: document.getElementById('order-form'),
-  orderType: document.getElementById('order-type'),
-  orderPrice: document.getElementById('order-price'),
-  orderStopPrice: document.getElementById('order-stop-price'),
-  orderbookBids: document.getElementById('orderbook-bids'),
-  orderbookAsks: document.getElementById('orderbook-asks'),
-  tradesBody: document.getElementById('trades-body'),
-  ordersBody: document.getElementById('orders-body'),
-  userCard: document.getElementById('user-card'),
-  balancesList: document.getElementById('balances-list'),
-  assetsList: document.getElementById('assets-list'),
-  positionsList: document.getElementById('positions-list'),
-  newsList: document.getElementById('news-list'),
-  logOutput: document.getElementById('log-output'),
-  btnLogin: document.getElementById('btn-login'),
-  btnConnect: document.getElementById('btn-connect'),
-  btnDisconnect: document.getElementById('btn-disconnect'),
-  btnRefresh: document.getElementById('btn-refresh'),
+  baseUrl: byId('api-base-url'),
+  apiKey: byId('api-key'),
+  botRole: byId('bot-role'),
+  adminPassword: byId('admin-password'),
+  httpStatus: byId('http-status'),
+  wsStatus: byId('ws-status'),
+  selectedAssetLabel: byId('selected-asset-label'),
+  marketWatchBody: byId('market-watch-body'),
+  orderAsset: byId('order-asset'),
+  orderForm: byId('order-form'),
+  orderType: byId('order-type'),
+  orderPrice: byId('order-price'),
+  orderStopPrice: byId('order-stop-price'),
+  orderbookBids: byId('orderbook-bids'),
+  orderbookAsks: byId('orderbook-asks'),
+  tradesBody: byId('trades-body'),
+  ordersBody: byId('orders-body'),
+  userCard: byId('user-card'),
+  balancesList: byId('balances-list'),
+  assetsList: byId('assets-list'),
+  positionsList: byId('positions-list'),
+  newsList: byId('news-list'),
+  logOutput: byId('log-output'),
+  btnLogin: byId('btn-login'),
+  btnConnect: byId('btn-connect'),
+  btnDisconnect: byId('btn-disconnect'),
+  btnRefresh: byId('btn-refresh'),
+  btnLogout: byId('btn-logout'),
 };
 
 function log(message, level = 'info') {
@@ -108,6 +130,15 @@ function updateApiKey(value) {
   const trimmed = String(value || '').trim();
   state.apiKey = trimmed;
   el.apiKey.value = trimmed;
+  if (trimmed) localStorage.setItem('paperstreet.apiKey', trimmed);
+  else localStorage.removeItem('paperstreet.apiKey');
+}
+
+function readNextPath() {
+  const raw = new URLSearchParams(location.search).get('next') || '';
+  if (!raw.startsWith('/')) return '';
+  if (raw.includes('://')) return '';
+  return raw;
 }
 
 function fmtNumber(v) {
@@ -352,12 +383,20 @@ async function loginBot() {
       state.user = payload.user || null;
       renderPortfolio();
       log('bot login succeeded');
+      location.href = readNextPath() || '/dashboard.html';
     } else {
       log('bot login response does not include api_key', 'error');
     }
   } catch (error) {
     log(`bot login failed: ${error.message}`, 'error');
   }
+}
+
+function logout() {
+  disconnectWS();
+  updateApiKey('');
+  state.user = null;
+  location.href = '/index.html';
 }
 
 function connectWS() {
@@ -496,6 +535,7 @@ function bindEvents() {
   el.btnConnect.addEventListener('click', connectWS);
   el.btnDisconnect.addEventListener('click', disconnectWS);
   el.btnRefresh.addEventListener('click', refreshAll);
+  el.btnLogout.addEventListener('click', logout);
   el.orderForm.addEventListener('submit', submitOrder);
   el.orderType.addEventListener('change', () => {
     const type = el.orderType.value;
@@ -525,6 +565,17 @@ async function init() {
 
   state.chart = new PriceChart(document.getElementById('chart-container'));
   state.chart.init();
+
+  if (pageConfig.redirectIfAuthed && state.apiKey) {
+    location.href = '/dashboard.html';
+    return;
+  }
+
+  if (pageConfig.requireAuth && !state.apiKey) {
+    const next = encodeURIComponent(location.pathname || '/dashboard.html');
+    location.href = `/index.html?next=${next}`;
+    return;
+  }
 
   if (!state.apiKey) {
     setHttpStatus('waiting-api-key', 'warn');

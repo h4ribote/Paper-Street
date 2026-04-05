@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Paper Street | News</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body data-require-auth="true">
+  <div id="app" class="app">
+    <header class="panel header-panel">
+      <div class="header-left">
+        <h1>Paper Street Terminal</h1>
+        <p class="muted">News</p>
+      </div>
+      <div class="header-right">
+        <div class="status-item"><span>HTTP</span><strong id="http-status">-</strong></div>
+        <div class="status-item"><span>WS</span><strong id="ws-status">-</strong></div>
+      </div>
+    </header>
+
+    <section class="panel control-panel">
+      <div class="controls-grid">
+        <label>API Base URL
+          <input id="api-base-url" type="url" placeholder="http://localhost:8000" />
+        </label>
+        <label>API Key
+          <input id="api-key" type="text" placeholder="20-char hex" autocomplete="off" />
+        </label>
+        <label>Bot Role (optional)
+          <input id="bot-role" type="text" placeholder="market_maker" />
+        </label>
+        <label>Admin Password (for /auth/login)
+          <input id="admin-password" type="password" placeholder="admin password" />
+        </label>
+      </div>
+      <div class="controls-actions">
+        <button id="btn-login" type="button">Re-Login</button>
+        <button id="btn-connect" type="button">Connect WS</button>
+        <button id="btn-disconnect" type="button">Disconnect WS</button>
+        <button id="btn-refresh" type="button">Refresh</button>
+        <button id="btn-logout" type="button" class="secondary">Logout</button>
+      </div>
+      <div class="controls-actions page-links">
+        <a class="page-link" href="/dashboard.html">Dashboard</a>
+        <a class="page-link" href="/trade.html">Trade</a>
+        <a class="page-link" href="/portfolio.html">Portfolio</a>
+        <a class="page-link" href="/news.html">News</a>
+      </div>
+    </section>
+
+    <main class="grid">
+      <section class="panel" id="news-panel">
+        <h2>News</h2>
+        <ul id="news-list" class="news-list"></ul>
+      </section>
+
+      <section class="panel" id="market-watch-panel">
+        <h2>Market Watch</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Symbol</th><th>Price</th><th>Change</th><th>Volume</th></tr></thead>
+            <tbody id="market-watch-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" id="log-panel">
+        <h2>Log</h2>
+        <pre id="log-output" class="mono log-output"></pre>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
