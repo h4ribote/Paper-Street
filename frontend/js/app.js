@@ -567,12 +567,12 @@ async function init() {
   state.chart.init();
 
   if (pageConfig.redirectIfAuthed && state.apiKey) {
-    location.assign('/dashboard.html');
+    location.assign(readNextPath() || '/dashboard.html');
     return;
   }
 
   if (pageConfig.requireAuth && !state.apiKey) {
-    const path = location.pathname || '/dashboard.html';
+    const path = location.pathname === '/' ? '/dashboard.html' : location.pathname;
     const nextPath = allowedPagePaths.has(path) ? path : '/dashboard.html';
     const next = encodeURIComponent(nextPath);
     location.assign(`/index.html?next=${next}`);
