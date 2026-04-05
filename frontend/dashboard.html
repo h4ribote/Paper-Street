@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paper Street | Dashboard</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
+                    colors: {
+                        brand: { 500: '#3b82f6', 600: '#2563eb' },
+                        trading: { up: '#0ecb81', up_bg: 'rgba(14, 203, 129, 0.1)', down: '#f6465d', down_bg: 'rgba(246, 70, 93, 0.1)' },
+                        dark: { bg: '#0b0e11', panel: '#181a20', border: '#2b3139', text: '#eaecef', muted: '#848e9c' }
+                    },
+                    fontSize: { 'xxs': '0.65rem' }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col font-sans text-sm bg-dark-bg">
+
+    <!-- Navbar -->
+    <header id="main-header"></header>
+
+    <!-- Main Content Wrapper -->
+    <div class="flex-1 overflow-y-auto p-4 md:p-6" id="main-content">
+        <div class="max-w-7xl mx-auto flex flex-col gap-6">
+            <h2 class="text-2xl font-bold text-white">マーケット概要</h2>
+
+            <!-- Ticker Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="dashboard-ticker-cards">
+                <!-- JS will populate -->
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Top Gainers/Losers -->
+                <div class="panel p-0 lg:col-span-2 flex flex-col overflow-hidden border border-dark-border bg-dark-panel rounded">
+                    <div class="flex gap-6 px-4 pt-3 border-b border-dark-border text-sm font-medium text-dark-muted bg-dark-bg/50">
+                        <button class="text-white border-b-2 border-brand-500 pb-2">急上昇銘柄</button>
+                    </div>
+                    <table class="w-full text-left text-sm">
+                        <thead class="text-dark-muted border-b border-dark-border bg-dark-bg">
+                            <tr>
+                                <th class="py-2 px-4 font-normal">ペア</th>
+                                <th class="py-2 px-4 font-normal text-right">現在価格</th>
+                                <th class="py-2 px-4 font-normal text-right">24h 変動</th>
+                                <th class="py-2 px-4 font-normal text-right hidden sm:table-cell">24h 出来高</th>
+                                <th class="py-2 px-4 font-normal text-right">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody class="font-mono text-white" id="dashboard-top-gainers">
+                            <!-- JS will populate -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Mini News Feed -->
+                <div class="panel p-4 flex flex-col border border-dark-border bg-dark-panel rounded">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-white">主要ニュース</h3>
+                        <a href="/news.html" class="text-brand-500 text-xs hover:underline">すべて見る</a>
+                    </div>
+                    <div class="flex flex-col gap-4" id="dashboard-mini-news">
+                        <!-- JS will populate -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/js/pages/dashboard.js"></script>
+</body>
+</html>
