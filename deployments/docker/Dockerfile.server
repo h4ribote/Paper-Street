@@ -9,5 +9,6 @@ FROM alpine:3.19.1
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=builder /out/paper-street-server ./paper-street-server
+COPY --from=builder /src/frontend ./frontend
 EXPOSE 8000
 CMD ["./paper-street-server"]
