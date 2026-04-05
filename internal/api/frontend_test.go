@@ -41,6 +41,18 @@ func TestFrontendRootServesIndex(t *testing.T) {
 }
 
 func TestPublicAssetPathsBypassAPIKey(t *testing.T) {
+	if !isPublicPath("/dashboard.html") {
+		t.Fatalf("expected /dashboard.html to be public")
+	}
+	if !isPublicPath("/trade.html") {
+		t.Fatalf("expected /trade.html to be public")
+	}
+	if !isPublicPath("/portfolio.html") {
+		t.Fatalf("expected /portfolio.html to be public")
+	}
+	if !isPublicPath("/news.html") {
+		t.Fatalf("expected /news.html to be public")
+	}
 	if !isPublicPath("/css/style.css") {
 		t.Fatalf("expected /css/style.css to be public")
 	}
@@ -55,6 +67,38 @@ func TestPublicAssetPathsBypassAPIKey(t *testing.T) {
 	}
 	if isPublicPath("/market/ticker") {
 		t.Fatalf("expected /market/ticker to require auth")
+	}
+}
+
+func TestFrontendAdditionalHTMLServed(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+	repoRoot := filepath.Clean(filepath.Join("..", ".."))
+	if err := os.Chdir(repoRoot); err != nil {
+		t.Fatalf("failed to chdir repo root: %v", err)
+	}
+
+	store := NewMarketStore()
+	apiKeys := auth.NewAPIKeyCache()
+	eng := engine.NewEngine(store)
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
+	defer server.Close()
+
+	paths := []string{"/dashboard.html", "/trade.html", "/portfolio.html", "/news.html"}
+	for _, p := range paths {
+		resp, err := http.Get(server.URL + p)
+		if err != nil {
+			t.Fatalf("failed to request %s: %v", p, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected status 200 for %s, got %d", p, resp.StatusCode)
+		}
 	}
 }
 

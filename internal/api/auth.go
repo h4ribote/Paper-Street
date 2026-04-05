@@ -32,7 +32,7 @@ func (s *Server) withAPIKeyAuth(next http.Handler) http.Handler {
 func isPublicPath(path string) bool {
 	cleanPath := normalizePath(path)
 	switch cleanPath {
-	case "/", "/index.html", "/health", "/auth/login", "/auth/bot", "/auth/callback", "/ws":
+	case "/", "/index.html", "/dashboard.html", "/trade.html", "/portfolio.html", "/news.html", "/health", "/auth/login", "/auth/bot", "/auth/callback", "/ws":
 		return true
 	}
 	if strings.HasPrefix(cleanPath, "/css/") || strings.HasPrefix(cleanPath, "/js/") {

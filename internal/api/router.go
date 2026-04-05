@@ -5,6 +5,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/h4ribote/Paper-Street/internal/auth"
 	"github.com/h4ribote/Paper-Street/internal/engine"
@@ -78,9 +79,14 @@ func registerFrontendRoutes(mux *http.ServeMux) {
 	}
 	cssHandler := http.StripPrefix("/css/", http.FileServer(http.Dir(filepath.Join(frontendAbs, "css"))))
 	jsHandler := http.StripPrefix("/js/", http.FileServer(http.Dir(filepath.Join(frontendAbs, "js"))))
+	htmlHandler := http.FileServer(http.Dir(frontendAbs))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" || r.URL.Path == "/index.html" {
 			http.ServeFile(w, r, filepath.Join(frontendAbs, "index.html"))
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, ".html") && path.Dir(r.URL.Path) == "/" {
+			htmlHandler.ServeHTTP(w, r)
 			return
 		}
 		if path.Dir(r.URL.Path) == "/css" {
