@@ -1,6 +1,8 @@
 package api
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,11 +15,26 @@ const maxFrontendSearchDepth = 8
 
 func NewRouter(e *engine.Engine, apiKeys *auth.APIKeyCache, store *MarketStore, adminPassword string) http.Handler {
 	hub := newWSHub(store, e)
-	srv := &Server{Engine: e, APIKeys: apiKeys, Store: store, WSHub: hub, AdminPassword: adminPassword}
+
+	discordStateBytes := make([]byte, 16)
+	if _, err := rand.Read(discordStateBytes); err != nil {
+		discordStateBytes = []byte("fallback-state-for-paper-street")
+	}
+	discordState := hex.EncodeToString(discordStateBytes)
+
+	srv := &Server{
+		Engine:        e,
+		APIKeys:       apiKeys,
+		Store:         store,
+		WSHub:         hub,
+		AdminPassword: adminPassword,
+		DiscordState:  discordState,
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", srv.handleHealth)
 	mux.HandleFunc("/auth/login", srv.handleAuthLogin)
 	mux.HandleFunc("/auth/bot", srv.handleAuthLogin)
+	mux.HandleFunc("/auth/discord/login", srv.handleDiscordLogin)
 	mux.HandleFunc("/auth/callback", srv.handleAuthCallback)
 	mux.HandleFunc("/api/users/me", srv.handleCurrentUser)
 	mux.HandleFunc("/api/user/rank", srv.handleUserRank)

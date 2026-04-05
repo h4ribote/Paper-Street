@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -30,7 +31,6 @@ func TestAuthCallbackIssuesAPIKey(t *testing.T) {
 		clientID     = "client-id"
 		clientSecret = "client-secret"
 		redirectURI  = "http://localhost:8000/auth/callback"
-		oauthState   = "paper-street-state"
 	)
 	discordServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -68,16 +68,49 @@ func TestAuthCallbackIssuesAPIKey(t *testing.T) {
 	t.Setenv("DISCORD_CLIENT_ID", clientID)
 	t.Setenv("DISCORD_CLIENT_SECRET", clientSecret)
 	t.Setenv("DISCORD_REDIRECT_URI", redirectURI)
-	t.Setenv("DISCORD_OAUTH_STATE", oauthState)
 	t.Setenv("DISCORD_API_BASE_URL", discordServer.URL+"/api")
 
 	store := NewMarketStore()
 	apiKeys := auth.NewAPIKeyCache()
 	eng := engine.NewEngine(store)
-	server := httptest.NewServer(NewRouter(eng, apiKeys, store, "admin"))
+	router := NewRouter(eng, apiKeys, store, "admin")
+	server := httptest.NewServer(router)
 	defer server.Close()
 
-	resp, err := http.Get(server.URL + "/auth/callback?code=" + tokenCode + "&state=" + oauthState)
+	// 1. Get the dynamic state by hitting /auth/discord/login without following redirects
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	loginResp, err := client.Get(server.URL + "/auth/discord/login")
+	if err != nil {
+		t.Fatalf("failed to call discord login: %v", err)
+	}
+	defer loginResp.Body.Close()
+	if loginResp.StatusCode != http.StatusTemporaryRedirect {
+		t.Fatalf("expected status 307 for discord login, got %d", loginResp.StatusCode)
+	}
+	loc := loginResp.Header.Get("Location")
+	if loc == "" {
+		t.Fatalf("expected Location header in discord login response")
+	}
+	u, err := url.Parse(loc)
+	if err != nil {
+		t.Fatalf("failed to parse redirect url: %v", err)
+	}
+	oauthState := u.Query().Get("state")
+	if oauthState == "" {
+		t.Fatalf("expected state in redirect url")
+	}
+
+	// 2. Call the callback with the state
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/auth/callback?code="+tokenCode+"&state="+oauthState, nil)
+	if err != nil {
+		t.Fatalf("failed to create callback request: %v", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("failed to call auth callback: %v", err)
 	}
@@ -107,7 +140,12 @@ func TestAuthCallbackIssuesAPIKey(t *testing.T) {
 		t.Fatalf("expected username %q, got %q", displayName, user.Username)
 	}
 
-	resp2, err := http.Get(server.URL + "/auth/callback?code=" + tokenCode + "&state=" + oauthState)
+	req2, err := http.NewRequest(http.MethodGet, server.URL+"/auth/callback?code="+tokenCode+"&state="+oauthState, nil)
+	if err != nil {
+		t.Fatalf("failed to create callback request: %v", err)
+	}
+	req2.Header.Set("Accept", "application/json")
+	resp2, err := http.DefaultClient.Do(req2)
 	if err != nil {
 		t.Fatalf("failed to call auth callback again: %v", err)
 	}
@@ -125,7 +163,6 @@ func TestAuthCallbackRejectsMissingState(t *testing.T) {
 	t.Setenv("DISCORD_CLIENT_ID", "client-id")
 	t.Setenv("DISCORD_CLIENT_SECRET", "client-secret")
 	t.Setenv("DISCORD_REDIRECT_URI", "http://localhost:8000/auth/callback")
-	t.Setenv("DISCORD_OAUTH_STATE", "required-state")
 
 	store := NewMarketStore()
 	apiKeys := auth.NewAPIKeyCache()

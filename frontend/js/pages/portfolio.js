@@ -17,14 +17,14 @@ async function initPortfolio() {
 
         document.getElementById('portfolio-user-info').textContent = JSON.stringify(state.user, null, 2);
 
-        // Calculate a very rough total USD (assuming fiat is base for now, accurate calculation requires ticker prices)
-        let totalUsd = 0;
+        // Calculate a very rough total ARC (assuming fiat is base for now, accurate calculation requires ticker prices)
+        let totalArc = 0;
 
         const balContainer = document.getElementById('portfolio-balances');
         let balHtml = '';
         if (balances) {
             balances.forEach(b => {
-                if(b.currency === 'USD') totalUsd += Number(b.amount);
+                if(b.currency === 'ARC') totalArc += Number(b.amount);
                 balHtml += `
                 <tr class="hover:bg-dark-bg/50 transition-colors">
                     <td class="py-4 px-6 flex items-center gap-3 font-sans">
@@ -48,7 +48,7 @@ async function initPortfolio() {
             });
         }
         balContainer.innerHTML = balHtml;
-        document.getElementById('portfolio-total-usd').textContent = `~ ${fmtNumber(totalUsd)}`;
+        document.getElementById('portfolio-total-arc').textContent = `~ ${fmtNumber(totalArc)}`;
 
         const posContainer = document.getElementById('portfolio-positions');
         let posHtml = '';
