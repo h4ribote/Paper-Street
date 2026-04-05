@@ -134,8 +134,8 @@ async function loadUserData() {
     ]);
 
     if (balances) {
-        const usd = balances.find(b => b.currency === 'USD');
-        document.getElementById('available-balance').textContent = usd ? `${fmtNumber(usd.amount)} USD` : '0.00 USD';
+        const arc = balances.find(b => b.currency === 'ARC');
+        document.getElementById('available-balance').textContent = arc ? `${fmtNumber(arc.amount)} ARC` : '0.00 ARC';
     }
 
     if (orders) {
