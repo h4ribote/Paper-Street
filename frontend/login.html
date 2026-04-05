@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paper Street | Login</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
+                    colors: {
+                        brand: { 500: '#3b82f6', 600: '#2563eb' },
+                        dark: { bg: '#0b0e11', panel: '#181a20', border: '#2b3139', text: '#eaecef', muted: '#848e9c' }
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/login.css">
+</head>
+<body class="h-screen w-screen overflow-hidden flex items-center justify-center bg-dark-bg font-sans text-sm">
+
+    <div class="panel w-full max-w-md p-8 flex flex-col gap-6 shadow-2xl border border-dark-border bg-dark-panel rounded-lg">
+        <div class="text-center mb-4">
+            <div class="flex items-center justify-center gap-2 font-bold text-2xl tracking-tighter text-white mb-2">
+                <i class="fa-solid fa-layer-group text-brand-500"></i>
+                <span>PAPER STREET</span>
+            </div>
+            <p class="text-dark-muted">アカウントにログイン</p>
+        </div>
+
+        <!-- Discord Login -->
+        <button id="btn-discord-login" class="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold py-3 px-4 rounded transition-colors flex items-center justify-center gap-3">
+            <i class="fa-brands fa-discord text-xl"></i>
+            Discordでログイン
+        </button>
+
+        <div class="flex items-center gap-4 my-2 text-dark-muted text-xs">
+            <div class="flex-1 h-px bg-dark-border"></div>
+            <span>または APIキーを入力</span>
+            <div class="flex-1 h-px bg-dark-border"></div>
+        </div>
+
+        <!-- API Key Login Form -->
+        <form id="api-login-form" class="flex flex-col gap-4">
+            <div class="flex flex-col gap-2">
+                <label for="api-key" class="text-dark-muted text-xs font-medium">API Key</label>
+                <input type="text" id="api-key" placeholder="APIキーを入力" class="w-full bg-dark-bg text-white text-sm rounded border border-dark-border px-4 py-2.5 focus:outline-none focus:border-brand-500 font-mono transition-colors" required>
+            </div>
+            <button type="submit" id="btn-api-login" class="w-full bg-brand-600 hover:bg-brand-500 text-white font-bold py-3 px-4 rounded transition-colors mt-2">
+                ログイン
+            </button>
+        </form>
+
+        <div id="login-error" class="text-red-500 text-xs text-center hidden mt-2"></div>
+    </div>
+
+    <script type="module" src="/js/pages/login.js"></script>
+</body>
+</html>

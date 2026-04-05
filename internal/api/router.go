@@ -3,7 +3,6 @@ package api
 import (
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 
 	"github.com/h4ribote/Paper-Street/internal/auth"
@@ -76,23 +75,9 @@ func registerFrontendRoutes(mux *http.ServeMux) {
 	if err != nil {
 		return
 	}
-	cssHandler := http.StripPrefix("/css/", http.FileServer(http.Dir(filepath.Join(frontendAbs, "css"))))
-	jsHandler := http.StripPrefix("/js/", http.FileServer(http.Dir(filepath.Join(frontendAbs, "js"))))
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" || r.URL.Path == "/index.html" {
-			http.ServeFile(w, r, filepath.Join(frontendAbs, "index.html"))
-			return
-		}
-		if path.Dir(r.URL.Path) == "/css" {
-			cssHandler.ServeHTTP(w, r)
-			return
-		}
-		if path.Dir(r.URL.Path) == "/js" {
-			jsHandler.ServeHTTP(w, r)
-			return
-		}
-		http.NotFound(w, r)
-	})
+
+	fs := http.FileServer(http.Dir(frontendAbs))
+	mux.Handle("/", fs)
 }
 
 func resolveFrontendDir() (string, bool) {

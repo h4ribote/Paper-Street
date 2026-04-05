@@ -1,186 +1,88 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="ja" class="dark">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Paper Street Terminal</title>
-  <link rel="stylesheet" href="/css/style.css" />
-  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js" defer></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paper Street | Advanced Crypto Exchange</title>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        brand: {
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                        },
+                        trading: {
+                            up: '#0ecb81',
+                            up_bg: 'rgba(14, 203, 129, 0.1)',
+                            down: '#f6465d',
+                            down_bg: 'rgba(246, 70, 93, 0.1)',
+                        },
+                        dark: {
+                            bg: '#0b0e11',
+                            panel: '#181a20',
+                            border: '#2b3139',
+                            text: '#eaecef',
+                            muted: '#848e9c'
+                        }
+                    },
+                    fontSize: {
+                        'xxs': '0.65rem',
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="/css/style.css">
 </head>
-<body>
-  <div id="app" class="app">
-    <header class="panel header-panel">
-      <div class="header-left">
-        <h1>Paper Street Terminal</h1>
-        <p class="muted">Real-time Financial MMO</p>
-      </div>
-      <div class="header-right">
-        <div class="status-item"><span>HTTP</span><strong id="http-status">-</strong></div>
-        <div class="status-item"><span>WS</span><strong id="ws-status">-</strong></div>
-        <div class="status-item"><span>Asset</span><strong id="selected-asset-label">-</strong></div>
-      </div>
-    </header>
+<body class="h-screen w-screen overflow-hidden flex flex-col font-sans text-sm bg-dark-bg text-dark-text">
 
-    <section class="panel control-panel">
-      <div class="controls-grid">
-        <label>API Base URL
-          <input id="api-base-url" type="url" placeholder="http://localhost:8000" />
-        </label>
-        <label>API Key
-          <input id="api-key" type="text" placeholder="20-char hex" autocomplete="off" />
-        </label>
-        <label>Bot Role (optional)
-          <input id="bot-role" type="text" placeholder="market_maker" />
-        </label>
-        <label>Admin Password (for /auth/login)
-          <input id="admin-password" type="password" placeholder="admin password" />
-        </label>
-      </div>
-      <div class="controls-actions">
-        <button id="btn-login" type="button">Login (Bot)</button>
-        <button id="btn-connect" type="button">Connect WS</button>
-        <button id="btn-disconnect" type="button">Disconnect WS</button>
-        <button id="btn-refresh" type="button">Refresh</button>
-      </div>
-    </section>
+    <!-- Navbar -->
+    <header id="main-header"></header>
 
-    <main class="grid">
-      <section class="panel" id="market-watch-panel">
-        <h2>Market Watch</h2>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Symbol</th><th>Price</th><th>Change</th><th>Volume</th></tr></thead>
-            <tbody id="market-watch-body"></tbody>
-          </table>
-        </div>
-      </section>
+    <!-- Main Content Wrapper -->
+    <div class="flex-1 overflow-y-auto p-4 md:p-6 bg-dark-bg flex items-center justify-center">
+        <div class="max-w-3xl w-full flex flex-col gap-8 text-center">
+            <h1 class="text-4xl md:text-5xl font-bold text-white tracking-tight">次世代の仮想通貨取引プラットフォーム</h1>
+            <p class="text-dark-muted text-lg">プロフェッショナルなトレーダーのための高度なツールと流動性。</p>
 
-      <section class="panel" id="chart-panel">
-        <h2>Chart</h2>
-        <div id="chart-container"></div>
-      </section>
-
-      <section class="panel" id="order-entry-panel">
-        <h2>Order Entry</h2>
-        <form id="order-form" class="form-grid">
-          <label>Asset
-            <select id="order-asset"></select>
-          </label>
-          <label>Side
-            <select id="order-side">
-              <option value="BUY">BUY</option>
-              <option value="SELL">SELL</option>
-            </select>
-          </label>
-          <label>Type
-            <select id="order-type">
-              <option value="MARKET">MARKET</option>
-              <option value="LIMIT">LIMIT</option>
-              <option value="STOP">STOP</option>
-              <option value="STOP_LIMIT">STOP_LIMIT</option>
-            </select>
-          </label>
-          <label>TIF
-            <select id="order-tif">
-              <option value="GTC">GTC</option>
-              <option value="IOC">IOC</option>
-              <option value="FOK">FOK</option>
-            </select>
-          </label>
-          <label>Quantity
-            <input id="order-quantity" type="number" min="1" step="1" required />
-          </label>
-          <label>Price
-            <input id="order-price" type="number" min="0" step="1" />
-          </label>
-          <label>Stop Price
-            <input id="order-stop-price" type="number" min="0" step="1" />
-          </label>
-          <label>Leverage
-            <input id="order-leverage" type="number" min="1" max="5" step="1" value="1" />
-          </label>
-          <button type="submit" id="btn-submit-order">Submit Order</button>
-        </form>
-      </section>
-
-      <section class="panel" id="orderbook-panel">
-        <h2>Order Book</h2>
-        <div class="orderbook-grid">
-          <div>
-            <h3>Bids</h3>
-            <div class="table-wrap slim">
-              <table>
-                <thead><tr><th>Price</th><th>Qty</th></tr></thead>
-                <tbody id="orderbook-bids"></tbody>
-              </table>
+            <div class="flex justify-center gap-4">
+                <a href="/login.html" class="bg-brand-600 hover:bg-brand-500 text-white px-8 py-4 rounded font-bold text-lg transition-colors shadow-[0_0_20px_rgba(37,99,235,0.4)]">取引を始める</a>
             </div>
-          </div>
-          <div>
-            <h3>Asks</h3>
-            <div class="table-wrap slim">
-              <table>
-                <thead><tr><th>Price</th><th>Qty</th></tr></thead>
-                <tbody id="orderbook-asks"></tbody>
-              </table>
+
+            <!-- Market Overview Mini -->
+            <div class="mt-12 text-left">
+                <h2 class="text-xl font-bold text-white mb-4">主要マーケット</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4" id="index-market-watch">
+                    <!-- JS will populate this -->
+                </div>
             </div>
-          </div>
         </div>
-      </section>
+    </div>
 
-      <section class="panel" id="timesales-panel">
-        <h2>Time & Sales</h2>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Time</th><th>Price</th><th>Qty</th><th>Side</th></tr></thead>
-            <tbody id="trades-body"></tbody>
-          </table>
-        </div>
-      </section>
+    <script type="module">
+        import { loadHeader } from '/js/components/header.js';
+        import { renderIndexMarketWatch } from '/js/components/market-watch.js';
 
-      <section class="panel" id="orders-panel">
-        <h2>Open Orders</h2>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>ID</th><th>Asset</th><th>Side</th><th>Type</th><th>Qty</th><th>Rem</th><th>Price</th><th>Status</th><th>Action</th></tr></thead>
-            <tbody id="orders-body"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="panel" id="portfolio-panel">
-        <h2>Portfolio</h2>
-        <div class="portfolio-grid">
-          <div>
-            <h3>User</h3>
-            <pre id="user-card" class="mono">-</pre>
-          </div>
-          <div>
-            <h3>Balances</h3>
-            <ul id="balances-list"></ul>
-          </div>
-          <div>
-            <h3>Assets</h3>
-            <ul id="assets-list"></ul>
-          </div>
-          <div>
-            <h3>Margin Positions</h3>
-            <ul id="positions-list"></ul>
-          </div>
-        </div>
-      </section>
-
-      <section class="panel" id="news-panel">
-        <h2>News</h2>
-        <ul id="news-list" class="news-list"></ul>
-      </section>
-
-      <section class="panel" id="log-panel">
-        <h2>Log</h2>
-        <pre id="log-output" class="mono log-output"></pre>
-      </section>
-    </main>
-  </div>
-
-  <script type="module" src="/js/app.js"></script>
+        document.addEventListener('DOMContentLoaded', () => {
+            loadHeader('index');
+            renderIndexMarketWatch();
+        });
+    </script>
 </body>
 </html>
