@@ -1,4 +1,3 @@
-import { loadHeader } from '../components/header.js';
 import { requireAuth, loginWithApiKey, loginBot } from '../core/auth.js';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -17,17 +16,13 @@ document.addEventListener('DOMContentLoaded', () => {
         errorEl.classList.add('hidden');
 
         const apiKey = document.getElementById('api-key').value;
-        const adminPw = document.getElementById('admin-password').value;
-        const botRole = document.getElementById('bot-role').value;
 
         let success = false;
 
-        if (adminPw && botRole) {
-            success = await loginBot(botRole, adminPw);
-        } else if (apiKey) {
+        if (apiKey) {
             success = await loginWithApiKey(apiKey);
         } else {
-            errorEl.textContent = 'Please provide API Key or Bot credentials.';
+            errorEl.textContent = 'Please provide an API Key.';
             errorEl.classList.remove('hidden');
             return;
         }
