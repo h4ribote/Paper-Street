@@ -25,6 +25,7 @@ type Server struct {
 	Store            *MarketStore
 	WSHub            *wsHub
 	AdminPassword    string
+	DiscordState     string
 	marketCooldownMu sync.Mutex
 	marketCooldown   map[marketCooldownKey]time.Time
 }

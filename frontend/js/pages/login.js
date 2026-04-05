@@ -7,8 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const errorEl = document.getElementById('login-error');
 
     discordBtn.addEventListener('click', () => {
-        errorEl.textContent = 'Discord login is currently disabled.';
-        errorEl.classList.remove('hidden');
+        window.location.href = '/auth/discord/login';
     });
 
     apiLoginForm.addEventListener('submit', async (e) => {

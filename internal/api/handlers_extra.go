@@ -118,6 +118,27 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, authResponse{APIKey: key, User: user})
 }
 
+func (s *Server) handleDiscordLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	clientID := strings.TrimSpace(os.Getenv("DISCORD_CLIENT_ID"))
+	redirectURI := strings.TrimSpace(os.Getenv("DISCORD_REDIRECT_URI"))
+	if clientID == "" || redirectURI == "" {
+		respondError(w, http.StatusInternalServerError, "discord oauth not configured")
+		return
+	}
+
+	discordAuthURL := fmt.Sprintf("https://discord.com/oauth2/authorize?client_id=%s&response_type=code&redirect_uri=%s&scope=identify&state=%s",
+		url.QueryEscape(clientID),
+		url.QueryEscape(redirectURI),
+		url.QueryEscape(s.DiscordState),
+	)
+
+	http.Redirect(w, r, discordAuthURL, http.StatusTemporaryRedirect)
+}
+
 func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -136,20 +157,17 @@ func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "code required")
 		return
 	}
-	expectedState := strings.TrimSpace(os.Getenv("DISCORD_OAUTH_STATE"))
-	if expectedState == "" {
-		respondError(w, http.StatusInternalServerError, "discord oauth state not configured")
-		return
-	}
+
 	state := strings.TrimSpace(r.URL.Query().Get("state"))
 	if state == "" {
 		respondError(w, http.StatusBadRequest, "state required")
 		return
 	}
-	if !subtleCompare(expectedState, state) {
+	if !subtleCompare(s.DiscordState, state) {
 		respondError(w, http.StatusBadRequest, "invalid oauth state")
 		return
 	}
+
 	clientID := strings.TrimSpace(os.Getenv("DISCORD_CLIENT_ID"))
 	clientSecret := strings.TrimSpace(os.Getenv("DISCORD_CLIENT_SECRET"))
 	redirectURI := strings.TrimSpace(os.Getenv("DISCORD_REDIRECT_URI"))
@@ -192,7 +210,24 @@ func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	respondJSON(w, http.StatusOK, authResponse{APIKey: apiKey, User: user})
+
+	if strings.Contains(r.Header.Get("Accept"), "application/json") {
+		respondJSON(w, http.StatusOK, authResponse{APIKey: apiKey, User: user})
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, `<!DOCTYPE html>
+<html>
+<head><title>Login Successful</title></head>
+<body>
+<script>
+	localStorage.setItem('paperstreet.apiKey', '%s');
+	window.location.href = '/dashboard.html';
+</script>
+</body>
+</html>`, apiKey)
 }
 
 func (s *Server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
