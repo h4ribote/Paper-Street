@@ -313,8 +313,11 @@ function connectWS() {
                 const isNew = !prevOrder && order.created_at === order.updated_at;
 
                 if (!prevOrder && !isNew) {
-                    // We missed the previous state of this order. Resync orderbook.
-                    wsClient.subscribe([`market.orderbook.${state.selectedAssetId}`]);
+                    // We missed the previous state of this order. Force a full resync by
+                    // unsubscribing then re-subscribing so the server sends a fresh snapshot.
+                    const resyncTopic = `market.orderbook.${state.selectedAssetId}`;
+                    wsClient.unsubscribe([resyncTopic]);
+                    wsClient.subscribe([resyncTopic]);
                     return;
                 }
 
