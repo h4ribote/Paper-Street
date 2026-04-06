@@ -3,7 +3,7 @@
 -- ==========================================
 
 SET NAMES utf8mb4;
-SET @seed_now = CAST(UNIX_TIMESTAMP(UTC_TIMESTAMP(3)) * 1000 AS UNSIGNED);
+SET @seed_now = CAST(UNIX_TIMESTAMP(UTC_TIMESTAMP()) * 1000 AS UNSIGNED);
 
 -- --------------------------------------------------------
 -- 1. Regions / Countries / Currencies
@@ -62,7 +62,7 @@ ON DUPLICATE KEY UPDATE
 -- --------------------------------------------------------
 -- 3. Companies (Stocks)
 -- --------------------------------------------------------
--- 初期カプテーブルはゲームバランス用の標準値として統一:
+-- 初期キャップテーブルはゲームバランス用の標準値として統一:
 -- shares_issued=1,000,000 / shares_outstanding=500,000 / treasury_stock=500,000
 
 INSERT INTO companies (
