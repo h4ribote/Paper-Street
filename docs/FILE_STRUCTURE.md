@@ -26,7 +26,8 @@ Paper Street の主要なディレクトリ構成と役割をまとめます。
 │   ├── models/                 # ドメインモデル
 │   └── websocket/              # WebSocket ハブ/クライアント
 ├── pkg/                        # 共有ユーティリティ
-└── init.sql                    # 初期 DB セットアップ
+├── init.sql                    # 初期 DB スキーマ作成
+└── seed.sql                    # 初期マスタデータ投入
 ```
 
 ## 補足
