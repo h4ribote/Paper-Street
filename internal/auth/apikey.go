@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	APIKeyByteLength = 20
+	APIKeyByteLength = 10
 	APIKeyHexLength  = APIKeyByteLength * 2
 )
 
-var ErrInvalidAPIKeyLength = errors.New("api key must be 40 hex characters")
+var ErrInvalidAPIKeyLength = errors.New("api key must be 20 hex characters")
 
 type APIKey [APIKeyByteLength]byte
 

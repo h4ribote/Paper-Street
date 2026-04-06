@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	testAPIKeyUser1 = "000102030405060708090a0b0c0d0e0f10111213"
-	testAPIKeyUser2 = "1111111111111111111111111111111111111111"
+	testAPIKeyUser1 = "00010203040506070809"
+	testAPIKeyUser2 = "11111111111111111111"
 )
 
 func TestTradeFlowUpdatesMarketData(t *testing.T) {
