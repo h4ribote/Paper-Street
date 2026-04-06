@@ -12,7 +12,8 @@ export function loadHeader(activeTab) {
             <!-- Navigation Links -->
             <div class="hidden md:flex gap-6 font-medium">
                 <a href="/dashboard.html" class="nav-link ${activeTab === 'dashboard' ? 'text-white border-brand-500' : 'text-dark-muted border-transparent hover:text-white'} transition-colors pb-4 mt-4 border-b-2">ダッシュボード</a>
-                <a href="/trade.html" class="nav-link ${activeTab === 'trade' ? 'text-white border-brand-500' : 'text-dark-muted border-transparent hover:text-white'} transition-colors pb-4 mt-4 border-b-2">トレード</a>
+                <a href="/trade.html" class="nav-link ${activeTab === 'trade' ? 'text-white border-brand-500' : 'text-dark-muted border-transparent hover:text-white'} transition-colors pb-4 mt-4 border-b-2">現物取引</a>
+                <a href="/margin.html" class="nav-link ${activeTab === 'margin' ? 'text-white border-brand-500' : 'text-dark-muted border-transparent hover:text-white'} transition-colors pb-4 mt-4 border-b-2">信用取引</a>
                 <a href="/news.html" class="nav-link ${activeTab === 'news' ? 'text-white border-brand-500' : 'text-dark-muted border-transparent hover:text-white'} transition-colors pb-4 mt-4 border-b-2">ニュース</a>
                 <a href="/portfolio.html" class="nav-link ${activeTab === 'portfolio' ? 'text-white border-brand-500' : 'text-dark-muted border-transparent hover:text-white'} transition-colors pb-4 mt-4 border-b-2">ポートフォリオ</a>
             </div>

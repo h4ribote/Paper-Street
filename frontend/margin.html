@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Paper Street | Spot Trade</title>
+    <title>Paper Street | Margin Trade</title>
 
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -82,7 +82,7 @@
             <div class="panel h-64 shrink-0 flex flex-col hidden sm:flex border border-dark-border bg-dark-panel rounded">
                 <div class="flex gap-6 px-4 pt-3 border-b border-dark-border text-sm font-medium text-dark-muted">
                     <button class="text-white border-b-2 border-brand-500 pb-2 tab-btn" data-target="open-orders">オープンオーダー</button>
-                    <button class="hover:text-white pb-2 tab-btn" data-target="positions">保有残高</button>
+                    <button class="hover:text-white pb-2 tab-btn" data-target="positions">ポジション</button>
                     <button class="hover:text-white pb-2 tab-btn" data-target="trade-history">取引履歴</button>
                 </div>
                 <div class="flex-1 overflow-auto p-0 relative">
@@ -108,8 +108,9 @@
                             <thead class="text-dark-muted sticky top-0 bg-dark-panel z-10 border-b border-dark-border">
                                 <tr>
                                     <th class="py-2 px-4 font-normal">ペア</th>
-                                    <th class="py-2 px-4 font-normal">種別</th>
-                                    <th class="py-2 px-4 font-normal text-right">保有量</th>
+                                    <th class="py-2 px-4 font-normal">サイズ</th>
+                                    <th class="py-2 px-4 font-normal">参入価格</th>
+                                    <th class="py-2 px-4 font-normal text-right">未実現損益</th>
                                 </tr>
                             </thead>
                             <tbody class="font-mono" id="positions-body"></tbody>
@@ -189,12 +190,18 @@
                         <input type="number" id="order-quantity" step="0.00000001" min="0" placeholder="0.00" class="flex-1 bg-transparent text-right font-mono text-sm outline-none text-white" required>
                     </div>
 
+                    <div class="flex items-center bg-dark-bg border border-dark-border rounded px-3 py-2 focus-within:border-brand-500 transition-colors">
+                        <span class="text-dark-muted text-xs w-16">レバレッジ</span>
+                        <input type="number" id="order-leverage" value="1" min="1" max="100" class="flex-1 bg-transparent text-right font-mono text-sm outline-none text-white">
+                        <span class="text-dark-muted text-xs ml-2">x</span>
+                    </div>
+
                     <div class="mt-4 flex gap-2">
                         <button type="button" id="btn-buy" class="flex-1 bg-trading-up hover:opacity-90 text-white font-bold py-3 rounded text-sm transition-opacity flex flex-col items-center leading-tight shadow-[0_0_10px_rgba(14,203,129,0.3)]">
-                            <span>買 (Buy)</span>
+                            <span>買 (Long)</span>
                         </button>
                         <button type="button" id="btn-sell" class="flex-1 bg-trading-down hover:opacity-90 text-white font-bold py-3 rounded text-sm transition-opacity flex flex-col items-center leading-tight shadow-[0_0_10px_rgba(246,70,93,0.3)]">
-                            <span>売 (Sell)</span>
+                            <span>売 (Short)</span>
                         </button>
                     </div>
                 </form>

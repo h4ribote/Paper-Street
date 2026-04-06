@@ -12,7 +12,8 @@ let wsClient;
 
 async function initTrade() {
     if (!await requireAuth()) return;
-    loadHeader('trade');
+    const isMargin = window.location.pathname.includes('margin.html');
+    loadHeader(isMargin ? 'margin' : 'trade');
 
     // Parse URL params for asset
     const urlParams = new URLSearchParams(window.location.search);
@@ -63,19 +64,42 @@ async function loadMarketList() {
     const tickers = await api('/api/market/ticker');
     let html = '';
     if (tickers) {
+        // Group by type
+        const grouped = {};
         tickers.forEach(t => {
-            const isUp = Number(t.change) >= 0;
-            const colorClass = isUp ? 'text-trading-up' : 'text-trading-down';
-            html += `
-                <div class="flex justify-between items-center px-3 py-1.5 hover:bg-dark-bg cursor-pointer group" onclick="window.location.href='/trade.html?asset=${t.asset_id}'">
-                    <div class="flex items-center gap-2">
-                        <span class="font-bold font-mono text-xs ${t.asset_id == state.selectedAssetId ? 'text-brand-500' : 'text-white'}">${t.symbol}</span>
-                    </div>
-                    <div class="flex gap-3 text-right font-mono text-xs">
-                        <span class="${colorClass}">${fmtNumber(t.price)}</span>
-                    </div>
-                </div>`;
+            const asset = state.assets.find(a => a.id == t.asset_id) || { type: 'OTHER' };
+            const type = asset.type || 'OTHER';
+            if (!grouped[type]) grouped[type] = [];
+            grouped[type].push(t);
         });
+
+        const typeLabels = {
+            'STOCK': '株式',
+            'COMMODITY': 'コモディティ',
+            'BOND': '債券',
+            'INDEX': '指数',
+            'FX': 'FX',
+            'OTHER': 'その他'
+        };
+
+        const pageLink = window.location.pathname.includes('margin.html') ? 'margin.html' : 'trade.html';
+
+        for (const type of Object.keys(grouped).sort()) {
+            html += `<div class="px-3 py-1 bg-dark-border/50 text-xs text-dark-muted font-bold">${typeLabels[type] || type}</div>`;
+            grouped[type].forEach(t => {
+                const isUp = Number(t.change) >= 0;
+                const colorClass = isUp ? 'text-trading-up' : 'text-trading-down';
+                html += `
+                    <div class="flex justify-between items-center px-3 py-1.5 hover:bg-dark-bg cursor-pointer group" onclick="window.location.href='/${pageLink}?asset=${t.asset_id}'">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold font-mono text-xs ${t.asset_id == state.selectedAssetId ? 'text-brand-500' : 'text-white'}">${t.symbol}</span>
+                        </div>
+                        <div class="flex gap-3 text-right font-mono text-xs">
+                            <span class="${colorClass}">${fmtNumber(t.price)}</span>
+                        </div>
+                    </div>`;
+            });
+        }
     }
     document.getElementById('market-list').innerHTML = html;
 }
@@ -127,10 +151,11 @@ async function loadAssetData() {
 }
 
 async function loadUserData() {
-    const [balances, orders, positions] = await Promise.all([
+    const isMargin = window.location.pathname.includes('margin.html');
+    const [balances, orders, positionsOrAssets] = await Promise.all([
         api('/api/portfolio/balances'),
         api('/api/orders?status=OPEN&limit=100'),
-        api('/api/margin/positions')
+        isMargin ? api('/api/margin/positions') : api('/api/portfolio/assets')
     ]);
 
     if (balances) {
@@ -143,8 +168,12 @@ async function loadUserData() {
         updateOrdersUI();
     }
 
-    if (positions) {
-        state.marginPositions = positions;
+    if (positionsOrAssets) {
+        if (isMargin) {
+            state.marginPositions = positionsOrAssets;
+        } else {
+            state.portfolioAssets = positionsOrAssets;
+        }
         updatePositionsUI();
     }
 }
@@ -209,18 +238,34 @@ window.cancelOrder = async function(orderId, assetId) {
 
 function updatePositionsUI() {
     const tbody = document.getElementById('positions-body');
+    const isMargin = window.location.pathname.includes('margin.html');
     let html = '';
-    (state.marginPositions || []).forEach(p => {
-        const pnl = -Number(p.unrealized_loss || 0);
-        html += `
-            <tr class="border-b border-dark-border/50 hover:bg-dark-bg/50">
-                <td class="py-2 px-4">${p.asset_id}</td>
-                <td class="py-2 px-4 ${p.side === 'LONG' ? 'text-trading-up' : 'text-trading-down'}">${fmtNumber(p.quantity)}</td>
-                <td class="py-2 px-4">${fmtNumber(p.entry_price || 0)}</td>
-                <td class="py-2 px-4 text-right ${pnl >= 0 ? 'text-trading-up' : 'text-trading-down'}">${fmtNumber(pnl)}</td>
-            </tr>
-        `;
-    });
+
+    if (isMargin) {
+        (state.marginPositions || []).forEach(p => {
+            const pnl = -Number(p.unrealized_loss || 0);
+            html += `
+                <tr class="border-b border-dark-border/50 hover:bg-dark-bg/50">
+                    <td class="py-2 px-4">${p.asset_id}</td>
+                    <td class="py-2 px-4 ${p.side === 'LONG' ? 'text-trading-up' : 'text-trading-down'}">${fmtNumber(p.quantity)}</td>
+                    <td class="py-2 px-4">${fmtNumber(p.entry_price || 0)}</td>
+                    <td class="py-2 px-4 text-right ${pnl >= 0 ? 'text-trading-up' : 'text-trading-down'}">${fmtNumber(pnl)}</td>
+                </tr>
+            `;
+        });
+    } else {
+        (state.portfolioAssets || []).forEach(item => {
+            const assetType = item.asset ? item.asset.type : 'N/A';
+            const symbol = item.asset ? item.asset.symbol : 'Unknown';
+            html += `
+                <tr class="border-b border-dark-border/50 hover:bg-dark-bg/50">
+                    <td class="py-2 px-4">${symbol}</td>
+                    <td class="py-2 px-4">${assetType}</td>
+                    <td class="py-2 px-4 text-right">${fmtNumber(item.quantity)}</td>
+                </tr>
+            `;
+        });
+    }
     tbody.innerHTML = html;
 }
 
@@ -265,13 +310,17 @@ function setupOrderForm() {
 }
 
 async function submitOrder(side) {
+    const isMargin = window.location.pathname.includes('margin.html');
+    const leverageEl = document.getElementById('order-leverage');
+    const overrideLeverage = isMargin && leverageEl ? Number(leverageEl.value || 1) : 1;
+
     const payload = {
         asset_id: Number(state.selectedAssetId),
         side: side,
         type: document.getElementById('order-type').value,
         time_in_force: 'GTC',
         quantity: Number(document.getElementById('order-quantity').value),
-        leverage: Number(document.getElementById('order-leverage').value || 1),
+        leverage: overrideLeverage,
     };
 
     if (payload.type === 'LIMIT') {
