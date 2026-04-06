@@ -1938,18 +1938,7 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if len(assets) == 0 {
-		s.seedAssets()
-		for _, asset := range s.assets {
-			basePrice := s.basePrices[asset.ID]
-			if basePrice == 0 {
-				basePrice = defaultAssetPrice
-			}
-			if err := s.queries.UpsertAsset(ctx, asset, basePrice); err != nil {
-				return err
-			}
-		}
-	} else {
+	if len(assets) > 0 {
 		for _, snapshot := range assets {
 			s.assets[snapshot.Asset.ID] = snapshot.Asset
 			basePrice := snapshot.BasePrice
@@ -1976,14 +1965,8 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 	if err := s.loadCompaniesFromDB(ctx); err != nil {
 		return err
 	}
-	if len(s.companyStates) == 0 {
-		s.seedCompanies()
-	}
 	if err := s.loadProductionRecipesFromDB(ctx); err != nil {
 		return err
-	}
-	if len(s.companyRecipes) == 0 {
-		s.seedProductionRecipes()
 	}
 	if err := s.loadFinancialReportsFromDB(ctx); err != nil {
 		return err
