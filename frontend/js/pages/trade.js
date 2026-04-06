@@ -301,8 +301,90 @@ function connectWS() {
             const data = msg.data;
 
             if (topic.startsWith('market.orderbook.')) {
-                state.orderbook = { bids: data.bids || [], asks: data.asks || [] };
+                if (!state.orderbook) {
+                    state.orderbook = { bids: data.bids || [], asks: data.asks || [] };
+                } else {
+                    const applyDelta = (book, deltaLevels, isBuy) => {
+                        if (!deltaLevels) return;
+                        for (const level of deltaLevels) {
+                            const price = Number(level.price);
+                            let existing = book.find(l => Number(l.price) === price);
+                            if (existing) {
+                                existing.quantity = Number(level.quantity);
+                                if (existing.quantity <= 0) {
+                                    const idx = book.indexOf(existing);
+                                    if (idx > -1) book.splice(idx, 1);
+                                }
+                            } else if (Number(level.quantity) > 0) {
+                                book.push({ price: price, quantity: Number(level.quantity) });
+                            }
+                        }
+                        if (isBuy) {
+                            book.sort((a, b) => Number(b.price) - Number(a.price));
+                        } else {
+                            book.sort((a, b) => Number(a.price) - Number(b.price));
+                        }
+                    };
+                    applyDelta(state.orderbook.bids, data.bids, true);
+                    applyDelta(state.orderbook.asks, data.asks, false);
+                }
                 updateOrderbookUI();
+            } else if (topic.startsWith('market.order.')) {
+                const order = data;
+                if (order.type !== 'LIMIT' && order.type !== 'STOP_LIMIT') return;
+
+                if (!state.activeOrders) state.activeOrders = new Map();
+
+                const prevOrder = state.activeOrders.get(order.id);
+                const isNew = !prevOrder && order.created_at === order.updated_at;
+
+                if (!prevOrder && !isNew) {
+                    // We missed the previous state of this order. Force a full resync by
+                    // unsubscribing then re-subscribing so the server sends a fresh snapshot.
+                    const resyncTopic = `market.orderbook.${state.selectedAssetId}`;
+                    wsClient.unsubscribe([resyncTopic]);
+                    wsClient.subscribe([resyncTopic]);
+                    return;
+                }
+
+                const isBuy = order.side === 'BUY';
+                const price = Number(order.price);
+                const book = isBuy ? state.orderbook.bids : state.orderbook.asks;
+
+                const prevRemaining = prevOrder ? Number(prevOrder.remaining) : 0;
+
+                let newRemaining = Number(order.remaining);
+                if (order.status === 'FILLED' || order.status === 'CANCELLED' || order.status === 'REJECTED') {
+                    newRemaining = 0;
+                }
+
+                const diff = newRemaining - prevRemaining;
+
+                if (diff !== 0) {
+                    let level = book.find(l => Number(l.price) === price);
+                    if (!level) {
+                        level = { price: price, quantity: 0 };
+                        book.push(level);
+                    }
+                    level.quantity = Number(level.quantity) + diff;
+                    if (level.quantity <= 0) {
+                        const idx = book.indexOf(level);
+                        if (idx > -1) book.splice(idx, 1);
+                    }
+
+                    if (isBuy) {
+                        book.sort((a, b) => Number(b.price) - Number(a.price));
+                    } else {
+                        book.sort((a, b) => Number(a.price) - Number(b.price));
+                    }
+                    updateOrderbookUI();
+                }
+
+                if (newRemaining === 0) {
+                    state.activeOrders.delete(order.id);
+                } else {
+                    state.activeOrders.set(order.id, order);
+                }
             } else if (topic.startsWith('market.trade.')) {
                 state.trades = data;
                 updateTradesUI();
@@ -326,6 +408,7 @@ function connectWS() {
     wsClient.subscribe([
         `market.orderbook.${id}`,
         `market.trade.${id}`,
+        `market.order.${id}`,
         `market.candles.${id}.1m`,
         'user.orders',
         'user.portfolio'

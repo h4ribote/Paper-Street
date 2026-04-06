@@ -546,7 +546,7 @@ func TestWebSocketOrderBookDelta(t *testing.T) {
 		t.Fatalf("failed to decode delta: %v", err)
 	}
 	if len(delta.Bids) != 1 || delta.Bids[0].Price != 110 {
-		t.Fatalf("expected delta with new price 110, got %+v", delta.Bids)
+		t.Fatalf("expected delta with new price 110 only, got %+v", delta.Bids)
 	}
 }
 

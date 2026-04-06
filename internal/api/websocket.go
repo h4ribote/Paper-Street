@@ -165,14 +165,42 @@ type wsHub struct {
 	startOnce sync.Once
 	stopOnce  sync.Once
 	stopCh    chan struct{}
+	triggerCh chan struct{}
 }
 
 func newWSHub(store *MarketStore, engine *engine.Engine) *wsHub {
 	return &wsHub{
-		store:   store,
-		engine:  engine,
-		clients: make(map[string]*wsClient),
-		stopCh:  make(chan struct{}),
+		store:     store,
+		engine:    engine,
+		clients:   make(map[string]*wsClient),
+		stopCh:    make(chan struct{}),
+		triggerCh: make(chan struct{}, 1),
+	}
+}
+
+func (h *wsHub) Trigger() {
+	select {
+	case h.triggerCh <- struct{}{}:
+	default:
+	}
+}
+
+func (h *wsHub) BroadcastEvent(topic string, data interface{}) {
+	h.mu.RLock()
+	clients := make([]*wsClient, 0, len(h.clients))
+	for _, client := range h.clients {
+		if _, ok := client.subscriptions[topic]; ok {
+			clients = append(clients, client)
+		}
+	}
+	h.mu.RUnlock()
+
+	for _, client := range clients {
+		client.enqueue(wsMessage{
+			Topic: topic,
+			Data:  data,
+			TS:    time.Now().UTC().UnixMilli(),
+		})
 	}
 }
 
@@ -187,6 +215,8 @@ func (h *wsHub) Start(interval time.Duration) {
 			for {
 				select {
 				case <-ticker.C:
+					h.broadcastSnapshots()
+				case <-h.triggerCh:
 					h.broadcastSnapshots()
 				case <-h.stopCh:
 					return
@@ -230,27 +260,43 @@ func (h *wsHub) broadcastSnapshots() {
 		return
 	}
 	clients := h.clientsSnapshot()
+	publicCache := make(map[string]interface{})
 	for _, client := range clients {
 		topics := client.subscriptionsSnapshot()
 		for _, topic := range topics {
-			h.sendSnapshotOrDelta(client, topic)
+			h.sendSnapshotOrDelta(client, topic, publicCache)
 		}
 	}
 }
 
-func (h *wsHub) sendSnapshotOrDelta(client *wsClient, topic string) {
+func (h *wsHub) sendSnapshotOrDelta(client *wsClient, topic string, publicCache map[string]interface{}) {
 	if client == nil {
 		return
 	}
 	if strings.HasPrefix(topic, "market.orderbook.") {
-		h.sendOrderbookDelta(client, topic)
+		h.sendOrderbookDelta(client, topic, publicCache)
 		return
 	}
-	h.sendSnapshot(client, topic)
+	h.sendSnapshot(client, topic, publicCache)
 }
 
-func (h *wsHub) sendSnapshot(client *wsClient, topic string) {
-	data, ok := h.snapshotForTopic(client, topic)
+func (h *wsHub) sendSnapshot(client *wsClient, topic string, publicCache map[string]interface{}) {
+	var data interface{}
+	var ok bool
+	if publicCache != nil && (strings.HasPrefix(topic, "market.") || topic == "news" || topic == "fx.theoretical") {
+		if cached, exists := publicCache[topic]; exists {
+			data = cached
+			ok = true
+		} else {
+			data, ok = h.snapshotForTopic(client, topic)
+			if ok {
+				publicCache[topic] = data
+			}
+		}
+	} else {
+		data, ok = h.snapshotForTopic(client, topic)
+	}
+
 	if !ok {
 		return
 	}
@@ -264,8 +310,23 @@ func (h *wsHub) sendSnapshot(client *wsClient, topic string) {
 	})
 }
 
-func (h *wsHub) sendOrderbookDelta(client *wsClient, topic string) {
-	data, ok := h.snapshotForTopic(client, topic)
+func (h *wsHub) sendOrderbookDelta(client *wsClient, topic string, publicCache map[string]interface{}) {
+	var data interface{}
+	var ok bool
+	if publicCache != nil && strings.HasPrefix(topic, "market.") {
+		if cached, exists := publicCache[topic]; exists {
+			data = cached
+			ok = true
+		} else {
+			data, ok = h.snapshotForTopic(client, topic)
+			if ok {
+				publicCache[topic] = data
+			}
+		}
+	} else {
+		data, ok = h.snapshotForTopic(client, topic)
+	}
+
 	if !ok {
 		return
 	}
@@ -274,23 +335,23 @@ func (h *wsHub) sendOrderbookDelta(client *wsClient, topic string) {
 		return
 	}
 	previous, ok := client.orderbookSnapshot(topic)
-	if !ok {
+	if ok {
+		delta, changed := orderbookDelta(previous, snapshot)
+		if !changed {
+			return
+		}
 		client.setOrderbookSnapshot(topic, snapshot)
 		client.enqueue(wsMessage{
 			Topic: topic,
-			Data:  snapshot,
+			Data:  delta,
 			TS:    time.Now().UTC().UnixMilli(),
 		})
-		return
-	}
-	delta, changed := orderbookDelta(previous, snapshot)
-	if !changed {
 		return
 	}
 	client.setOrderbookSnapshot(topic, snapshot)
 	client.enqueue(wsMessage{
 		Topic: topic,
-		Data:  delta,
+		Data:  snapshot,
 		TS:    time.Now().UTC().UnixMilli(),
 	})
 }
@@ -467,6 +528,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	s.WSHub.Start(wsDefaultBroadcastEvery)
 	apiKey := strings.TrimSpace(r.Header.Get(apiKeyHeader))
+	if apiKey == "" {
+		apiKey = strings.TrimSpace(r.URL.Query().Get("api_key"))
+	}
 	if apiKey == "" || !s.APIKeys.ContainsHex(apiKey) {
 		respondError(w, http.StatusUnauthorized, "invalid api key")
 		return
@@ -524,7 +588,7 @@ func (s *Server) wsReadLoop(client *wsClient) {
 				return
 			}
 			for _, topic := range topics {
-				s.WSHub.sendSnapshot(client, topic)
+				s.WSHub.sendSnapshot(client, topic, nil)
 			}
 		case "unsubscribe":
 			client.unsubscribe(req.Args)

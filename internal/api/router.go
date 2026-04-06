@@ -15,6 +15,7 @@ const maxFrontendSearchDepth = 8
 
 func NewRouter(e *engine.Engine, apiKeys *auth.APIKeyCache, store *MarketStore, adminPassword string) http.Handler {
 	hub := newWSHub(store, e)
+	store.SetWSHub(hub)
 
 	discordStateBytes := make([]byte, 16)
 	if _, err := rand.Read(discordStateBytes); err != nil {
