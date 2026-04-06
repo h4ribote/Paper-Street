@@ -159,6 +159,67 @@ func TestAuthCallbackIssuesAPIKey(t *testing.T) {
 	}
 }
 
+func TestAuthLoginBotRoleSuccess(t *testing.T) {
+	store := NewMarketStore()
+	apiKeys := auth.NewAPIKeyCache()
+	eng := engine.NewEngine(store)
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, "admin"))
+	defer server.Close()
+
+	body := strings.NewReader(`{"role":"market_maker","admin_password":"admin"}`)
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/auth/bot", body)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("failed to call /auth/bot: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	var payload map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	apiKey, _ := payload["api_key"].(string)
+	if strings.TrimSpace(apiKey) == "" {
+		t.Fatal("expected api key in response")
+	}
+	user, _ := payload["user"].(map[string]any)
+	idVal, ok := user["id"].(float64)
+	if !ok || int64(idVal) == 0 {
+		t.Fatal("expected user.id in response")
+	}
+}
+
+func TestAuthLoginBotRoleNotFound(t *testing.T) {
+	store := NewMarketStore()
+	apiKeys := auth.NewAPIKeyCache()
+	eng := engine.NewEngine(store)
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, "admin"))
+	defer server.Close()
+
+	body := strings.NewReader(`{"role":"non_existent_bot_role","admin_password":"admin"}`)
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/auth/bot", body)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("failed to call /auth/bot: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d", resp.StatusCode)
+	}
+}
+
 func TestAuthCallbackRejectsMissingState(t *testing.T) {
 	t.Setenv("DISCORD_CLIENT_ID", "client-id")
 	t.Setenv("DISCORD_CLIENT_SECRET", "client-secret")
