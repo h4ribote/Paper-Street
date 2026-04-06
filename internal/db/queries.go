@@ -334,14 +334,12 @@ func (q *Queries) lookupCurrencyID(ctx context.Context, code string) (int64, err
 	return currencyID, nil
 }
 
-
 func (q *Queries) CurrencyIDByCode(ctx context.Context, code string) (int64, error) {
 	code = strings.TrimSpace(code)
 	if code == "" {
 		return 0, errors.New("currency code required")
 	}
-	var currencyID int64
-	err := q.Conn.DB.QueryRowContext(ctx, "SELECT currency_id FROM currencies WHERE code = ? LIMIT 1", code).Scan(&currencyID)
+	currencyID, err := q.lookupCurrencyID(ctx, code)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return 0, fmt.Errorf("currency %s not found", code)
