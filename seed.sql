@@ -288,6 +288,8 @@ WHERE NOT EXISTS (SELECT 1 FROM world_events WHERE event_id = 7 OR name = 'El Do
 -- --------------------------------------------------------
 -- DBモードではサーバーがrole/api_keyを自動生成しないため、
 -- /auth/bot 利用ボットのロールをseedで事前投入する。
+-- users.rank_id=1 は既定のエントリーランクを示し、created_at=0 は
+-- 未設定/初期状態の番兵値（業務時刻としてのUNIX epochではない）。
 
 INSERT INTO users (user_id, username, rank_id, created_at) VALUES
     (1000, 'Market Maker', 1, 0),
