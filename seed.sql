@@ -149,7 +149,7 @@ ON DUPLICATE KEY UPDATE
 
 -- --------------------------------------------------------
 -- 5) Assets (Stocks / Bonds / Indices / Commodities)
--- NOTE: created_at = 0 は既存スキーマ運用（未設定/未初期化）に合わせる。UNIX epoch時刻として扱う意図ではない。
+-- NOTE: created_at = 0 は「未設定/未初期化」の番兵値として利用する。1970-01-01を意味する業務時刻としては扱わない。
 -- --------------------------------------------------------
 
 INSERT INTO assets (asset_id, ticker, company_id, resource_id, type, base_price, lot_size, is_tradable, created_at) VALUES

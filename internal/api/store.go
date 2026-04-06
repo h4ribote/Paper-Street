@@ -1931,7 +1931,7 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 		return err
 	}
 	if len(assets) == 0 {
-		return errors.New("no assets found in database; apply seed.sql before starting server")
+		return errors.New("no assets found in database; initialize DB with /home/runner/work/Paper-Street/Paper-Street/seed.sql (or run docker compose so init.sql and seed.sql are auto-applied)")
 	} else {
 		for _, snapshot := range assets {
 			s.assets[snapshot.Asset.ID] = snapshot.Asset
