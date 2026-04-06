@@ -251,6 +251,9 @@ INSERT IGNORE INTO index_constituents (index_asset_id, component_asset_id) VALUE
 -- 8) World Events / Season baseline
 -- --------------------------------------------------------
 
+-- NOTE: seasons.start_at/end_at と world_events.starts_at/ends_at の 0 は
+-- 「未スケジュール/未初期化」を示す番兵値。UNIX epoch時刻としては扱わない。
+
 INSERT INTO seasons (season_id, name, theme_code, start_at, end_at, is_active)
 SELECT 1, 'Season 1: The Great Resurgence', 'RECOVERY', 0, 0, TRUE
 WHERE NOT EXISTS (SELECT 1 FROM seasons WHERE season_id = 1);
