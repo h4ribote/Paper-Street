@@ -60,6 +60,9 @@ ON DUPLICATE KEY UPDATE
 -- --------------------------------------------------------
 -- 3. Initial Symbols (Companies / Assets)
 -- --------------------------------------------------------
+-- NOTE: timestamp fields set to 0 intentionally mean "unset / not happened yet"
+-- and align with existing schema defaults used across this project.
+
 
 INSERT INTO companies (
     company_id,
