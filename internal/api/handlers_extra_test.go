@@ -545,8 +545,8 @@ func TestWebSocketOrderBookDelta(t *testing.T) {
 	if err := json.Unmarshal(deltaMsg.Data, &delta); err != nil {
 		t.Fatalf("failed to decode delta: %v", err)
 	}
-	if len(delta.Bids) != 2 || delta.Bids[0].Price != 110 || delta.Bids[1].Price != 100 {
-		t.Fatalf("expected snapshot with new price 110 and 100, got %+v", delta.Bids)
+	if len(delta.Bids) != 1 || delta.Bids[0].Price != 110 {
+		t.Fatalf("expected delta with new price 110 only, got %+v", delta.Bids)
 	}
 }
 

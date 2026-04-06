@@ -301,7 +301,33 @@ function connectWS() {
             const data = msg.data;
 
             if (topic.startsWith('market.orderbook.')) {
-                state.orderbook = { bids: data.bids || [], asks: data.asks || [] };
+                if (!state.orderbook) {
+                    state.orderbook = { bids: data.bids || [], asks: data.asks || [] };
+                } else {
+                    const applyDelta = (book, deltaLevels, isBuy) => {
+                        if (!deltaLevels) return;
+                        for (const level of deltaLevels) {
+                            const price = Number(level.price);
+                            let existing = book.find(l => Number(l.price) === price);
+                            if (existing) {
+                                existing.quantity = Number(level.quantity);
+                                if (existing.quantity <= 0) {
+                                    const idx = book.indexOf(existing);
+                                    if (idx > -1) book.splice(idx, 1);
+                                }
+                            } else if (Number(level.quantity) > 0) {
+                                book.push({ price: price, quantity: Number(level.quantity) });
+                            }
+                        }
+                        if (isBuy) {
+                            book.sort((a, b) => Number(b.price) - Number(a.price));
+                        } else {
+                            book.sort((a, b) => Number(a.price) - Number(b.price));
+                        }
+                    };
+                    applyDelta(state.orderbook.bids, data.bids, true);
+                    applyDelta(state.orderbook.asks, data.asks, false);
+                }
                 updateOrderbookUI();
             } else if (topic.startsWith('market.order.')) {
                 const order = data;
