@@ -80,7 +80,7 @@ ON DUPLICATE KEY UPDATE
 
 -- --------------------------------------------------------
 -- 3) Companies (Stocks)
--- NOTE: last_capex_at = 0 は「未実施」を示す既存仕様。
+-- NOTE: last_capex_at = 0 は「未実施」を示す既定仕様。
 -- --------------------------------------------------------
 
 INSERT INTO companies (
