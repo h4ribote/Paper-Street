@@ -109,6 +109,10 @@ export class RealtimeClient {
     const url = new URL(baseUrl);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     url.pathname = '/ws';
+    // Append api_key to the query string as required by the backend
+    if (this.apiKey) {
+      url.searchParams.set('api_key', this.apiKey);
+    }
     return url.toString();
   }
 }

@@ -165,14 +165,42 @@ type wsHub struct {
 	startOnce sync.Once
 	stopOnce  sync.Once
 	stopCh    chan struct{}
+	triggerCh chan struct{}
 }
 
 func newWSHub(store *MarketStore, engine *engine.Engine) *wsHub {
 	return &wsHub{
-		store:   store,
-		engine:  engine,
-		clients: make(map[string]*wsClient),
-		stopCh:  make(chan struct{}),
+		store:     store,
+		engine:    engine,
+		clients:   make(map[string]*wsClient),
+		stopCh:    make(chan struct{}),
+		triggerCh: make(chan struct{}, 1),
+	}
+}
+
+func (h *wsHub) Trigger() {
+	select {
+	case h.triggerCh <- struct{}{}:
+	default:
+	}
+}
+
+func (h *wsHub) BroadcastEvent(topic string, data interface{}) {
+	h.mu.RLock()
+	clients := make([]*wsClient, 0, len(h.clients))
+	for _, client := range h.clients {
+		if _, ok := client.subscriptions[topic]; ok {
+			clients = append(clients, client)
+		}
+	}
+	h.mu.RUnlock()
+
+	for _, client := range clients {
+		client.enqueue(wsMessage{
+			Topic: topic,
+			Data:  data,
+			TS:    time.Now().UTC().UnixMilli(),
+		})
 	}
 }
 
@@ -187,6 +215,8 @@ func (h *wsHub) Start(interval time.Duration) {
 			for {
 				select {
 				case <-ticker.C:
+					h.broadcastSnapshots()
+				case <-h.triggerCh:
 					h.broadcastSnapshots()
 				case <-h.stopCh:
 					return
@@ -274,23 +304,16 @@ func (h *wsHub) sendOrderbookDelta(client *wsClient, topic string) {
 		return
 	}
 	previous, ok := client.orderbookSnapshot(topic)
-	if !ok {
-		client.setOrderbookSnapshot(topic, snapshot)
-		client.enqueue(wsMessage{
-			Topic: topic,
-			Data:  snapshot,
-			TS:    time.Now().UTC().UnixMilli(),
-		})
-		return
-	}
-	delta, changed := orderbookDelta(previous, snapshot)
-	if !changed {
-		return
+	if ok {
+		_, changed := orderbookDelta(previous, snapshot)
+		if !changed {
+			return
+		}
 	}
 	client.setOrderbookSnapshot(topic, snapshot)
 	client.enqueue(wsMessage{
 		Topic: topic,
-		Data:  delta,
+		Data:  snapshot,
 		TS:    time.Now().UTC().UnixMilli(),
 	})
 }
@@ -467,6 +490,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	s.WSHub.Start(wsDefaultBroadcastEvery)
 	apiKey := strings.TrimSpace(r.Header.Get(apiKeyHeader))
+	if apiKey == "" {
+		apiKey = strings.TrimSpace(r.URL.Query().Get("api_key"))
+	}
 	if apiKey == "" || !s.APIKeys.ContainsHex(apiKey) {
 		respondError(w, http.StatusUnauthorized, "invalid api key")
 		return

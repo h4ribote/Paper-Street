@@ -393,6 +393,19 @@ type AssetFilter struct {
 	Sector string
 }
 
+type PublicOrderEvent struct {
+	ID        int64              `json:"id"`
+	AssetID   int64              `json:"asset_id"`
+	Side      engine.Side        `json:"side"`
+	Type      engine.OrderType   `json:"type"`
+	Quantity  int64              `json:"quantity"`
+	Remaining int64              `json:"remaining"`
+	Price     int64              `json:"price,omitempty"`
+	Status    engine.OrderStatus `json:"status"`
+	CreatedAt time.Time          `json:"created_at"`
+	UpdatedAt time.Time          `json:"updated_at"`
+}
+
 type MarketStore struct {
 	mu                   sync.RWMutex
 	assets               map[int64]models.Asset
@@ -456,6 +469,13 @@ type MarketStore struct {
 	currencyIDs          map[string]int64
 	needsInitialAlloc    bool
 	initialAllocDone     bool
+	WSHub                *wsHub
+}
+
+func (s *MarketStore) SetWSHub(hub *wsHub) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.WSHub = hub
 }
 
 // NewMarketStore builds an in-memory store. newMarketStore only errors when DB queries are supplied.
@@ -602,6 +622,27 @@ func (s *MarketStore) EnqueueOrder(order *engine.Order) {
 	s.mu.Unlock()
 	// Persistence is best-effort; in-memory state remains authoritative during runtime.
 	s.persistOrder(cloned, userSnapshot, assetSnapshot, basePrice)
+
+	s.mu.RLock()
+	hub := s.WSHub
+	s.mu.RUnlock()
+
+	if hub != nil {
+		hub.Trigger()
+		publicOrder := PublicOrderEvent{
+			ID:        cloned.ID,
+			AssetID:   cloned.AssetID,
+			Side:      cloned.Side,
+			Type:      cloned.Type,
+			Quantity:  cloned.Quantity,
+			Remaining: cloned.Remaining,
+			Price:     cloned.Price,
+			Status:    cloned.Status,
+			CreatedAt: cloned.CreatedAt,
+			UpdatedAt: cloned.UpdatedAt,
+		}
+		hub.BroadcastEvent(fmt.Sprintf("market.order.%d", cloned.AssetID), publicOrder)
+	}
 }
 
 func (s *MarketStore) EnqueueExecution(execution engine.Execution) {
@@ -658,6 +699,42 @@ func (s *MarketStore) EnqueueExecution(execution engine.Execution) {
 			Quantity: sellerQty,
 		},
 	})
+
+	s.mu.RLock()
+	hub := s.WSHub
+	s.mu.RUnlock()
+
+	if hub != nil {
+		hub.Trigger()
+		publicTaker := PublicOrderEvent{
+			ID:        taker.ID,
+			AssetID:   taker.AssetID,
+			Side:      taker.Side,
+			Type:      taker.Type,
+			Quantity:  taker.Quantity,
+			Remaining: taker.Remaining,
+			Price:     taker.Price,
+			Status:    taker.Status,
+			CreatedAt: taker.CreatedAt,
+			UpdatedAt: taker.UpdatedAt,
+		}
+		hub.BroadcastEvent(fmt.Sprintf("market.order.%d", taker.AssetID), publicTaker)
+		if maker != nil && maker.ID != taker.ID {
+			publicMaker := PublicOrderEvent{
+				ID:        maker.ID,
+				AssetID:   maker.AssetID,
+				Side:      maker.Side,
+				Type:      maker.Type,
+				Quantity:  maker.Quantity,
+				Remaining: maker.Remaining,
+				Price:     maker.Price,
+				Status:    maker.Status,
+				CreatedAt: maker.CreatedAt,
+				UpdatedAt: maker.UpdatedAt,
+			}
+			hub.BroadcastEvent(fmt.Sprintf("market.order.%d", maker.AssetID), publicMaker)
+		}
+	}
 }
 
 func (s *MarketStore) Shutdown(ctx context.Context) error {
