@@ -6,7 +6,7 @@ import (
 )
 
 func TestParseAPIKeyHexValid(t *testing.T) {
-	value := "00010203040506070809"
+	value := "000102030405060708090a0b0c0d0e0f10111213"
 	key, err := ParseAPIKeyHex(value)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -29,7 +29,7 @@ func TestParseAPIKeyHexInvalidLength(t *testing.T) {
 }
 
 func TestParseAPIKeyHexInvalidHex(t *testing.T) {
-	_, err := ParseAPIKeyHex("zzzzzzzzzzzzzzzzzzzz")
+	_, err := ParseAPIKeyHex("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
 	if err == nil {
 		t.Fatal("expected error for invalid hex")
 	}
@@ -40,14 +40,14 @@ func TestParseAPIKeyHexInvalidHex(t *testing.T) {
 
 func TestAPIKeyCacheContainsHex(t *testing.T) {
 	cache := NewAPIKeyCache()
-	value := "aabbccddeeff00112233"
+	value := "aabbccddeeff00112233445566778899aabbccdd"
 	if err := cache.AddHex(value); err != nil {
 		t.Fatalf("expected no error adding key, got %v", err)
 	}
-	if !cache.ContainsHex("  aabbccddeeff00112233 ") {
+	if !cache.ContainsHex("  aabbccddeeff00112233445566778899aabbccdd ") {
 		t.Fatal("expected cache to contain key with trimmed input")
 	}
-	if cache.ContainsHex("aabbccddeeff00112234") {
+	if cache.ContainsHex("aabbccddeeff00112233445566778899aabbccde") {
 		t.Fatal("expected cache miss for different key")
 	}
 }
