@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"log"
@@ -407,69 +408,69 @@ type PublicOrderEvent struct {
 }
 
 type MarketStore struct {
-	mu                   sync.RWMutex
-	assets               map[int64]models.Asset
-	basePrices           map[int64]int64
-	users                map[int64]models.User
-	orders               map[int64]*engine.Order
-	executions           []engine.Execution
-	balances             map[int64]map[string]int64
-	positions            map[int64]map[int64]int64
-	assetAcquiredAt      map[int64]map[int64]int64
-	apiKeyToUser         map[string]int64
-	roleToUserID         map[string]int64
-	roleToAPIKey         map[string]string
-	lastPrices           map[int64]int64
-	prevPrices           map[int64]int64
-	volumes              map[int64]int64
-	currencies           map[string]struct{}
-	pools                map[int64]LiquidityPool
-	poolPositions        map[int64]PoolPosition
-	marginPools          map[int64]MarginPool
-	marginProviders      map[marginProviderKey]MarginProviderPosition
-	marginPositions      map[int64]MarginPosition
-	marginLiquidations   []MarginLiquidation
-	indexes              map[int64]IndexDefinition
-	indexHoldings        map[int64]map[int64]int64
-	dailyMissions        map[string][]DailyMission
-	missionProgress      map[int64]map[string]*DailyMissionProgress
-	contracts            map[int64]*Contract
-	contractProgress     map[int64]map[int64]int64
-	companyStates        map[int64]*companyState
-	companyRecipes       map[int64][]ProductionRecipe
-	financialReports     map[int64][]CompanyFinancialReport
-	companyDividends     map[int64][]CompanyDividendRecord
+	mu                      sync.RWMutex
+	assets                  map[int64]models.Asset
+	basePrices              map[int64]int64
+	users                   map[int64]models.User
+	orders                  map[int64]*engine.Order
+	executions              []engine.Execution
+	balances                map[int64]map[string]int64
+	positions               map[int64]map[int64]int64
+	assetAcquiredAt         map[int64]map[int64]int64
+	apiKeyToUser            map[string]int64
+	roleToUserID            map[string]int64
+	roleToAPIKey            map[string]string
+	lastPrices              map[int64]int64
+	prevPrices              map[int64]int64
+	volumes                 map[int64]int64
+	currencies              map[string]struct{}
+	pools                   map[int64]LiquidityPool
+	poolPositions           map[int64]PoolPosition
+	marginPools             map[int64]MarginPool
+	marginProviders         map[marginProviderKey]MarginProviderPosition
+	marginPositions         map[int64]MarginPosition
+	marginLiquidations      []MarginLiquidation
+	indexes                 map[int64]IndexDefinition
+	indexHoldings           map[int64]map[int64]int64
+	dailyMissions           map[string][]DailyMission
+	missionProgress         map[int64]map[string]*DailyMissionProgress
+	contracts               map[int64]*Contract
+	contractProgress        map[int64]map[int64]int64
+	companyStates           map[int64]*companyState
+	companyRecipes          map[int64][]ProductionRecipe
+	financialReports        map[int64][]CompanyFinancialReport
+	companyDividends        map[int64][]CompanyDividendRecord
 	pendingCompanyDividends map[int64][]pendingCompanyDividend
-	perpetualBonds       map[int64]PerpetualBondDefinition
-	bondCouponIndex      map[int64]int64
-	nextUserID           int64
-	nextExecutionID      int64
-	nextNewsID           int64
-	nextContractID       int64
-	nextRecipeID         int64
-	nextPoolPosID        int64
-	nextMarginPosID      int64
-	nextMarginPositionID int64
-	nextLiquidationID    int64
-	news                 []NewsItem
-	macroIndicators      []MacroIndicator
-	theoreticalFXRates   []TheoreticalFXRate
-	macroQuarterIndex    int64
-	macroWeekIndex       int64
-	macroGDPPrevTotals   map[string]float64
-	macroGDPTotals       map[string]float64
-	macroCPIIndexPrev    map[string]float64
-	macroCPIIndexCurrent map[string]float64
-	macroGovSpending     map[string]int64
-	macroGovQuarterIndex int64
-	seasons              []Season
-	regions              []Region
-	worldEvents          []WorldEvent
-	queries              *db.Queries
-	currencyIDs          map[string]int64
-	needsInitialAlloc    bool
-	initialAllocDone     bool
-	WSHub                *wsHub
+	perpetualBonds          map[int64]PerpetualBondDefinition
+	bondCouponIndex         map[int64]int64
+	nextUserID              int64
+	nextExecutionID         int64
+	nextNewsID              int64
+	nextContractID          int64
+	nextRecipeID            int64
+	nextPoolPosID           int64
+	nextMarginPosID         int64
+	nextMarginPositionID    int64
+	nextLiquidationID       int64
+	news                    []NewsItem
+	macroIndicators         []MacroIndicator
+	theoreticalFXRates      []TheoreticalFXRate
+	macroQuarterIndex       int64
+	macroWeekIndex          int64
+	macroGDPPrevTotals      map[string]float64
+	macroGDPTotals          map[string]float64
+	macroCPIIndexPrev       map[string]float64
+	macroCPIIndexCurrent    map[string]float64
+	macroGovSpending        map[string]int64
+	macroGovQuarterIndex    int64
+	seasons                 []Season
+	regions                 []Region
+	worldEvents             []WorldEvent
+	queries                 *db.Queries
+	currencyIDs             map[string]int64
+	needsInitialAlloc       bool
+	initialAllocDone        bool
+	WSHub                   *wsHub
 }
 
 func (s *MarketStore) SetWSHub(hub *wsHub) {
@@ -494,48 +495,48 @@ func NewMarketStoreWithDB(ctx context.Context, queries *db.Queries) (*MarketStor
 func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, error) {
 	now := time.Now().UTC()
 	store := &MarketStore{
-		assets:               make(map[int64]models.Asset),
-		basePrices:           make(map[int64]int64),
-		users:                make(map[int64]models.User),
-		orders:               make(map[int64]*engine.Order),
-		balances:             make(map[int64]map[string]int64),
-		positions:            make(map[int64]map[int64]int64),
-		assetAcquiredAt:      make(map[int64]map[int64]int64),
-		apiKeyToUser:         make(map[string]int64),
-		roleToUserID:         make(map[string]int64),
-		roleToAPIKey:         make(map[string]string),
-		lastPrices:           make(map[int64]int64),
-		prevPrices:           make(map[int64]int64),
-		volumes:              make(map[int64]int64),
-		currencies:           map[string]struct{}{defaultCurrency: {}},
-		pools:                make(map[int64]LiquidityPool),
-		poolPositions:        make(map[int64]PoolPosition),
-		marginPools:          make(map[int64]MarginPool),
-		marginProviders:      make(map[marginProviderKey]MarginProviderPosition),
-		marginPositions:      make(map[int64]MarginPosition),
-		marginLiquidations:   make([]MarginLiquidation, 0),
-		indexes:              make(map[int64]IndexDefinition),
-		indexHoldings:        make(map[int64]map[int64]int64),
-		dailyMissions:        make(map[string][]DailyMission),
-		missionProgress:      make(map[int64]map[string]*DailyMissionProgress),
-		contracts:            make(map[int64]*Contract),
-		contractProgress:     make(map[int64]map[int64]int64),
-		companyStates:        make(map[int64]*companyState),
-		companyRecipes:       make(map[int64][]ProductionRecipe),
-		financialReports:     make(map[int64][]CompanyFinancialReport),
-		companyDividends:     make(map[int64][]CompanyDividendRecord),
+		assets:                  make(map[int64]models.Asset),
+		basePrices:              make(map[int64]int64),
+		users:                   make(map[int64]models.User),
+		orders:                  make(map[int64]*engine.Order),
+		balances:                make(map[int64]map[string]int64),
+		positions:               make(map[int64]map[int64]int64),
+		assetAcquiredAt:         make(map[int64]map[int64]int64),
+		apiKeyToUser:            make(map[string]int64),
+		roleToUserID:            make(map[string]int64),
+		roleToAPIKey:            make(map[string]string),
+		lastPrices:              make(map[int64]int64),
+		prevPrices:              make(map[int64]int64),
+		volumes:                 make(map[int64]int64),
+		currencies:              map[string]struct{}{defaultCurrency: {}},
+		pools:                   make(map[int64]LiquidityPool),
+		poolPositions:           make(map[int64]PoolPosition),
+		marginPools:             make(map[int64]MarginPool),
+		marginProviders:         make(map[marginProviderKey]MarginProviderPosition),
+		marginPositions:         make(map[int64]MarginPosition),
+		marginLiquidations:      make([]MarginLiquidation, 0),
+		indexes:                 make(map[int64]IndexDefinition),
+		indexHoldings:           make(map[int64]map[int64]int64),
+		dailyMissions:           make(map[string][]DailyMission),
+		missionProgress:         make(map[int64]map[string]*DailyMissionProgress),
+		contracts:               make(map[int64]*Contract),
+		contractProgress:        make(map[int64]map[int64]int64),
+		companyStates:           make(map[int64]*companyState),
+		companyRecipes:          make(map[int64][]ProductionRecipe),
+		financialReports:        make(map[int64][]CompanyFinancialReport),
+		companyDividends:        make(map[int64][]CompanyDividendRecord),
 		pendingCompanyDividends: make(map[int64][]pendingCompanyDividend),
-		perpetualBonds:       make(map[int64]PerpetualBondDefinition),
-		bondCouponIndex:      make(map[int64]int64),
-		nextUserID:           userIDSeed,
-		nextNewsID:           0,
-		macroIndicators:      make([]MacroIndicator, 0),
-		theoreticalFXRates:   make([]TheoreticalFXRate, 0),
-		macroGDPPrevTotals:   make(map[string]float64),
-		macroGDPTotals:       make(map[string]float64),
-		macroCPIIndexPrev:    make(map[string]float64),
-		macroCPIIndexCurrent: make(map[string]float64),
-		macroGovSpending:     make(map[string]int64),
+		perpetualBonds:          make(map[int64]PerpetualBondDefinition),
+		bondCouponIndex:         make(map[int64]int64),
+		nextUserID:              userIDSeed,
+		nextNewsID:              0,
+		macroIndicators:         make([]MacroIndicator, 0),
+		theoreticalFXRates:      make([]TheoreticalFXRate, 0),
+		macroGDPPrevTotals:      make(map[string]float64),
+		macroGDPTotals:          make(map[string]float64),
+		macroCPIIndexPrev:       make(map[string]float64),
+		macroCPIIndexCurrent:    make(map[string]float64),
+		macroGovSpending:        make(map[string]int64),
 		seasons: []Season{
 			{Name: "Season 1: The Great Resurgence", Theme: "RECOVERY", StartAt: now.Add(-7 * 24 * time.Hour).UnixMilli(), EndAt: now.Add(53 * 24 * time.Hour).UnixMilli()},
 		},
@@ -573,7 +574,7 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 		store.seedContracts(now)
 		return store, nil
 	}
-	currencyID, err := queries.EnsureDefaultCurrency(ctx, defaultCurrency)
+	currencyID, err := queries.CurrencyIDByCode(ctx, defaultCurrency)
 	if err != nil {
 		return nil, err
 	}
@@ -590,16 +591,7 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 	if needsRefresh {
 		store.refreshMacroIndicatorsLocked(now)
 	}
-	store.persistWorldState()
 	store.mu.Unlock()
-	store.seedPools()
-	if store.needsInitialAlloc {
-		store.seedInitialAllocations()
-	}
-	store.seedMarginPools()
-	store.seedIndexes()
-	store.seedNews(now)
-	store.seedContracts(now)
 	return store, nil
 }
 
@@ -1939,16 +1931,7 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 		return err
 	}
 	if len(assets) == 0 {
-		s.seedAssets()
-		for _, asset := range s.assets {
-			basePrice := s.basePrices[asset.ID]
-			if basePrice == 0 {
-				basePrice = defaultAssetPrice
-			}
-			if err := s.queries.UpsertAsset(ctx, asset, basePrice); err != nil {
-				return err
-			}
-		}
+		return errors.New("no assets found in database; apply seed.sql before starting server")
 	} else {
 		for _, snapshot := range assets {
 			s.assets[snapshot.Asset.ID] = snapshot.Asset
@@ -1976,14 +1959,8 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 	if err := s.loadCompaniesFromDB(ctx); err != nil {
 		return err
 	}
-	if len(s.companyStates) == 0 {
-		s.seedCompanies()
-	}
 	if err := s.loadProductionRecipesFromDB(ctx); err != nil {
 		return err
-	}
-	if len(s.companyRecipes) == 0 {
-		s.seedProductionRecipes()
 	}
 	if err := s.loadFinancialReportsFromDB(ctx); err != nil {
 		return err
@@ -2171,27 +2148,6 @@ func (s *MarketStore) loadPerpetualBondsFromDB(ctx context.Context) error {
 	}
 	now := time.Now().UTC()
 	if len(records) == 0 {
-		s.seedPerpetualBonds(now)
-		for _, bond := range s.perpetualBonds {
-			if asset, ok := s.assets[bond.AssetID]; ok {
-				basePrice := s.basePrices[bond.AssetID]
-				if basePrice == 0 {
-					basePrice = defaultAssetPrice
-				}
-				if err := s.queries.UpsertAsset(ctx, asset, basePrice); err != nil {
-					return err
-				}
-			}
-			record := db.PerpetualBondRecord{
-				AssetID:          bond.AssetID,
-				IssuerCountry:    bond.IssuerCountry,
-				BaseCoupon:       bond.BaseCoupon,
-				PaymentFrequency: bond.PaymentFrequency,
-			}
-			if err := s.queries.UpsertPerpetualBond(ctx, record); err != nil {
-				return err
-			}
-		}
 		return nil
 	}
 	for _, record := range records {

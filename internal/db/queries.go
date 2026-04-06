@@ -172,18 +172,18 @@ type LiquidityPositionRecord struct {
 }
 
 type MarginPoolRecord struct {
-	PoolID            int64
-	AssetID           int64
-	Currency          string
-	TotalCash         int64
-	BorrowedCash      int64
-	TotalAssets       int64
-	BorrowedAssets    int64
-	CashRateBps       int64
-	AssetRateBps      int64
-	TotalCashShares   int64
-	TotalAssetShares  int64
-	UpdatedAt         int64
+	PoolID           int64
+	AssetID          int64
+	Currency         string
+	TotalCash        int64
+	BorrowedCash     int64
+	TotalAssets      int64
+	BorrowedAssets   int64
+	CashRateBps      int64
+	AssetRateBps     int64
+	TotalCashShares  int64
+	TotalAssetShares int64
+	UpdatedAt        int64
 }
 
 type MarginPoolProviderRecord struct {
@@ -329,6 +329,23 @@ func (q *Queries) lookupCurrencyID(ctx context.Context, code string) (int64, err
 	var currencyID int64
 	err := q.Conn.DB.QueryRowContext(ctx, "SELECT currency_id FROM currencies WHERE code = ? LIMIT 1", code).Scan(&currencyID)
 	if err != nil {
+		return 0, err
+	}
+	return currencyID, nil
+}
+
+
+func (q *Queries) CurrencyIDByCode(ctx context.Context, code string) (int64, error) {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return 0, errors.New("currency code required")
+	}
+	var currencyID int64
+	err := q.Conn.DB.QueryRowContext(ctx, "SELECT currency_id FROM currencies WHERE code = ? LIMIT 1", code).Scan(&currencyID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, fmt.Errorf("currency %s not found", code)
+		}
 		return 0, err
 	}
 	return currencyID, nil

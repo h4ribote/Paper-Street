@@ -21,7 +21,7 @@ func (s *MarketStore) ensureCurrencyID(currency string) int64 {
 	}
 	ctx, cancel := s.dbContext()
 	defer cancel()
-	id, err := s.queries.EnsureDefaultCurrency(ctx, currency)
+	id, err := s.queries.CurrencyIDByCode(ctx, currency)
 	if err != nil {
 		log.Printf("db ensure currency %s: %v", currency, err)
 		return 0
