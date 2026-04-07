@@ -7,6 +7,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/h4ribote/Paper-Street/internal/engine"
+	"github.com/h4ribote/Paper-Street/internal/models"
 )
 
 func newMockQueries(t *testing.T) (*Queries, sqlmock.Sqlmock, func()) {
@@ -47,6 +48,23 @@ func TestUpsertOrder(t *testing.T) {
 
 	if err := queries.UpsertOrder(context.Background(), order); err != nil {
 		t.Fatalf("UpsertOrder error: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("expectations: %v", err)
+	}
+}
+
+func TestUpsertAssetRequiresSymbol(t *testing.T) {
+	queries, mock, cleanup := newMockQueries(t)
+	defer cleanup()
+
+	asset := models.Asset{ID: 1}
+	err := queries.UpsertAsset(context.Background(), asset, 1000)
+	if err == nil {
+		t.Fatal("expected error for missing asset symbol")
+	}
+	if err.Error() != "asset symbol required" {
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("expectations: %v", err)
