@@ -384,9 +384,9 @@ func (q *Queries) UpsertAsset(ctx context.Context, asset models.Asset, basePrice
 			asset.Symbol = strings.ToUpper(strings.TrimSpace(asset.Name))
 		}
 	}
-	asset.Symbol = strings.TrimSpace(asset.Symbol)
+	// Fallback for ticker so inserts don't violate NOT NULL/UNIQUE constraints.
 	if asset.Symbol == "" {
-		return errors.New("asset symbol required")
+		asset.Symbol = fmt.Sprintf("ASSET-%d", asset.ID)
 	}
 	if asset.Type == "" {
 		asset.Type = "STOCK"
@@ -396,7 +396,7 @@ func (q *Queries) UpsertAsset(ctx context.Context, asset models.Asset, basePrice
 		INSERT INTO assets (asset_id, ticker, type, base_price, created_at)
 		VALUES (?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE ticker = VALUES(ticker), type = VALUES(type), base_price = VALUES(base_price)
-	`, asset.ID, asset.Symbol, strings.TrimSpace(asset.Type), basePrice, createdAt)
+	`, asset.ID, strings.TrimSpace(asset.Symbol), strings.TrimSpace(asset.Type), basePrice, createdAt)
 	return err
 }
 
