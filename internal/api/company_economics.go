@@ -297,6 +297,42 @@ func (s *MarketStore) CompanySupplyChain(companyID int64) (CompanySupplyChain, b
 	return CompanySupplyChain{CompanyID: companyID, Recipes: recipes}, true
 }
 
+func (s *MarketStore) seedCompanies() {
+	commodityID := s.firstCommodityAssetID()
+	for _, asset := range s.assets {
+		if !stringsEqualFold(asset.Type, "STOCK") {
+			continue
+		}
+		state := s.ensureCompanyStateLocked(asset, commodityID)
+		if state == nil {
+			continue
+		}
+	}
+}
+
+func (s *MarketStore) seedProductionRecipes() {
+	if len(s.companyStates) == 0 {
+		return
+	}
+	for companyID, state := range s.companyStates {
+		if state.OutputAssetID == 0 {
+			continue
+		}
+		if len(s.companyRecipes[companyID]) > 0 {
+			continue
+		}
+		s.nextRecipeID++
+		s.companyRecipes[companyID] = []ProductionRecipe{
+			{
+				ID:             s.nextRecipeID,
+				CompanyID:      companyID,
+				OutputAssetID:  state.OutputAssetID,
+				OutputQuantity: 1,
+			},
+		}
+	}
+}
+
 func (s *MarketStore) CompanyProductionStatus(companyID int64) (CompanyProductionStatus, bool) {
 	if companyID == 0 {
 		return CompanyProductionStatus{}, false
@@ -425,42 +461,6 @@ func (s *MarketStore) AuthorizeShareBuyback(companyID int64, req CompanyBuybackR
 	}
 	s.persistCompanyState(state)
 	return result, nil
-}
-
-func (s *MarketStore) seedCompanies() {
-	commodityID := s.firstCommodityAssetID()
-	for _, asset := range s.assets {
-		if !stringsEqualFold(asset.Type, "STOCK") {
-			continue
-		}
-		state := s.ensureCompanyStateLocked(asset, commodityID)
-		if state == nil {
-			continue
-		}
-	}
-}
-
-func (s *MarketStore) seedProductionRecipes() {
-	if len(s.companyStates) == 0 {
-		return
-	}
-	for companyID, state := range s.companyStates {
-		if state.OutputAssetID == 0 {
-			continue
-		}
-		if len(s.companyRecipes[companyID]) > 0 {
-			continue
-		}
-		s.nextRecipeID++
-		s.companyRecipes[companyID] = []ProductionRecipe{
-			{
-				ID:             s.nextRecipeID,
-				CompanyID:      companyID,
-				OutputAssetID:  state.OutputAssetID,
-				OutputQuantity: 1,
-			},
-		}
-	}
 }
 
 func (s *MarketStore) ensureCompanyStateLocked(asset models.Asset, commodityID int64) *companyState {
