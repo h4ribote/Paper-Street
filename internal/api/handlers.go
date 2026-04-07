@@ -183,6 +183,12 @@ func (s *Server) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if s.Store != nil {
+		if _, ok := s.Store.Asset(order.AssetID); !ok {
+			respondError(w, http.StatusBadRequest, "invalid asset_id: asset does not exist")
+			return
+		}
+	}
 	previousTimestamp, hadPreviousEntry, err := s.checkAndSetMarketCooldown(order)
 	if err != nil {
 		respondError(w, http.StatusTooManyRequests, err.Error())
