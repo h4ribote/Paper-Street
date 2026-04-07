@@ -1727,8 +1727,6 @@ func (s *MarketStore) ensureAssetLocked(assetID int64) models.Asset {
 	}
 	asset = models.Asset{
 		ID:     assetID,
-		Symbol: fmt.Sprintf("ASSET-%d", assetID),
-		Name:   fmt.Sprintf("Asset %d", assetID),
 		Type:   "STOCK",
 		Sector: "GENERAL",
 	}
@@ -2384,12 +2382,6 @@ func normalizeUser(user models.User, fallbackID int64) models.User {
 func normalizeAsset(asset models.Asset, fallbackID int64) models.Asset {
 	if asset.ID == 0 {
 		asset.ID = fallbackID
-	}
-	if asset.ID != 0 && asset.Symbol == "" {
-		asset.Symbol = fmt.Sprintf("ASSET-%d", asset.ID)
-	}
-	if asset.ID != 0 && asset.Name == "" {
-		asset.Name = fmt.Sprintf("Asset %d", asset.ID)
 	}
 	if asset.Type == "" {
 		asset.Type = "STOCK"
