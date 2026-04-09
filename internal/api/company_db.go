@@ -66,7 +66,9 @@ func (s *MarketStore) loadCompaniesFromDB(ctx context.Context) error {
 		if user.Role != "bot" {
 			user.Role = "bot"
 			ctx, cancel := s.dbContext()
-			_ = s.queries.UpsertUser(ctx, user, time.Now().UTC())
+			if s.queries != nil {
+				_ = s.queries.UpsertUser(ctx, user, time.Now().UTC())
+			}
 			cancel()
 		}
 	}

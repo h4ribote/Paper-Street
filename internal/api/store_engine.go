@@ -13,6 +13,10 @@ const defaultGuardPercent = 20
 
 // ProcessSubmit handles order submission and matching logic within a database transaction.
 func (s *MarketStore) ProcessSubmit(ctx context.Context, order *engine.Order) (engine.OrderResult, error) {
+	if s.queries == nil {
+		return engine.OrderResult{Err: fmt.Errorf("in-memory engine matching is not implemented")}, nil
+	}
+
 	tx, err := s.queries.Conn.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return engine.OrderResult{Err: err}, err

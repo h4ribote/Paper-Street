@@ -381,7 +381,7 @@ func (s *MarketStore) bondOperationNewsLocked(def PerpetualBondDefinition, actio
 		return
 	}
 	
-	s.publishNewsItem(now, NewsItem{
+	s.publishNewsItemLocked(now, NewsItem{
 		Headline: headline,
 		AssetID:  asset.ID,
 		Category: "CENTRAL_BANK",
