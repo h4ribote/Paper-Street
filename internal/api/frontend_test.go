@@ -26,7 +26,7 @@ func TestFrontendRootServesIndex(t *testing.T) {
 
 	store := NewMarketStore()
 	apiKeys := auth.NewAPIKeyCache()
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
@@ -73,7 +73,7 @@ func TestFrontendStaticTraversalBlocked(t *testing.T) {
 
 	store := NewMarketStore()
 	apiKeys := auth.NewAPIKeyCache()
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 

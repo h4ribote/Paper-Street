@@ -129,8 +129,11 @@ func TestMacroCPIUsesPriceIndex(t *testing.T) {
 	store.mu.Lock()
 	store.macroQuarterIndex = quarterIndex
 	store.macroCPIIndexPrev["Arcadia"] = 100
-	for assetID, base := range store.basePrices {
-		store.lastPrices[assetID] = base * 110 / 100
+	for _, assetID := range []int64{101, 102, 103} {
+		base := store.marketPriceLocked(assetID)
+		if base > 0 {
+			store.lastPrices[assetID] = base * 110 / 100
+		}
 	}
 	store.refreshMacroIndicatorsLocked(now)
 	indicators := append([]MacroIndicator(nil), store.macroIndicators...)

@@ -36,7 +36,7 @@ func TestRandomNewsItem(t *testing.T) {
 
 func TestApplyNewsImpactMovesPrice(t *testing.T) {
 	store := NewMarketStore()
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	cfg := NewsEngineConfig{
 		Interval:      time.Second,
 		BaseQuantity:  10,
@@ -58,7 +58,7 @@ func TestApplyNewsImpactMovesPrice(t *testing.T) {
 		t.Fatal("expected price impact to update last price")
 	}
 	store.mu.RLock()
-	basePrice := store.basePrices[item.AssetID]
+	basePrice := store.marketPriceLocked(item.AssetID)
 	store.mu.RUnlock()
 	if basePrice == 0 {
 		t.Fatal("expected base price for asset")

@@ -72,7 +72,7 @@ func TestAuthCallbackIssuesAPIKey(t *testing.T) {
 
 	store := NewMarketStore()
 	apiKeys := auth.NewAPIKeyCache()
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	router := NewRouter(eng, apiKeys, store, "admin")
 	server := httptest.NewServer(router)
 	defer server.Close()
@@ -166,7 +166,7 @@ func TestAuthCallbackRejectsMissingState(t *testing.T) {
 
 	store := NewMarketStore()
 	apiKeys := auth.NewAPIKeyCache()
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, "admin"))
 	defer server.Close()
 
@@ -188,10 +188,9 @@ func TestPoolPositionLifecycle(t *testing.T) {
 	}
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
 	store.EnsureUser(1)
-	store.mu.Lock()
-	store.balances[1]["VDP"] = 1_000
+	store.SetBalance(1, "VDP", 1_000)
 	store.mu.Unlock()
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
@@ -231,7 +230,7 @@ func TestPoolPositionLifecycle(t *testing.T) {
 
 func TestHandleCurrentUserReturnsNotFoundForUnknownUser(t *testing.T) {
 	store := NewMarketStore()
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, nil, store, ""))
 	defer server.Close()
 
@@ -258,7 +257,7 @@ func TestPortfolioRejectsMismatchedUserID(t *testing.T) {
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
 	store.EnsureUser(1)
 	store.EnsureUser(2)
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
@@ -285,10 +284,10 @@ func TestIndexCreateRedeem(t *testing.T) {
 	}
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
 	store.EnsureUser(1)
+	store.SetPosition(1, 101, 2)
+	store.SetPosition(1, 102, 2)
+	store.SetPosition(1, 103, 2)
 	store.mu.Lock()
-	store.positions[1][101] = 2
-	store.positions[1][102] = 2
-	store.positions[1][103] = 2
 	store.theoreticalFXRates = []TheoreticalFXRate{
 		{BaseCurrency: "BRB", QuoteCurrency: fxBaseCurrency, Rate: fxTheoreticalScale},
 		{BaseCurrency: "DRL", QuoteCurrency: fxBaseCurrency, Rate: fxTheoreticalScale},
@@ -302,7 +301,7 @@ func TestIndexCreateRedeem(t *testing.T) {
 	}
 	store.lastPrices[201] = nav + band + 1
 	store.mu.Unlock()
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
@@ -312,13 +311,13 @@ func TestIndexCreateRedeem(t *testing.T) {
 		t.Fatalf("unexpected create response: %+v", createResult)
 	}
 	store.mu.RLock()
-	if store.positions[1][201] != 2 {
+	if store.GetPosition(1, 201) != 2 {
 		store.mu.RUnlock()
-		t.Fatalf("expected index holdings 2, got %d", store.positions[1][201])
+		t.Fatalf("expected index holdings 2, got %d", store.GetPosition(1, 201))
 	}
-	if store.positions[1][101] != 0 || store.positions[1][102] != 0 || store.positions[1][103] != 0 {
+	if store.GetPosition(1, 101) != 0 || store.GetPosition(1, 102) != 0 || store.GetPosition(1, 103) != 0 {
 		store.mu.RUnlock()
-		t.Fatalf("expected component holdings to be delivered, got %+v", store.positions[1])
+		t.Fatalf("expected component holdings to be delivered, got %+v", store.GetPosition(1, 101))
 	}
 	store.mu.RUnlock()
 
@@ -345,13 +344,13 @@ func TestIndexCreateRedeem(t *testing.T) {
 		t.Fatalf("unexpected redeem response: %+v", redeemResult)
 	}
 	store.mu.RLock()
-	if store.positions[1][201] != 1 {
+	if store.GetPosition(1, 201) != 1 {
 		store.mu.RUnlock()
-		t.Fatalf("expected index holdings 1, got %d", store.positions[1][201])
+		t.Fatalf("expected index holdings 1, got %d", store.GetPosition(1, 201))
 	}
-	if store.positions[1][101] != 1 || store.positions[1][102] != 1 || store.positions[1][103] != 1 {
+	if store.GetPosition(1, 101) != 1 || store.GetPosition(1, 102) != 1 || store.GetPosition(1, 103) != 1 {
 		store.mu.RUnlock()
-		t.Fatalf("expected component holdings returned, got %+v", store.positions[1])
+		t.Fatalf("expected component holdings returned, got %+v", store.GetPosition(1, 101))
 	}
 	store.mu.RUnlock()
 }
@@ -365,9 +364,9 @@ func TestIndexUnitPriceUsesFXRates(t *testing.T) {
 	}
 	definition := store.ensureIndexLocked(201)
 	price := store.indexUnitPriceLocked(definition)
-	base101 := store.basePrices[101]
-	base102 := store.basePrices[102]
-	base103 := store.basePrices[103]
+	base101 := store.marketPriceLocked(101)
+	base102 := store.marketPriceLocked(102)
+	base103 := store.marketPriceLocked(103)
 	expected := int64(0)
 	expected += base101
 	expected += (base102 * 150) / fxTheoreticalScale
@@ -386,7 +385,7 @@ func TestIndexGetEndpoints(t *testing.T) {
 		t.Fatalf("failed to add api key: %v", err)
 	}
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
@@ -447,7 +446,7 @@ func TestWebSocketTickerSubscription(t *testing.T) {
 	}
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
 	store.EnsureUser(1)
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
@@ -483,7 +482,7 @@ func TestWebSocketOrderBookDelta(t *testing.T) {
 	}
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
 	store.EnsureUser(1)
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	submitEngineOrder(t, eng, &engine.Order{
 		AssetID:  101,
 		UserID:   1,

@@ -20,7 +20,7 @@ func TestDailyMissionCompletionAwardsReward(t *testing.T) {
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
 	store.EnsureUser(1)
 
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
@@ -78,7 +78,7 @@ func TestContractDeliveryAwardsXP(t *testing.T) {
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
 	store.EnsureUser(1)
 
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
@@ -102,7 +102,7 @@ func TestContractDeliveryAwardsXP(t *testing.T) {
 
 	var delivery ContractDeliveryResult
 	store.mu.Lock()
-	store.positions[1][target.AssetID] = 25
+	store.SetPosition(11, target.AssetID, 25)
 	store.mu.Unlock()
 
 	postJSON(t, server.URL+"/api/contracts/"+fmt.Sprint(target.ID)+"/deliver", testAPIKeyUser1, contractDeliveryRequest{UserID: 1, Quantity: 10}, &delivery)
@@ -136,13 +136,13 @@ func TestContractPriceUsesVWAPPremium(t *testing.T) {
 	store := NewMarketStore()
 	now := time.Now().UTC()
 	store.mu.Lock()
-	store.executions = append(store.executions, engine.Execution{
+	store.AddExecution(engine.Execution{
 		AssetID:       contractAssetAUR,
 		Price:         100,
 		Quantity:      10,
 		OccurredAtUTC: now.Add(-1 * time.Hour),
 	})
-	store.executions = append(store.executions, engine.Execution{
+	store.AddExecution(engine.Execution{
 		AssetID:       contractAssetAUR,
 		Price:         200,
 		Quantity:      10,

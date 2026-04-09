@@ -35,7 +35,7 @@ func TestTradeFlowUpdatesMarketData(t *testing.T) {
 	store.EnsureUser(1)
 	store.EnsureUser(2)
 
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	handler := NewRouter(eng, apiKeys, store, "")
 	server := httptest.NewServer(handler)
 	defer server.Close()
@@ -90,7 +90,7 @@ func TestHandleOrdersPagination(t *testing.T) {
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
 	store.EnsureUser(1)
 
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	handler := NewRouter(eng, apiKeys, store, "")
 	server := httptest.NewServer(handler)
 	defer server.Close()
@@ -131,7 +131,7 @@ func TestHandleOrderByIDRequiresAssetID(t *testing.T) {
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
 	store.EnsureUser(1)
 
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	handler := NewRouter(eng, apiKeys, store, "")
 	server := httptest.NewServer(handler)
 	defer server.Close()
@@ -185,7 +185,7 @@ func TestHandleOrderByIDRejectsOtherUserOrderAccess(t *testing.T) {
 	store.EnsureUser(1)
 	store.EnsureUser(2)
 
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
@@ -232,7 +232,7 @@ func TestHandleOrderByIDRejectsOtherUserOrderCancel(t *testing.T) {
 	store.EnsureUser(1)
 	store.EnsureUser(2)
 
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
@@ -283,7 +283,7 @@ func TestHandleOrdersRejectsMismatchedQueryUserID(t *testing.T) {
 	store.EnsureUser(1)
 	store.EnsureUser(2)
 
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
@@ -312,7 +312,7 @@ func TestHandleCreateOrderRejectsMismatchedPayloadUserID(t *testing.T) {
 	store.EnsureUser(1)
 	store.EnsureUser(2)
 
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
@@ -353,7 +353,7 @@ func TestHandleOrderBookDepthLimit(t *testing.T) {
 	store.EnsureUser(1)
 	store.EnsureUser(2)
 
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	handler := NewRouter(eng, apiKeys, store, "")
 	server := httptest.NewServer(handler)
 	defer server.Close()
@@ -402,7 +402,7 @@ func TestMarketOrderCooldown(t *testing.T) {
 	store.EnsureUser(1)
 	store.EnsureUser(2)
 
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	handler := NewRouter(eng, apiKeys, store, "")
 	server := httptest.NewServer(handler)
 	defer server.Close()
@@ -477,7 +477,7 @@ func TestMarketOrderCooldownIsAssetScoped(t *testing.T) {
 	store.EnsureUser(1)
 	store.EnsureUser(2)
 
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	handler := NewRouter(eng, apiKeys, store, "")
 	server := httptest.NewServer(handler)
 	defer server.Close()
@@ -539,7 +539,7 @@ func TestHandleOrderBookMethodNotAllowed(t *testing.T) {
 	if err := apiKeys.AddHex(testAPIKeyUser1); err != nil {
 		t.Fatalf("failed to add api key: %v", err)
 	}
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
@@ -561,7 +561,7 @@ func TestHandleOrderBookMethodNotAllowed(t *testing.T) {
 func TestHandleHealthMethodNotAllowed(t *testing.T) {
 	store := NewMarketStore()
 	apiKeys := auth.NewAPIKeyCache()
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 

@@ -19,22 +19,20 @@ func (s *MarketStore) loadIndexesFromDB(ctx context.Context) error {
 		constituentMap[r.IndexAssetID] = append(constituentMap[r.IndexAssetID], r.ComponentAssetID)
 	}
 	for indexAssetID, components := range constituentMap {
-		asset, ok := s.assets[indexAssetID]
-		if !ok {
-			continue
-		}
 		definition := IndexDefinition{
 			AssetID:    indexAssetID,
 			Components: components,
 			FeeBps:     indexFeeBps,
 		}
 		s.indexes[indexAssetID] = definition
+		
+		asset := s.ensureAssetLocked(indexAssetID)
 		asset.Type = "INDEX"
 		if asset.Sector == "" {
 			asset.Sector = "MIXED"
 		}
-		s.assets[indexAssetID] = asset
-		s.basePrices[indexAssetID] = s.indexUnitPriceLocked(definition)
+		
+		s.updateAssetLocked(asset, s.indexUnitPriceLocked(definition))
 	}
 	return nil
 }

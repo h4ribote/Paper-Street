@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/h4ribote/Paper-Street/internal/engine"
-	"github.com/h4ribote/Paper-Street/internal/models"
 )
 
 const (
@@ -93,13 +92,12 @@ func (s *MarketStore) generateNewsTick(now time.Time, eng *engine.Engine, rng *r
 
 func (s *MarketStore) publishNewsItem(now time.Time, item NewsItem) NewsItem {
 	s.mu.Lock()
-	s.nextNewsID++
-	item.ID = s.nextNewsID
+	defer s.mu.Unlock()
 	if item.PublishedAt == 0 {
 		item.PublishedAt = now.UnixMilli()
 	}
-	s.news = append([]NewsItem{item}, s.news...)
-	s.mu.Unlock()
+	// We don't have a news slice anymore, it's in the DB.
+	// But we might want a News() method to retrieve it.
 	s.persistNewsItem(item)
 	return item
 }
@@ -184,12 +182,16 @@ func (s *MarketStore) applyNewsImpact(item NewsItem, eng *engine.Engine, rng *ra
 
 func (s *MarketStore) ensureNewsBotsLocked() {
 	ensureBot := func(userID int64, name string) {
-		user := s.ensureUserLocked(userID)
-		user.Role = "bot"
-		if strings.TrimSpace(name) != "" {
-			user.Username = name
+		user := s.EnsureUser(userID)
+		if user.Role != "bot" {
+			user.Role = "bot"
+			if strings.TrimSpace(name) != "" {
+				user.Username = name
+			}
+			ctx, cancel := s.dbContext()
+			defer cancel()
+			_ = s.queries.UpsertUser(ctx, user, time.Now().UTC())
 		}
-		s.users[userID] = user
 	}
 	ensureBot(newsReactorUserID, "news-reactor")
 	ensureBot(newsLiquidityUserID, "news-impact")
@@ -207,42 +209,29 @@ func (s *MarketStore) ensureNewsBalancesLocked(assetID, quantity, price int64, b
 	if !ok {
 		cashBuffer = requiredCash
 	}
-	ensureUser := func(userID int64) {
-		if _, ok := s.balances[userID]; !ok {
-			s.balances[userID] = make(map[string]int64)
-		}
-		if _, ok := s.positions[userID]; !ok {
-			s.positions[userID] = make(map[int64]int64)
-		}
-	}
-	ensureUser(newsLiquidityUserID)
-	ensureUser(newsReactorUserID)
+	s.EnsureUser(newsLiquidityUserID)
+	s.EnsureUser(newsReactorUserID)
 	if bearish {
 		// Maker buys, taker sells.
-		if s.balances[newsLiquidityUserID][defaultCurrency] < cashBuffer {
-			s.balances[newsLiquidityUserID][defaultCurrency] = cashBuffer
+		if s.GetBalance(newsLiquidityUserID, defaultCurrency) < cashBuffer {
+			s.SetBalance(newsLiquidityUserID, defaultCurrency, cashBuffer)
 		}
-		if s.positions[newsReactorUserID][assetID] < quantity {
-			s.positions[newsReactorUserID][assetID] = quantity
+		if s.GetPosition(newsReactorUserID, assetID) < quantity {
+			s.SetPosition(newsReactorUserID, assetID, quantity)
 		}
 	} else {
 		// Maker sells, taker buys.
-		if s.positions[newsLiquidityUserID][assetID] < quantity {
-			s.positions[newsLiquidityUserID][assetID] = quantity
+		if s.GetPosition(newsLiquidityUserID, assetID) < quantity {
+			s.SetPosition(newsLiquidityUserID, assetID, quantity)
 		}
-		if s.balances[newsReactorUserID][defaultCurrency] < cashBuffer {
-			s.balances[newsReactorUserID][defaultCurrency] = cashBuffer
+		if s.GetBalance(newsReactorUserID, defaultCurrency) < cashBuffer {
+			s.SetBalance(newsReactorUserID, defaultCurrency, cashBuffer)
 		}
 	}
 }
 
 func (s *MarketStore) newsImpactAssets(item NewsItem) []int64 {
-	s.mu.RLock()
-	assets := make([]models.Asset, 0, len(s.assets))
-	for _, asset := range s.assets {
-		assets = append(assets, asset)
-	}
-	s.mu.RUnlock()
+	assets := s.Assets(AssetFilter{})
 	if len(assets) == 0 {
 		return nil
 	}

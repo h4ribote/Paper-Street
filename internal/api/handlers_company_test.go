@@ -18,7 +18,7 @@ func TestCompanyCapitalStructureEndpoint(t *testing.T) {
 	}
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
 	store.EnsureUser(1)
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
@@ -60,9 +60,9 @@ func TestCompanyFinancingAndBuybackEndpoints(t *testing.T) {
 	store.EnsureUser(1)
 	store.EnsureUser(2)
 	store.mu.Lock()
-	store.balances[1][defaultCurrency] = 100_000
+	store.SetBalance(1, defaultCurrency, 100_000)
 	store.mu.Unlock()
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
@@ -104,7 +104,7 @@ func TestCompanySimulationEndpoint(t *testing.T) {
 	}
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
 	store.EnsureUser(1)
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
@@ -132,8 +132,9 @@ func TestCompanyProcurementRespectsCashBalance(t *testing.T) {
 	}
 	inputPrice := int64(10)
 	inputQuantity := int64(2)
-	store.assets[inputAsset.ID] = inputAsset
-	store.basePrices[inputAsset.ID] = inputPrice
+	ctx, cancel := store.dbContext()
+	_ = store.queries.UpsertAsset(ctx, inputAsset, inputPrice)
+	cancel()
 	state.MaxProductionCapacity = 10
 	store.companyRecipes[state.Company.ID] = []ProductionRecipe{
 		{
@@ -146,10 +147,10 @@ func TestCompanyProcurementRespectsCashBalance(t *testing.T) {
 			},
 		},
 	}
-	store.positions[state.UserID][inputAsset.ID] = 0
+	store.SetPosition(state.UserID, inputAsset.ID, 0)
 	cashBalance := int64(50)
-	store.balances[state.UserID][defaultCurrency] = cashBalance
-	availableInputs := store.positions[state.UserID][inputAsset.ID]
+	store.SetBalance(state.UserID, defaultCurrency, cashBalance)
+	availableInputs := store.GetPosition(state.UserID, inputAsset.ID)
 	store.mu.Unlock()
 
 	result, err := store.SimulateCompanyQuarter(101, time.Now().UTC())
@@ -162,7 +163,7 @@ func TestCompanyProcurementRespectsCashBalance(t *testing.T) {
 		t.Fatalf("expected production to be %d with limited cash, got %d", expectedProduction, result.Production)
 	}
 	store.mu.RLock()
-	inputBalance := store.positions[state.UserID][inputAsset.ID]
+	inputBalance := store.GetPosition(state.UserID, inputAsset.ID)
 	store.mu.RUnlock()
 	if inputBalance != 0 {
 		t.Fatalf("expected input inventory to be fully consumed, got %d", inputBalance)
@@ -182,17 +183,14 @@ func TestCompanyDividendDistributionCoversSpotPoolAndMargin(t *testing.T) {
 	state.OutputAssetID = 0
 	state.CurrentInventory = 0
 	store.companyRecipes[state.Company.ID] = []ProductionRecipe{{ID: 1, CompanyID: state.Company.ID, OutputAssetID: 0, OutputQuantity: 1}}
-	store.balances[state.UserID][defaultCurrency] = 10_000_000
+	store.SetBalance(state.UserID, defaultCurrency, 10_000_000)
 	spotUser := int64(3001)
 	poolUser := int64(3002)
-	store.ensureUserLocked(spotUser)
-	store.ensureUserLocked(poolUser)
-	store.positions[spotUser][101] = 100
-	if _, ok := store.assetAcquiredAt[spotUser]; !ok {
-		store.assetAcquiredAt[spotUser] = make(map[int64]int64)
-	}
-	store.assetAcquiredAt[spotUser][101] = now.Add(-45 * 24 * time.Hour).UnixMilli()
-	store.positions[poolUser][101] = 1_000
+	store.EnsureUser(spotUser)
+	store.EnsureUser(poolUser)
+	store.SetPosition(spotUser, 101, 100)
+	store.SetAssetAcquiredAt(spotUser, 101, now.Add(-45*24*time.Hour).UnixMilli())
+	store.SetPosition(poolUser, 101, 1_000)
 	poolID := int64(0)
 	for id, pool := range store.marginPools {
 		if pool.AssetID == 101 {
@@ -257,9 +255,9 @@ func TestCompanyDividendDistributionCoversSpotPoolAndMargin(t *testing.T) {
 		PublishedAt:   now.UnixMilli(),
 	}
 	store.storeFinancialReportLocked(101, report)
-	companyStartCash := store.balances[state.UserID][defaultCurrency]
-	spotStartCash := store.balances[spotUser][defaultCurrency]
-	poolProviderStartCash := store.balances[poolUser][defaultCurrency]
+	companyStartCash := store.GetBalance(state.UserID, defaultCurrency)
+	spotStartCash := store.GetBalance(spotUser, defaultCurrency)
+	poolProviderStartCash := store.GetBalance(poolUser, defaultCurrency)
 	longStartMargin := store.marginPositions[5001].MarginUsed
 	shortStartFees := store.marginPositions[5002].AccumulatedFees
 	poolStartCash := store.marginPools[poolID].TotalCash
@@ -277,15 +275,15 @@ func TestCompanyDividendDistributionCoversSpotPoolAndMargin(t *testing.T) {
 		store.mu.RUnlock()
 		t.Fatalf("expected positive company payout, got %d", record.CompanyPayout)
 	}
-	if got := store.balances[101][defaultCurrency]; got >= companyStartCash {
+	if got := store.GetBalance(101, defaultCurrency); got >= companyStartCash {
 		store.mu.RUnlock()
 		t.Fatalf("expected company cash to decrease after dividends, start=%d got=%d", companyStartCash, got)
 	}
-	if got := store.balances[spotUser][defaultCurrency]; got <= spotStartCash {
+	if got := store.GetBalance(spotUser, defaultCurrency); got <= spotStartCash {
 		store.mu.RUnlock()
 		t.Fatalf("expected spot holder to receive dividend, start=%d got=%d", spotStartCash, got)
 	}
-	if got := store.balances[poolUser][defaultCurrency]; got <= poolProviderStartCash {
+	if got := store.GetBalance(poolUser, defaultCurrency); got <= poolProviderStartCash {
 		store.mu.RUnlock()
 		t.Fatalf("expected pool asset provider to receive short-side dividend, start=%d got=%d", poolProviderStartCash, got)
 	}
@@ -329,13 +327,10 @@ func TestCompanyDividendsEndpoint(t *testing.T) {
 	state.OutputAssetID = 0
 	store.companyRecipes[state.Company.ID] = []ProductionRecipe{{ID: 1, CompanyID: state.Company.ID, OutputAssetID: 0, OutputQuantity: 1}}
 	holder := int64(3101)
-	store.ensureUserLocked(holder)
-	store.positions[holder][101] = 10
-	if _, ok := store.assetAcquiredAt[holder]; !ok {
-		store.assetAcquiredAt[holder] = make(map[int64]int64)
-	}
-	store.assetAcquiredAt[holder][101] = now.Add(-10 * 24 * time.Hour).UnixMilli()
-	store.balances[state.UserID][defaultCurrency] = 2_000_000_000
+	store.EnsureUser(holder)
+	store.SetPosition(holder, 101, 10)
+	store.SetAssetAcquiredAt(holder, 101, now.Add(-10*24*time.Hour).UnixMilli())
+	store.SetBalance(state.UserID, defaultCurrency, 2_000_000_000)
 	report := CompanyFinancialReport{
 		CompanyID:     101,
 		FiscalYear:    2026,
@@ -365,7 +360,7 @@ func TestCompanyDividendsEndpoint(t *testing.T) {
 	}
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
 	store.EnsureUser(1)
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()
 
@@ -412,13 +407,10 @@ func TestCompanyDividendSettlesAfterDelay(t *testing.T) {
 		t.Fatal("expected company state for 101")
 	}
 	holder := int64(3201)
-	store.ensureUserLocked(holder)
-	store.positions[holder][101] = 100
-	if _, ok := store.assetAcquiredAt[holder]; !ok {
-		store.assetAcquiredAt[holder] = make(map[int64]int64)
-	}
-	store.assetAcquiredAt[holder][101] = now.Add(-10 * 24 * time.Hour).UnixMilli()
-	store.balances[state.UserID][defaultCurrency] = 10_000_000
+	store.EnsureUser(holder)
+	store.SetPosition(holder, 101, 100)
+	store.SetAssetAcquiredAt(holder, 101, now.Add(-10*24*time.Hour).UnixMilli())
+	store.SetBalance(state.UserID, defaultCurrency, 10_000_000)
 	report := CompanyFinancialReport{
 		CompanyID:     101,
 		FiscalYear:    2026,
@@ -427,8 +419,8 @@ func TestCompanyDividendSettlesAfterDelay(t *testing.T) {
 		EPS:           10,
 		PublishedAt:   now.UnixMilli(),
 	}
-	beforeCompany := store.balances[state.UserID][defaultCurrency]
-	beforeHolder := store.balances[holder][defaultCurrency]
+	beforeCompany := store.GetBalance(state.UserID, defaultCurrency)
+	beforeHolder := store.GetBalance(holder, defaultCurrency)
 	store.queueCompanyDividendLocked(state, report, report.NetIncome, now)
 	if got := len(store.companyDividends[101]); got != 0 {
 		store.mu.Unlock()
@@ -439,8 +431,8 @@ func TestCompanyDividendSettlesAfterDelay(t *testing.T) {
 		t.Fatalf("expected pending dividend entry")
 	}
 	store.settlePendingCompanyDividendsLocked(state, now.Add(companyDividendSettlementWait+time.Minute))
-	afterCompany := store.balances[state.UserID][defaultCurrency]
-	afterHolder := store.balances[holder][defaultCurrency]
+	afterCompany := store.GetBalance(state.UserID, defaultCurrency)
+	afterHolder := store.GetBalance(holder, defaultCurrency)
 	store.mu.Unlock()
 
 	if afterCompany >= beforeCompany {
@@ -464,7 +456,7 @@ func TestCompanyCapexTriggerInitiatesFinancing(t *testing.T) {
 		CapacityIncrease:  100,
 		Cost:              500_000,
 	}
-	store.balances[state.UserID][defaultCurrency] = 1
+	store.SetBalance(state.UserID, defaultCurrency, 1)
 	before := state.SharesOutstanding
 	store.evaluateFinancingLocked(state, CompanyDemandBreakdown{}, time.Now().UTC())
 	after := state.SharesOutstanding

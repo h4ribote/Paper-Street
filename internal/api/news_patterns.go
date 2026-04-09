@@ -97,13 +97,13 @@ func (s *MarketStore) generatePatternNews(now time.Time) []NewsItem {
 	var items []NewsItem
 	earningsCategory, ok := library.Categories["EARNINGS"]
 	if ok {
-		assets := sortedAssets(s.assets)
+		assets := s.Assets(AssetFilter{})
 		for _, asset := range assets {
 			pattern := choosePattern(earningsCategory.Patterns, int(asset.ID))
 			if pattern == nil {
 				continue
 			}
-			vars := assetNewsVariables(asset, s.basePrices[asset.ID], now)
+			vars := assetNewsVariables(asset, s.marketPriceLocked(asset.ID), now)
 			items = append(items, buildNewsItem(earningsCategory.ID, asset.ID, *pattern, vars))
 		}
 	}

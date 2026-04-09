@@ -16,8 +16,8 @@ func TestSwapPoolTickMath(t *testing.T) {
 	pool.FeeBps = poolFeeLowBps
 	store.pools[1] = pool
 
-	startARC := store.balances[1]["ARC"]
-	startVDP := store.balances[1]["VDP"]
+	startARC := store.GetBalance(1, "ARC")
+	startVDP := store.GetBalance(1, "VDP")
 
 	amountIn := int64(10_000)
 	result, err := store.SwapPool(1, 1, "ARC", "VDP", amountIn)
@@ -40,11 +40,11 @@ func TestSwapPoolTickMath(t *testing.T) {
 	if store.pools[1].Liquidity != pool.Liquidity+result.FeeAmount {
 		t.Fatalf("expected pool liquidity to include fees")
 	}
-	if store.balances[1]["ARC"] != startARC-amountIn {
-		t.Fatalf("unexpected ARC balance: %d", store.balances[1]["ARC"])
+	if store.GetBalance(1, "ARC") != startARC-amountIn {
+		t.Fatalf("unexpected ARC balance: %d", store.GetBalance(1, "ARC"))
 	}
-	if store.balances[1]["VDP"] != startVDP+result.AmountOut {
-		t.Fatalf("unexpected VDP balance: %d", store.balances[1]["VDP"])
+	if store.GetBalance(1, "VDP") != startVDP+result.AmountOut {
+		t.Fatalf("unexpected VDP balance: %d", store.GetBalance(1, "VDP"))
 	}
 }
 
@@ -52,13 +52,11 @@ func TestSwapPoolRouterMultiHop(t *testing.T) {
 	store := NewMarketStore()
 	store.EnsureUser(1)
 
-	store.mu.Lock()
-	store.balances[1]["VDP"] = 100_000
-	store.mu.Unlock()
+	store.SetBalance(1, "VDP", 100_000)
 
-	startVDP := store.balances[1]["VDP"]
-	startBRB := store.balances[1]["BRB"]
-	startARC := store.balances[1]["ARC"]
+	startVDP := store.GetBalance(1, "VDP")
+	startBRB := store.GetBalance(1, "BRB")
+	startARC := store.GetBalance(1, "ARC")
 
 	amountIn := int64(50_000)
 	result, err := store.SwapPool(0, 1, "VDP", "BRB", amountIn)
@@ -74,14 +72,14 @@ func TestSwapPoolRouterMultiHop(t *testing.T) {
 	if result.FeeAmount <= 0 {
 		t.Fatalf("expected positive fee, got %d", result.FeeAmount)
 	}
-	if store.balances[1]["VDP"] != startVDP-amountIn {
-		t.Fatalf("unexpected VDP balance: %d", store.balances[1]["VDP"])
+	if store.GetBalance(1, "VDP") != startVDP-amountIn {
+		t.Fatalf("unexpected VDP balance: %d", store.GetBalance(1, "VDP"))
 	}
-	if store.balances[1]["BRB"] != startBRB+result.AmountOut {
-		t.Fatalf("unexpected BRB balance: %d", store.balances[1]["BRB"])
+	if store.GetBalance(1, "BRB") != startBRB+result.AmountOut {
+		t.Fatalf("unexpected BRB balance: %d", store.GetBalance(1, "BRB"))
 	}
-	if store.balances[1]["ARC"] != startARC {
-		t.Fatalf("expected ARC balance to be unchanged, got %d", store.balances[1]["ARC"])
+	if store.GetBalance(1, "ARC") != startARC {
+		t.Fatalf("expected ARC balance to be unchanged, got %d", store.GetBalance(1, "ARC"))
 	}
 }
 
@@ -95,13 +93,12 @@ func TestPoolPositionCollectsFeesOnClose(t *testing.T) {
 	lower := pool.CurrentTick - spacing*2
 	upper := pool.CurrentTick + spacing*2
 
-	store.mu.Lock()
-	store.balances[1][pool.BaseCurrency] = 20_000
-	store.balances[1][pool.QuoteCurrency] = 20_000
-	store.balances[2][pool.BaseCurrency] = 20_000
-	store.balances[2][pool.QuoteCurrency] = 20_000
-	startBase := store.balances[1][pool.BaseCurrency]
-	startQuote := store.balances[1][pool.QuoteCurrency]
+	store.SetBalance(1, pool.BaseCurrency, 20_000)
+	store.SetBalance(1, pool.QuoteCurrency, 20_000)
+	store.SetBalance(2, pool.BaseCurrency, 20_000)
+	store.SetBalance(2, pool.QuoteCurrency, 20_000)
+	startBase := store.GetBalance(1, pool.BaseCurrency)
+	startQuote := store.GetBalance(1, pool.QuoteCurrency)
 	store.mu.Unlock()
 
 	position, err := store.CreatePoolPosition(pool.ID, 1, 5_000, 5_000, lower, upper)
@@ -127,11 +124,11 @@ func TestPoolPositionCollectsFeesOnClose(t *testing.T) {
 		t.Fatalf("close pool position failed: %v", err)
 	}
 
-	if store.balances[1][pool.BaseCurrency] != startBase+result.FeeAmount {
-		t.Fatalf("expected base balance to include fees, got %d", store.balances[1][pool.BaseCurrency])
+	if store.GetBalance(1, pool.BaseCurrency) != startBase+result.FeeAmount {
+		t.Fatalf("expected base balance to include fees, got %d", store.GetBalance(1, pool.BaseCurrency))
 	}
-	if store.balances[1][pool.QuoteCurrency] != startQuote {
-		t.Fatalf("expected quote balance to return to original amount, got %d", store.balances[1][pool.QuoteCurrency])
+	if store.GetBalance(1, pool.QuoteCurrency) != startQuote {
+		t.Fatalf("expected quote balance to return to original amount, got %d", store.GetBalance(1, pool.QuoteCurrency))
 	}
 }
 
@@ -143,10 +140,8 @@ func TestClosePoolPositionFailsWhenPoolMissing(t *testing.T) {
 	lower := pool.CurrentTick - spacing*2
 	upper := pool.CurrentTick + spacing*2
 
-	store.mu.Lock()
-	store.balances[1][pool.BaseCurrency] = 10_000
-	store.balances[1][pool.QuoteCurrency] = 10_000
-	store.mu.Unlock()
+	store.SetBalance(1, pool.BaseCurrency, 10_000)
+	store.SetBalance(1, pool.QuoteCurrency, 10_000)
 
 	position, err := store.CreatePoolPosition(pool.ID, 1, 1_000, 1_000, lower, upper)
 	if err != nil {
@@ -155,8 +150,8 @@ func TestClosePoolPositionFailsWhenPoolMissing(t *testing.T) {
 
 	store.mu.Lock()
 	delete(store.pools, pool.ID)
-	baseBefore := store.balances[1][pool.BaseCurrency]
-	quoteBefore := store.balances[1][pool.QuoteCurrency]
+	baseBefore := store.GetBalance(1, pool.BaseCurrency)
+	quoteBefore := store.GetBalance(1, pool.QuoteCurrency)
 	store.mu.Unlock()
 
 	_, err = store.ClosePoolPosition(1, position.ID)
@@ -166,10 +161,10 @@ func TestClosePoolPositionFailsWhenPoolMissing(t *testing.T) {
 
 	store.mu.RLock()
 	defer store.mu.RUnlock()
-	if store.balances[1][pool.BaseCurrency] != baseBefore {
-		t.Fatalf("expected base balance unchanged, got %d", store.balances[1][pool.BaseCurrency])
+	if store.GetBalance(1, pool.BaseCurrency) != baseBefore {
+		t.Fatalf("expected base balance unchanged, got %d", store.GetBalance(1, pool.BaseCurrency))
 	}
-	if store.balances[1][pool.QuoteCurrency] != quoteBefore {
-		t.Fatalf("expected quote balance unchanged, got %d", store.balances[1][pool.QuoteCurrency])
+	if store.GetBalance(1, pool.QuoteCurrency) != quoteBefore {
+		t.Fatalf("expected quote balance unchanged, got %d", store.GetBalance(1, pool.QuoteCurrency))
 	}
 }

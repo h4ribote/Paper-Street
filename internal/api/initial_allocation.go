@@ -136,35 +136,26 @@ func (s *MarketStore) applyCompanyAllocationsLocked(companies []*companyState) [
 			userID = state.Company.ID
 			state.UserID = userID
 		}
-		user := s.users[userID]
-		if user.ID == 0 {
+		user, ok := s.User(userID)
+		if !ok {
 			user = models.User{ID: userID, Username: stringOrDefault(state.Company.Name, "company"), Role: "bot", RankID: 1, Rank: defaultRankName}
 		}
 		if user.Role == "" || !strings.EqualFold(user.Role, "bot") {
 			user.Role = "bot"
-		}
-		user = normalizeUserRank(user)
-		s.users[userID] = user
-		if _, ok := s.balances[userID]; !ok {
-			s.balances[userID] = make(map[string]int64)
-		}
-		if _, ok := s.positions[userID]; !ok {
-			s.positions[userID] = make(map[int64]int64)
 		}
 		localCurrency := currencyForCountry(state.Country, defaultCurrency)
 		if localCurrency == "" {
 			localCurrency = defaultCurrency
 		}
 		s.currencies[localCurrency] = struct{}{}
-		s.balances[userID][localCurrency] = tier.cash
+		
 		inventory := state.MaxProductionCapacity * tier.inventoryQuarters
 		state.CurrentInventory = inventory
-		if state.OutputAssetID != 0 {
-			s.positions[userID][state.OutputAssetID] = inventory
-		}
+		
 		state.SharesIssued = tier.sharesIssued
 		state.TreasuryShares = tier.sharesIssued / 2
 		state.SharesOutstanding = tier.sharesIssued - state.TreasuryShares
+		
 		seedEntry := seededUser{
 			user:     user,
 			balances: map[string]int64{localCurrency: tier.cash},
@@ -325,35 +316,17 @@ func (s *MarketStore) applyRoleSeedLocked(seed roleSeed) seededUser {
 	if userID == 0 {
 		return seededUser{}
 	}
-	user := s.users[userID]
+	user, _ := s.User(userID)
 	if user.ID == 0 {
-		username := stringOrDefault(seed.Username, role)
-		user = models.User{ID: userID, Username: username, Role: "bot", RankID: 1, Rank: defaultRankName}
+		user = models.User{ID: userID, Username: stringOrDefault(seed.Username, role), Role: "bot", RankID: 1, Rank: defaultRankName}
 	}
-	if user.Role == "" || !strings.EqualFold(user.Role, "bot") {
-		user.Role = "bot"
-	}
-	user = normalizeUserRank(user)
 	if user.Username == "" {
 		user.Username = stringOrDefault(seed.Username, role)
 	}
-	s.users[userID] = user
-	if _, ok := s.balances[userID]; !ok {
-		s.balances[userID] = make(map[string]int64)
-	}
-	if _, ok := s.positions[userID]; !ok {
-		s.positions[userID] = make(map[int64]int64)
-	}
-	for currency, amount := range seed.Balances {
+	for currency := range seed.Balances {
 		s.currencies[currency] = struct{}{}
-		s.balances[userID][currency] = amount
 	}
-	for assetID, qty := range seed.Positions {
-		if assetID == 0 {
-			continue
-		}
-		s.positions[userID][assetID] = qty
-	}
+	
 	s.roleToUserID[role] = userID
 	if _, ok := s.roleToAPIKey[role]; !ok {
 		key, err := generateAPIKeyHex()

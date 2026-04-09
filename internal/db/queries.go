@@ -353,11 +353,16 @@ func (q *Queries) UpsertUser(ctx context.Context, user models.User, createdAt ti
 	return err
 }
 
+func (q *Queries) UpdateUserXP(ctx context.Context, userID int64, xp int64, rankID int64) error {
+	_, err := q.Conn.DB.ExecContext(ctx, "UPDATE users SET xp = ?, rank_id = ? WHERE user_id = ?", xp, rankID, userID)
+	return err
+}
+
 func (q *Queries) ListUsers(ctx context.Context) ([]models.User, error) {
 	rows, err := q.Conn.DB.QueryContext(ctx, `
 		SELECT u.user_id, u.username, u.rank_id, rd.name
 		FROM users u
-		INNER JOIN rank_definitions rd ON rd.rank_id = u.rank_id
+		LEFT JOIN rank_definitions rd ON rd.rank_id = u.rank_id
 	`)
 	if err != nil {
 		return nil, err
@@ -366,13 +371,31 @@ func (q *Queries) ListUsers(ctx context.Context) ([]models.User, error) {
 	var users []models.User
 	for rows.Next() {
 		var user models.User
-		if err := rows.Scan(&user.ID, &user.Username, &user.RankID, &user.Rank); err != nil {
+		var rankName sql.NullString
+		if err := rows.Scan(&user.ID, &user.Username, &user.RankID, &rankName); err != nil {
 			return nil, err
 		}
+		user.Rank = rankName.String
 		user.Role = "player"
 		users = append(users, user)
 	}
 	return users, rows.Err()
+}
+
+func (q *Queries) GetUser(ctx context.Context, userID int64) (models.User, error) {
+	var user models.User
+	var rankName sql.NullString
+	err := q.Conn.DB.QueryRowContext(ctx, `
+		SELECT u.user_id, u.username, u.rank_id, rd.name
+		FROM users u
+		LEFT JOIN rank_definitions rd ON rd.rank_id = u.rank_id
+		WHERE u.user_id = ?
+	`, userID).Scan(&user.ID, &user.Username, &user.RankID, &rankName)
+	if err == nil {
+		user.Rank = rankName.String
+		user.Role = "player"
+	}
+	return user, err
 }
 
 func (q *Queries) UpsertAsset(ctx context.Context, asset models.Asset, basePrice int64) error {
@@ -400,6 +423,12 @@ func (q *Queries) UpsertAsset(ctx context.Context, asset models.Asset, basePrice
 	return err
 }
 
+func (q *Queries) GetAssetPrice(ctx context.Context, assetID int64) (int64, error) {
+	var price int64
+	err := q.Conn.DB.QueryRowContext(ctx, "SELECT base_price FROM assets WHERE asset_id = ?", assetID).Scan(&price)
+	return price, err
+}
+
 func (q *Queries) ListAssets(ctx context.Context) ([]AssetSnapshot, error) {
 	rows, err := q.Conn.DB.QueryContext(ctx, "SELECT asset_id, ticker, type, base_price FROM assets")
 	if err != nil {
@@ -413,15 +442,19 @@ func (q *Queries) ListAssets(ctx context.Context) ([]AssetSnapshot, error) {
 		if err := rows.Scan(&asset.ID, &asset.Symbol, &asset.Type, &basePrice); err != nil {
 			return nil, err
 		}
-		if asset.Name == "" {
-			asset.Name = asset.Symbol
-		}
-		if asset.Sector == "" {
-			asset.Sector = "GENERAL"
-		}
+		if asset.Name == "" { asset.Name = asset.Symbol }
 		assets = append(assets, AssetSnapshot{Asset: asset, BasePrice: basePrice})
 	}
 	return assets, rows.Err()
+}
+
+func (q *Queries) GetAsset(ctx context.Context, assetID int64) (models.Asset, error) {
+	var asset models.Asset
+	err := q.Conn.DB.QueryRowContext(ctx, "SELECT asset_id, ticker, type FROM assets WHERE asset_id = ?", assetID).Scan(&asset.ID, &asset.Symbol, &asset.Type)
+	if err == nil {
+		if asset.Name == "" { asset.Name = asset.Symbol }
+	}
+	return asset, err
 }
 
 func (q *Queries) ListPerpetualBonds(ctx context.Context) ([]PerpetualBondRecord, error) {
@@ -514,6 +547,142 @@ func (q *Queries) UpsertOrder(ctx context.Context, order *engine.Order) error {
 			status = VALUES(status),
 			updated_at = VALUES(updated_at)
 	`, order.ID, order.UserID, order.AssetID, order.Side, order.Type, order.Quantity, order.Price, order.StopPrice, filled, order.Status, createdAt.UnixMilli(), updatedAt.UnixMilli())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (q *Queries) GetCrossingOrders(ctx context.Context, tx *sql.Tx, assetID int64, side engine.Side, price int64, isMarket bool) ([]*engine.Order, error) {
+	var query string
+	var args []interface{}
+	if side == engine.SideBuy {
+		if isMarket {
+			query = `SELECT order_id, user_id, asset_id, side, type, quantity, price, stop_price, filled_quantity, status, created_at, updated_at
+					 FROM orders
+					 WHERE asset_id = ? AND side = 'SELL' AND status IN ('OPEN', 'PARTIAL')
+					 ORDER BY price ASC, created_at ASC FOR UPDATE`
+			args = []interface{}{assetID}
+		} else {
+			query = `SELECT order_id, user_id, asset_id, side, type, quantity, price, stop_price, filled_quantity, status, created_at, updated_at
+					 FROM orders
+					 WHERE asset_id = ? AND side = 'SELL' AND status IN ('OPEN', 'PARTIAL') AND price <= ?
+					 ORDER BY price ASC, created_at ASC FOR UPDATE`
+			args = []interface{}{assetID, price}
+		}
+	} else {
+		if isMarket {
+			query = `SELECT order_id, user_id, asset_id, side, type, quantity, price, stop_price, filled_quantity, status, created_at, updated_at
+					 FROM orders
+					 WHERE asset_id = ? AND side = 'BUY' AND status IN ('OPEN', 'PARTIAL')
+					 ORDER BY price DESC, created_at ASC FOR UPDATE`
+			args = []interface{}{assetID}
+		} else {
+			query = `SELECT order_id, user_id, asset_id, side, type, quantity, price, stop_price, filled_quantity, status, created_at, updated_at
+					 FROM orders
+					 WHERE asset_id = ? AND side = 'BUY' AND status IN ('OPEN', 'PARTIAL') AND price >= ?
+					 ORDER BY price DESC, created_at ASC FOR UPDATE`
+			args = []interface{}{assetID, price}
+		}
+	}
+
+	rows, err := tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var orders []*engine.Order
+	for rows.Next() {
+		order := &engine.Order{}
+		var p sql.NullInt64
+		var sp sql.NullInt64
+		var filled int64
+		var createdAt int64
+		var updatedAt int64
+		if err := rows.Scan(&order.ID, &order.UserID, &order.AssetID, &order.Side, &order.Type, &order.Quantity, &p, &sp, &filled, &order.Status, &createdAt, &updatedAt); err != nil {
+			return nil, err
+		}
+		if p.Valid {
+			order.Price = p.Int64
+		}
+		if sp.Valid {
+			order.StopPrice = sp.Int64
+		}
+		order.Remaining = order.Quantity - filled
+		order.CreatedAt = time.UnixMilli(createdAt).UTC()
+		order.UpdatedAt = time.UnixMilli(updatedAt).UTC()
+		orders = append(orders, order)
+	}
+	return orders, nil
+}
+
+func (q *Queries) GetStopOrdersToTrigger(ctx context.Context, tx *sql.Tx, assetID int64, lastPrice int64) ([]*engine.Order, error) {
+	query := `SELECT order_id, user_id, asset_id, side, type, quantity, price, stop_price, filled_quantity, status, created_at, updated_at
+			  FROM orders
+			  WHERE asset_id = ? AND status = 'OPEN' AND (type = 'STOP' OR type = 'STOP_LIMIT')
+			  AND ((side = 'BUY' AND stop_price <= ?) OR (side = 'SELL' AND stop_price >= ?))
+			  ORDER BY created_at ASC FOR UPDATE`
+	
+	rows, err := tx.QueryContext(ctx, query, assetID, lastPrice, lastPrice)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var orders []*engine.Order
+	for rows.Next() {
+		order := &engine.Order{}
+		var p sql.NullInt64
+		var sp sql.NullInt64
+		var filled int64
+		var createdAt int64
+		var updatedAt int64
+		if err := rows.Scan(&order.ID, &order.UserID, &order.AssetID, &order.Side, &order.Type, &order.Quantity, &p, &sp, &filled, &order.Status, &createdAt, &updatedAt); err != nil {
+			return nil, err
+		}
+		if p.Valid {
+			order.Price = p.Int64
+		}
+		if sp.Valid {
+			order.StopPrice = sp.Int64
+		}
+		order.Remaining = order.Quantity - filled
+		order.CreatedAt = time.UnixMilli(createdAt).UTC()
+		order.UpdatedAt = time.UnixMilli(updatedAt).UTC()
+		orders = append(orders, order)
+	}
+	return orders, nil
+}
+
+func (q *Queries) UpdateOrder(ctx context.Context, order *engine.Order) error {
+	filled := order.Quantity - order.Remaining
+	_, err := q.Conn.DB.ExecContext(ctx, `
+		UPDATE orders SET status = ?, filled_quantity = ?, updated_at = ? WHERE order_id = ?
+	`, order.Status, filled, order.UpdatedAt.UnixMilli(), order.ID)
+	return err
+}
+
+func (q *Queries) UpdateOrderTx(ctx context.Context, tx *sql.Tx, order *engine.Order) error {
+	filled := order.Quantity - order.Remaining
+	_, err := tx.ExecContext(ctx, `
+		UPDATE orders SET status = ?, filled_quantity = ?, updated_at = ?
+		WHERE order_id = ?
+	`, order.Status, filled, order.UpdatedAt.UnixMilli(), order.ID)
+	return err
+}
+
+func (q *Queries) InsertExecutionTx(ctx context.Context, tx *sql.Tx, exec engine.Execution, isTakerBuyer bool) error {
+	buyOrderID := exec.MakerOrderID
+	sellOrderID := exec.TakerOrderID
+	if isTakerBuyer {
+		buyOrderID = exec.TakerOrderID
+		sellOrderID = exec.MakerOrderID
+	}
+	_, err := tx.ExecContext(ctx, `
+		INSERT INTO executions (buy_order_id, sell_order_id, asset_id, price, quantity, executed_at, is_taker_buyer)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, buyOrderID, sellOrderID, exec.AssetID, exec.Price, exec.Quantity, exec.OccurredAtUTC.UnixMilli(), isTakerBuyer)
 	return err
 }
 
@@ -679,6 +848,19 @@ func (q *Queries) ListNewsFeed(ctx context.Context) ([]NewsRecord, error) {
 	return items, rows.Err()
 }
 
+func (q *Queries) GetBalance(ctx context.Context, params models.GetBalanceParams) (int64, error) {
+	var amount int64
+	err := q.Conn.DB.QueryRowContext(ctx, `
+		SELECT amount FROM currency_balances cb
+		JOIN currencies c ON cb.currency_id = c.currency_id
+		WHERE cb.user_id = ? AND c.code = ?
+	`, params.UserID, params.Currency).Scan(&amount)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	return amount, err
+}
+
 func (q *Queries) SetCurrencyBalance(ctx context.Context, userID, currencyID, amount int64) error {
 	if userID == 0 || currencyID == 0 {
 		return errors.New("user id and currency id required")
@@ -688,6 +870,52 @@ func (q *Queries) SetCurrencyBalance(ctx context.Context, userID, currencyID, am
 		VALUES (?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE amount = VALUES(amount), updated_at = VALUES(updated_at)
 	`, userID, currencyID, amount, time.Now().UTC().UnixMilli())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (q *Queries) AdjustCurrencyBalance(ctx context.Context, tx *sql.Tx, userID int64, currency string, delta int64) error {
+	var currencyID int64
+	var err error
+	query := "SELECT currency_id FROM currencies WHERE code = ? LIMIT 1"
+	if tx != nil {
+		err = tx.QueryRowContext(ctx, query, currency).Scan(&currencyID)
+	} else {
+		err = q.Conn.DB.QueryRowContext(ctx, query, currency).Scan(&currencyID)
+	}
+	if err != nil {
+		return err
+	}
+	
+	upsertQuery := `
+		INSERT INTO currency_balances (user_id, currency_id, amount, updated_at)
+		VALUES (?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE amount = amount + ?, updated_at = ?
+	`
+	now := time.Now().UTC().UnixMilli()
+	if tx != nil {
+		_, err = tx.ExecContext(ctx, upsertQuery, userID, currencyID, delta, now, delta, now)
+	} else {
+		_, err = q.Conn.DB.ExecContext(ctx, upsertQuery, userID, currencyID, delta, now, delta, now)
+	}
+	return err
+}
+
+func (q *Queries) AdjustAssetBalance(ctx context.Context, tx *sql.Tx, userID int64, assetID int64, delta int64) error {
+	upsertQuery := `
+		INSERT INTO asset_balances (user_id, asset_id, quantity, average_price, average_acquired_at, updated_at)
+		VALUES (?, ?, ?, 0, 0, ?)
+		ON DUPLICATE KEY UPDATE quantity = quantity + ?, updated_at = ?
+	`
+	now := time.Now().UTC().UnixMilli()
+	var err error
+	if tx != nil {
+		_, err = tx.ExecContext(ctx, upsertQuery, userID, assetID, delta, now, delta, now)
+	} else {
+		_, err = q.Conn.DB.ExecContext(ctx, upsertQuery, userID, assetID, delta, now, delta, now)
+	}
 	return err
 }
 
@@ -751,6 +979,18 @@ func (q *Queries) ListAPIKeys(ctx context.Context) ([]APIKeyRecord, error) {
 		return nil, err
 	}
 	return records, nil
+}
+
+func (q *Queries) GetPosition(ctx context.Context, params models.GetPositionParams) (int64, error) {
+	var qty int64
+	err := q.Conn.DB.QueryRowContext(ctx, `
+		SELECT quantity FROM asset_balances
+		WHERE user_id = ? AND asset_id = ?
+	`, params.UserID, params.AssetID).Scan(&qty)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	return qty, err
 }
 
 func (q *Queries) SetAssetBalance(ctx context.Context, userID, assetID, quantity int64) error {
@@ -1786,6 +2026,7 @@ func (q *Queries) ReplaceMacroIndicators(ctx context.Context, records []MacroInd
 	}
 	return tx.Commit()
 }
+
 
 func rollbackTx(tx *sql.Tx) {
 	if tx == nil {

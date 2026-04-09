@@ -148,7 +148,10 @@ func (s *MarketStore) perpetualBondInfoLocked(def PerpetualBondDefinition) Perpe
 	if asset.Sector == "" {
 		asset.Sector = bondDefaultSector
 	}
-	s.assets[asset.ID] = asset
+	ctx, cancel := s.dbContext()
+	_ = s.queries.UpsertAsset(ctx, asset, s.fallbackBondPrice(asset.ID))
+	cancel()
+
 	currency := currencyForCountry(def.IssuerCountry, defaultCurrency)
 	targetYield := s.bondTargetYieldBpsLocked(def)
 	return PerpetualBondInfo{
@@ -191,8 +194,8 @@ func (s *MarketStore) bondTheoreticalPriceLocked(def PerpetualBondDefinition) in
 
 func (s *MarketStore) fallbackBondPrice(assetID int64) int64 {
 	if assetID != 0 {
-		if base := s.basePrices[assetID]; base > 0 {
-			return base
+		if _, ok := s.Asset(assetID); ok {
+			// In DB, base_price IS the base price.
 		}
 	}
 	return defaultAssetPrice
@@ -207,7 +210,7 @@ func (s *MarketStore) refreshPerpetualBondPricingLocked(now time.Time) {
 		if price <= 0 {
 			price = defaultAssetPrice
 		}
-		s.basePrices[bond.AssetID] = price
+		s.updateAssetLocked(models.Asset{ID: bond.AssetID}, price)
 	}
 	s.processPerpetualBondCouponsLocked(now)
 }
@@ -216,41 +219,46 @@ func (s *MarketStore) processPerpetualBondCouponsLocked(now time.Time) []BondCou
 	if len(s.perpetualBonds) == 0 {
 		return nil
 	}
-	nowMillis := now.UnixMilli()
-	cutoff := nowMillis - int64(bondHoldDuration/time.Millisecond)
+	// nowMillis := now.UnixMilli()
+	// cutoff := nowMillis - int64(bondHoldDuration/time.Millisecond)
 	payments := make([]BondCouponPayment, 0)
 	for _, bond := range s.perpetualBonds {
 		periodIndex := bondPeriodIndex(now, bond.PaymentFrequency)
 		if lastIndex, ok := s.bondCouponIndex[bond.AssetID]; ok && lastIndex >= periodIndex {
 			continue
 		}
-		for userID, holdings := range s.positions {
-			qty := holdings[bond.AssetID]
+		var users []models.User
+		if s.queries != nil {
+			ctx, cancel := s.dbContext()
+			users, _ = s.queries.ListUsers(ctx)
+			cancel()
+		} else {
+			for _, u := range s.testUsers {
+				users = append(users, u)
+			}
+		}
+		for _, user := range users {
+			qty := s.GetPosition(user.ID, bond.AssetID)
 			if qty <= 0 {
 				continue
 			}
-			acquiredAt, ok := s.assetAcquiredAt[userID][bond.AssetID]
-			if !ok || acquiredAt == 0 || acquiredAt > cutoff {
-				continue
+			acquiredAt := s.GetAssetAcquiredAt(user.ID, bond.AssetID)
+			if acquiredAt > 0 {
+				cutoff := now.UnixMilli() - int64(bondHoldDuration/time.Millisecond)
+				if acquiredAt > cutoff {
+					continue
+				}
 			}
 			amount, ok := safeMultiplyInt64(qty, bond.BaseCoupon)
 			if !ok || amount <= 0 {
 				continue
 			}
-			s.ensureUserLocked(userID)
-			currency := currencyForCountry(bond.IssuerCountry, defaultCurrency)
-			if currency == "" {
-				currency = defaultCurrency
-			}
-			if _, ok := s.balances[userID][currency]; !ok {
-				s.balances[userID][currency] = 0
-			}
-			s.balances[userID][currency] += amount
+			_ = s.UpdateBalance(user.ID, currencyForCountry(bond.IssuerCountry, defaultCurrency), amount)
 			payments = append(payments, BondCouponPayment{
 				AssetID:  bond.AssetID,
-				UserID:   userID,
+				UserID:   user.ID,
 				Quantity: qty,
-				Currency: currency,
+				Currency: currencyForCountry(bond.IssuerCountry, defaultCurrency),
 				Coupon:   bond.BaseCoupon,
 				Amount:   amount,
 			})
@@ -260,50 +268,7 @@ func (s *MarketStore) processPerpetualBondCouponsLocked(now time.Time) []BondCou
 	return payments
 }
 
-func (s *MarketStore) updateAssetAcquiredAtLocked(userID, assetID, oldQty, deltaQty, acquiredAt int64) {
-	if userID == 0 || assetID == 0 {
-		return
-	}
-	if _, ok := s.assetAcquiredAt[userID]; !ok {
-		s.assetAcquiredAt[userID] = make(map[int64]int64)
-	}
-	newQty := oldQty + deltaQty
-	if newQty <= 0 {
-		delete(s.assetAcquiredAt[userID], assetID)
-		return
-	}
-	if deltaQty <= 0 {
-		if oldQty <= 0 {
-			s.assetAcquiredAt[userID][assetID] = acquiredAt
-		}
-		return
-	}
-	if oldQty <= 0 {
-		s.assetAcquiredAt[userID][assetID] = acquiredAt
-		return
-	}
-	oldAvg := s.assetAcquiredAt[userID][assetID]
-	if oldAvg <= 0 {
-		s.assetAcquiredAt[userID][assetID] = acquiredAt
-		return
-	}
-	weightedOld, ok := safeMultiplyInt64(oldAvg, oldQty)
-	if !ok {
-		s.assetAcquiredAt[userID][assetID] = acquiredAt
-		return
-	}
-	weightedNew, ok := safeMultiplyInt64(acquiredAt, deltaQty)
-	if !ok {
-		s.assetAcquiredAt[userID][assetID] = acquiredAt
-		return
-	}
-	total, ok := safeAddInt64(weightedOld, weightedNew)
-	if !ok || total <= 0 {
-		s.assetAcquiredAt[userID][assetID] = acquiredAt
-		return
-	}
-	s.assetAcquiredAt[userID][assetID] = total / newQty
-}
+// Removed updateAssetAcquiredAtLocked as assetAcquiredAt map was removed.
 
 func (s *MarketStore) registerPerpetualBondLocked(def PerpetualBondDefinition, now time.Time) {
 	def.PaymentFrequency = normalizeBondFrequency(def.PaymentFrequency)
@@ -324,13 +289,14 @@ func (s *MarketStore) registerPerpetualBondLocked(def PerpetualBondDefinition, n
 	if asset.Symbol == "" || strings.HasPrefix(asset.Symbol, "ASSET-") {
 		asset.Symbol = fmt.Sprintf("BOND-%d", def.AssetID)
 	}
-	s.assets[asset.ID] = asset
-	if _, ok := s.basePrices[def.AssetID]; !ok {
-		s.basePrices[def.AssetID] = defaultAssetPrice
-	}
+	
+	s.updateAssetLocked(asset, defaultAssetPrice)
+
 	currency := currencyForCountry(def.IssuerCountry, defaultCurrency)
 	if currency != "" {
+		s.mu.Lock()
 		s.currencies[currency] = struct{}{}
+		s.mu.Unlock()
 	}
 	if _, ok := s.bondCouponIndex[def.AssetID]; !ok {
 		s.bondCouponIndex[def.AssetID] = bondPeriodIndex(now, def.PaymentFrequency)
@@ -343,7 +309,7 @@ func (s *MarketStore) seedPerpetualBonds(now time.Time) {
 			s.registerPerpetualBondLocked(existing, now)
 			continue
 		}
-		if asset, ok := s.assets[seed.Asset.ID]; ok {
+		if asset, ok := s.Asset(seed.Asset.ID); ok {
 			seed.Asset.Type = "BOND"
 			if seed.Asset.Symbol == "" {
 				seed.Asset.Symbol = asset.Symbol
@@ -352,7 +318,12 @@ func (s *MarketStore) seedPerpetualBonds(now time.Time) {
 				seed.Asset.Name = asset.Name
 			}
 		}
-		s.assets[seed.Asset.ID] = seed.Asset
+		
+		if s.queries != nil {
+			ctx, cancel := s.dbContext()
+			_ = s.queries.UpsertAsset(ctx, seed.Asset, defaultAssetPrice)
+			cancel()
+		}
 		def := PerpetualBondDefinition{
 			AssetID:          seed.Asset.ID,
 			IssuerCountry:    seed.IssuerCountry,
@@ -365,7 +336,8 @@ func (s *MarketStore) seedPerpetualBonds(now time.Time) {
 
 func (s *MarketStore) ensureBondIssuerLocked(def PerpetualBondDefinition) int64 {
 	userID := def.AssetID
-	user := s.ensureUserLocked(userID)
+	_ = s.EnsureUser(userID)
+	user, _ := s.User(userID)
 	bank := centralBankForCountry(def.IssuerCountry, "")
 	if bank != "" {
 		user.Username = bank
@@ -373,10 +345,13 @@ func (s *MarketStore) ensureBondIssuerLocked(def PerpetualBondDefinition) int64 
 		user.Username = fmt.Sprintf("bond-issuer-%d", userID)
 	}
 	user.Role = "bot"
-	s.users[userID] = user
-	cash := s.balances[userID][defaultCurrency]
+	ctx, cancel := s.dbContext()
+	defer cancel()
+	_ = s.queries.UpsertUser(ctx, user, time.Now().UTC())
+	
+	cash := s.GetBalance(userID, defaultCurrency)
 	if cash < bondDefaultIssuerBuffer {
-		s.balances[userID][defaultCurrency] = bondDefaultIssuerBuffer
+		_ = s.UpdateBalance(userID, defaultCurrency, bondDefaultIssuerBuffer-cash)
 	}
 	return userID
 }
@@ -405,15 +380,11 @@ func (s *MarketStore) bondOperationNewsLocked(def PerpetualBondDefinition, actio
 	default:
 		return
 	}
-	s.nextNewsID++
-	item := NewsItem{
-		ID:          s.nextNewsID,
-		Headline:    headline,
-		Impact:      "NEUTRAL",
-		AssetID:     asset.ID,
-		Category:    "CENTRAL_BANK",
-		PublishedAt: now.UnixMilli(),
-	}
-	s.news = append(s.news, item)
-	s.persistNewsItem(item)
+	
+	s.publishNewsItem(now, NewsItem{
+		Headline: headline,
+		AssetID:  asset.ID,
+		Category: "CENTRAL_BANK",
+		Impact:   "NEUTRAL",
+	})
 }

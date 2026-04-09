@@ -7,7 +7,7 @@ func TestMarginPoolSupplyWithdrawShares(t *testing.T) {
 	store.EnsureUser(1)
 
 	poolID := int64(1)
-	startCash := store.balances[1][defaultCurrency]
+	startCash := store.GetBalance(1, defaultCurrency)
 	initialPool := store.marginPools[poolID]
 	initialCashShares := initialPool.TotalCashShares
 	if initialCashShares == 0 && initialPool.TotalCash > 0 {
@@ -27,7 +27,7 @@ func TestMarginPoolSupplyWithdrawShares(t *testing.T) {
 	if result.Pool.TotalCashShares != initialCashShares+1_000 {
 		t.Fatalf("unexpected pool cash shares: %d", result.Pool.TotalCashShares)
 	}
-	if store.balances[1][defaultCurrency] != startCash-1_000 {
+	if store.GetBalance(1, defaultCurrency) != startCash-1_000 {
 		t.Fatalf("unexpected cash balance after supply")
 	}
 
@@ -44,7 +44,7 @@ func TestMarginPoolSupplyWithdrawShares(t *testing.T) {
 	if result.Pool.TotalCashShares != initialCashShares+600 {
 		t.Fatalf("unexpected pool cash shares after withdraw: %d", result.Pool.TotalCashShares)
 	}
-	if store.balances[1][defaultCurrency] != startCash-600 {
+	if store.GetBalance(1, defaultCurrency) != startCash-600 {
 		t.Fatalf("unexpected cash balance after withdraw")
 	}
 

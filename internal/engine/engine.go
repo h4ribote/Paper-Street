@@ -16,19 +16,28 @@ type EventSink interface {
 	Shutdown(ctx context.Context) error
 }
 
+type Storage interface {
+	ProcessSubmit(ctx context.Context, order *Order) (OrderResult, error)
+	ProcessCancel(ctx context.Context, orderID int64) (OrderResult, error)
+	GetOrderBookSnapshot(ctx context.Context, assetID int64, depth int) (OrderBookSnapshot, error)
+	FindOrder(ctx context.Context, orderID int64) (*Order, error)
+}
+
 type Engine struct {
 	mu         sync.RWMutex
 	orderBooks map[int64]*OrderBook
 	sink       EventSink
+	storage    Storage
 }
 
-func NewEngine(sink EventSink) *Engine {
+func NewEngine(sink EventSink, storage Storage) *Engine {
 	if sink == nil {
 		sink = NewDiscardSink()
 	}
 	return &Engine{
 		orderBooks: make(map[int64]*OrderBook),
 		sink:       sink,
+		storage:    storage,
 	}
 }
 
@@ -39,7 +48,7 @@ func (e *Engine) OrderBook(assetID int64) *OrderBook {
 	if book != nil {
 		return book
 	}
-	book = NewOrderBook(assetID, e.sink)
+	book = NewOrderBook(assetID, e.sink, e.storage)
 	e.orderBooks[assetID] = book
 	book.Start()
 	return book

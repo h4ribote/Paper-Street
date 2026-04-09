@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"log"
 
+	"time"
+
 	"github.com/h4ribote/Paper-Street/internal/db"
 	"github.com/h4ribote/Paper-Street/internal/models"
 )
@@ -22,10 +24,12 @@ func (s *MarketStore) loadCompaniesFromDB(ctx context.Context) error {
 	}
 	commodityID := s.firstCommodityAssetID()
 	for _, record := range records {
-		asset, ok := s.assets[record.CompanyID]
+		asset, ok := s.Asset(record.CompanyID)
 		if !ok {
 			asset = models.Asset{ID: record.CompanyID, Symbol: record.Symbol, Name: record.Name, Type: "STOCK", Sector: record.Sector}
-			s.assets[asset.ID] = asset
+			ctx, cancel := s.dbContext()
+			_ = s.queries.UpsertAsset(ctx, asset, defaultAssetPrice)
+			cancel()
 		}
 		state := &companyState{
 			Company: Company{
@@ -61,7 +65,9 @@ func (s *MarketStore) loadCompaniesFromDB(ctx context.Context) error {
 		user := s.ensureUserLocked(state.UserID)
 		if user.Role != "bot" {
 			user.Role = "bot"
-			s.users[state.UserID] = user
+			ctx, cancel := s.dbContext()
+			_ = s.queries.UpsertUser(ctx, user, time.Now().UTC())
+			cancel()
 		}
 	}
 	return nil

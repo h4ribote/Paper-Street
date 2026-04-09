@@ -161,18 +161,17 @@ func (s *MarketStore) CreatePoolPosition(poolID, userID, baseAmount, quoteAmount
 	if lowerTick%tickSpacing != 0 || upperTick%tickSpacing != 0 {
 		return PoolPosition{}, fmt.Errorf("tick spacing must align to %d", tickSpacing)
 	}
-	s.ensureUserLocked(userID)
 	if baseAmount > 0 {
-		if s.balances[userID][pool.BaseCurrency] < baseAmount {
+		if s.GetBalance(userID, pool.BaseCurrency) < baseAmount {
 			return PoolPosition{}, errors.New("insufficient base currency balance")
 		}
-		s.balances[userID][pool.BaseCurrency] -= baseAmount
+		s.UpdateBalance(userID, pool.BaseCurrency, -baseAmount)
 	}
 	if quoteAmount > 0 {
-		if s.balances[userID][pool.QuoteCurrency] < quoteAmount {
+		if s.GetBalance(userID, pool.QuoteCurrency) < quoteAmount {
 			return PoolPosition{}, errors.New("insufficient quote currency balance")
 		}
-		s.balances[userID][pool.QuoteCurrency] -= quoteAmount
+		s.UpdateBalance(userID, pool.QuoteCurrency, -quoteAmount)
 	}
 	s.nextPoolPosID++
 	position := PoolPosition{
@@ -214,9 +213,8 @@ func (s *MarketStore) ClosePoolPosition(userID, positionID int64) (PoolPosition,
 	}
 	pool.Liquidity -= position.BaseAmount + position.QuoteAmount
 	s.pools[position.PoolID] = pool
-	s.ensureUserLocked(position.UserID)
-	s.balances[position.UserID][pool.BaseCurrency] += position.BaseAmount
-	s.balances[position.UserID][pool.QuoteCurrency] += position.QuoteAmount
+	s.UpdateBalance(position.UserID, pool.BaseCurrency, position.BaseAmount)
+	s.UpdateBalance(position.UserID, pool.QuoteCurrency, position.QuoteAmount)
 	delete(s.poolPositions, positionID)
 	poolSnapshot := pool
 	go s.persistLiquidityPool(poolSnapshot)
@@ -238,8 +236,7 @@ func (s *MarketStore) SwapPool(poolID, userID int64, fromCurrency, toCurrency st
 	if from == "" || to == "" || from == to {
 		return PoolSwapResult{}, errors.New("invalid currencies")
 	}
-	s.ensureUserLocked(userID)
-	if s.balances[userID][from] < amount {
+	if s.GetBalance(userID, from) < amount {
 		return PoolSwapResult{}, errors.New("insufficient balance")
 	}
 	if poolID == 0 {
@@ -248,11 +245,11 @@ func (s *MarketStore) SwapPool(poolID, userID int64, fromCurrency, toCurrency st
 			return PoolSwapResult{}, err
 		}
 		for _, step := range plan.steps {
-			if s.balances[userID][step.from] < step.amountIn {
+			if s.GetBalance(userID, step.from) < step.amountIn {
 				return PoolSwapResult{}, errors.New("insufficient balance for routed swap")
 			}
-			s.balances[userID][step.from] -= step.amountIn
-			s.balances[userID][step.to] += step.amountOut
+			s.UpdateBalance(userID, step.from, -step.amountIn)
+			s.UpdateBalance(userID, step.to, step.amountOut)
 			s.pools[step.pool.ID] = step.updatedPool
 			s.distributePoolFeesLocked(step.updatedPool, step.from, step.feeAmount)
 			poolSnapshot := s.pools[step.pool.ID]
@@ -284,8 +281,8 @@ func (s *MarketStore) SwapPool(poolID, userID int64, fromCurrency, toCurrency st
 	if err != nil {
 		return PoolSwapResult{}, err
 	}
-	s.balances[userID][from] -= amount
-	s.balances[userID][to] += result.AmountOut
+	s.UpdateBalance(userID, from, -amount)
+	s.UpdateBalance(userID, to, result.AmountOut)
 	s.pools[poolID] = updatedPool
 	s.distributePoolFeesLocked(updatedPool, from, result.FeeAmount)
 	poolSnapshot := s.pools[poolID]
@@ -510,7 +507,7 @@ func (s *MarketStore) updateMarginPool(poolID, userID, cashAmount, assetAmount i
 			if pool.TotalAssets-pool.BorrowedAssets < assetAmount {
 				return MarginSupplyResult{}, errors.New("insufficient pool assets")
 			}
-		} else if s.positions[userID][pool.AssetID] < assetAmount {
+		} else if s.GetPosition(userID, pool.AssetID) < assetAmount {
 			return MarginSupplyResult{}, errors.New("insufficient asset balance")
 		}
 	}
@@ -522,7 +519,7 @@ func (s *MarketStore) updateMarginPool(poolID, userID, cashAmount, assetAmount i
 			if pool.TotalCash-pool.BorrowedCash < cashAmount {
 				return MarginSupplyResult{}, errors.New("insufficient pool cash")
 			}
-		} else if s.balances[userID][defaultCurrency] < cashAmount {
+		} else if s.GetBalance(userID, defaultCurrency) < cashAmount {
 			return MarginSupplyResult{}, errors.New("insufficient cash balance")
 		}
 	}
@@ -543,26 +540,26 @@ func (s *MarketStore) updateMarginPool(poolID, userID, cashAmount, assetAmount i
 	}
 	if cashAmount > 0 {
 		if isSupply {
-			s.balances[userID][defaultCurrency] -= cashAmount
+			s.UpdateBalance(userID, defaultCurrency, -cashAmount)
 			pool.TotalCash += cashAmount
 			position.CashShares += cashShares
 			pool.TotalCashShares += cashShares
 		} else {
 			pool.TotalCash -= cashAmount
-			s.balances[userID][defaultCurrency] += cashAmount
+			s.UpdateBalance(userID, defaultCurrency, cashAmount)
 			position.CashShares -= cashShares
 			pool.TotalCashShares -= cashShares
 		}
 	}
 	if assetAmount > 0 {
 		if isSupply {
-			s.positions[userID][pool.AssetID] -= assetAmount
+			s.UpdatePosition(userID, pool.AssetID, -assetAmount)
 			pool.TotalAssets += assetAmount
 			position.AssetShares += assetShares
 			pool.TotalAssetShares += assetShares
 		} else {
 			pool.TotalAssets -= assetAmount
-			s.positions[userID][pool.AssetID] += assetAmount
+			s.UpdatePosition(userID, pool.AssetID, assetAmount)
 			position.AssetShares -= assetShares
 			pool.TotalAssetShares -= assetShares
 		}
@@ -616,25 +613,25 @@ func (s *MarketStore) updateIndexHoldings(userID, assetID, quantity int64, isCre
 	s.ensureUserLocked(userID)
 	inventory := s.ensureIndexInventoryLocked(assetID)
 	if isCreate {
-		if s.balances[userID][defaultCurrency] < fee {
+		if s.GetBalance(userID, defaultCurrency) < fee {
 			return IndexActionResult{}, errors.New("insufficient cash balance for fee")
 		}
 		for _, componentID := range definition.Components {
-			if s.positions[userID][componentID] < quantity {
+			if s.GetPosition(userID, componentID) < quantity {
 				return IndexActionResult{}, errors.New("insufficient component holdings")
 			}
 		}
-		s.balances[userID][defaultCurrency] -= fee
+		s.UpdateBalance(userID, defaultCurrency, -fee)
 		for _, componentID := range definition.Components {
-			s.positions[userID][componentID] -= quantity
+			s.UpdatePosition(userID, componentID, -quantity)
 			inventory[componentID] += quantity
 		}
-		s.positions[userID][assetID] += quantity
+		s.UpdatePosition(userID, assetID, quantity)
 	} else {
-		if s.positions[userID][assetID] < quantity {
+		if s.GetPosition(userID, assetID) < quantity {
 			return IndexActionResult{}, errors.New("insufficient index holdings")
 		}
-		if s.balances[userID][defaultCurrency] < fee {
+		if s.GetBalance(userID, defaultCurrency) < fee {
 			return IndexActionResult{}, errors.New("insufficient cash balance for fee")
 		}
 		for _, componentID := range definition.Components {
@@ -642,11 +639,11 @@ func (s *MarketStore) updateIndexHoldings(userID, assetID, quantity int64, isCre
 				return IndexActionResult{}, errors.New("insufficient index inventory")
 			}
 		}
-		s.positions[userID][assetID] -= quantity
-		s.balances[userID][defaultCurrency] -= fee
+		s.UpdatePosition(userID, assetID, -quantity)
+		s.UpdateBalance(userID, defaultCurrency, -fee)
 		for _, componentID := range definition.Components {
 			inventory[componentID] -= quantity
-			s.positions[userID][componentID] += quantity
+			s.UpdatePosition(userID, componentID, quantity)
 		}
 	}
 	total := amount + fee
@@ -771,9 +768,7 @@ func (s *MarketStore) seedIndexes() {
 			return
 		}
 	}
-	s.assets[indexAsset.ID] = indexAsset
 	s.indexes[indexAsset.ID] = definition
-	s.basePrices[indexAsset.ID] = basePrice
 	s.persistIndex(definition)
 }
 
@@ -781,12 +776,13 @@ func (s *MarketStore) ensureIndexLocked(assetID int64) IndexDefinition {
 	if def, ok := s.indexes[assetID]; ok {
 		return def
 	}
-	components := make([]int64, 0, len(s.assets))
-	for id, asset := range s.assets {
+	assets := s.Assets(AssetFilter{})
+	components := make([]int64, 0, len(assets))
+	for _, asset := range assets {
 		if asset.Type == "INDEX" {
 			continue
 		}
-		components = append(components, id)
+		components = append(components, asset.ID)
 	}
 	sort.Slice(components, func(i, j int) bool { return components[i] < components[j] })
 	definition := IndexDefinition{
@@ -801,8 +797,8 @@ func (s *MarketStore) ensureIndexLocked(assetID int64) IndexDefinition {
 	if asset.Symbol == "" || strings.HasPrefix(asset.Symbol, "ASSET-") {
 		asset.Symbol = fmt.Sprintf("INDEX-%d", assetID)
 	}
-	s.assets[assetID] = asset
-	s.basePrices[assetID] = s.indexUnitPriceLocked(definition)
+	price := s.indexUnitPriceLocked(definition)
+	s.updateAssetLocked(asset, price)
 	go s.persistIndex(definition)
 	return definition
 }
@@ -846,7 +842,7 @@ func (s *MarketStore) assetCurrencyLocked(assetID int64) string {
 	if state := s.companyStates[assetID]; state != nil {
 		return currencyForCountry(state.Country, fxBaseCurrency)
 	}
-	if asset, ok := s.assets[assetID]; ok {
+	if asset, ok := s.Asset(assetID); ok {
 		if asset.Sector != "" {
 			country := s.defaultCountryForSector(asset.Sector)
 			return currencyForCountry(country, fxBaseCurrency)

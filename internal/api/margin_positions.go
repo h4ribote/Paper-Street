@@ -157,8 +157,7 @@ func (s *MarketStore) AddMargin(userID, positionID, amount int64) (MarginPositio
 	if userID != 0 && position.UserID != userID {
 		return MarginPosition{}, errors.New("position does not belong to user")
 	}
-	s.ensureUserLocked(position.UserID)
-	if s.balances[position.UserID][defaultCurrency] < amount {
+	if s.GetBalance(position.UserID, defaultCurrency) < amount {
 		return MarginPosition{}, errors.New("insufficient cash balance")
 	}
 	now := time.Now().UTC().UnixMilli()
@@ -166,7 +165,7 @@ func (s *MarketStore) AddMargin(userID, positionID, amount int64) (MarginPositio
 	position.MarginUsed += amount
 	position.LossRatioBps = s.lossRatioBps(position.MarginUsed, position.UnrealizedLoss+position.AccumulatedFees)
 	position.UpdatedAt = now
-	s.balances[position.UserID][defaultCurrency] -= amount
+	s.UpdateBalance(position.UserID, defaultCurrency, -amount)
 	s.marginPositions[position.ID] = position
 	positionSnapshot := position
 	go s.persistMarginPosition(positionSnapshot)
@@ -186,14 +185,7 @@ func (s *MarketStore) refreshMarginPositionLocked(position MarginPosition, now i
 }
 
 func (s *MarketStore) priceForAssetLocked(assetID int64) int64 {
-	if assetID == 0 {
-		return marginPriceMissing
-	}
-	price := s.lastPrices[assetID]
-	if price == 0 {
-		price = s.basePrices[assetID]
-	}
-	return price
+	return s.marketPriceLocked(assetID)
 }
 
 func (s *MarketStore) accrueMarginFeesLocked(position MarginPosition, now int64) MarginPosition {
@@ -482,9 +474,8 @@ func (s *MarketStore) liquidateMarginPositionLocked(position MarginPosition, now
 		}
 		payout = remaining - fee
 	}
-	s.ensureUserLocked(position.UserID)
 	if payout > 0 {
-		s.balances[position.UserID][defaultCurrency] += payout
+		s.UpdateBalance(position.UserID, defaultCurrency, payout)
 	}
 	s.repayMarginBorrowLocked(position)
 	s.nextLiquidationID++

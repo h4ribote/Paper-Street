@@ -31,7 +31,7 @@ func main() {
 	}
 
 	store := createStore()
-	engine := engine.NewEngine(store)
+	engine := engine.NewEngine(nil, store)
 	adminPassword := strings.TrimSpace(os.Getenv("ADMIN_PASSWORD"))
 	if adminPassword == "" {
 		log.Fatal("ADMIN_PASSWORD is required")

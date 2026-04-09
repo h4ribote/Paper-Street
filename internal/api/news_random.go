@@ -43,15 +43,13 @@ func (s *MarketStore) randomNewsItem(now time.Time, rng *rand.Rand) (NewsItem, b
 		return NewsItem{}, false
 	}
 	pattern := category.Patterns[rng.Intn(len(category.Patterns))]
-
+	assetsArr := s.Assets(AssetFilter{})
 	s.mu.RLock()
-	assets := make([]models.Asset, 0, len(s.assets))
-	for _, asset := range s.assets {
-		assets = append(assets, asset)
-	}
-	basePrices := make(map[int64]int64, len(s.basePrices))
-	for id, price := range s.basePrices {
-		basePrices[id] = price
+	assets := make([]models.Asset, 0, len(assetsArr))
+	prices := make(map[int64]int64)
+	for _, a := range assetsArr {
+		assets = append(assets, a)
+		prices[a.ID] = s.marketPriceLocked(a.ID)
 	}
 	indicators := make([]MacroIndicator, len(s.macroIndicators))
 	copy(indicators, s.macroIndicators)
@@ -67,7 +65,7 @@ func (s *MarketStore) randomNewsItem(now time.Time, rng *rand.Rand) (NewsItem, b
 
 	asset := randomAsset(rng, assets)
 	indicator := randomMacroIndicator(rng, indicators)
-	vars, assetID := s.newsVariablesForPattern(strings.ToUpper(category.ID), pattern, asset, indicator, basePrices, now, rng)
+	vars, assetID := s.newsVariablesForPattern(strings.ToUpper(category.ID), pattern, asset, indicator, prices, now, rng)
 	sentiment := randomSentiment(pattern, rng)
 	return buildNewsItemWithSentiment(category.ID, assetID, pattern, vars, sentiment), true
 }

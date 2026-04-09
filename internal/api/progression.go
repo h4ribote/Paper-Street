@@ -246,7 +246,7 @@ func (s *MarketStore) fxFeeBpsForUserLocked(userID int64, baseFee int64) int64 {
 	if userID == 0 {
 		return baseFee
 	}
-	user := s.users[userID]
+	user := s.ensureUserLocked(userID)
 	rank := resolveUserRank(user)
 	return applyDiscountBps(baseFee, rank.FXFeeDiscountBps)
 }
@@ -255,13 +255,13 @@ func (s *MarketStore) marginRateForUserLocked(userID int64, baseRate int64) int6
 	if userID == 0 {
 		return baseRate
 	}
-	user := s.users[userID]
+	user := s.ensureUserLocked(userID)
 	rank := resolveUserRank(user)
 	return applyDiscountBps(baseRate, rank.InterestDiscountBps)
 }
 
 func (s *MarketStore) userRankInfoLocked(userID int64) UserRankInfo {
-	user := s.users[userID]
+	user := s.ensureUserLocked(userID)
 	rank := resolveUserRank(user)
 	return UserRankInfo{
 		UserID:              userID,
@@ -300,9 +300,9 @@ func (s *MarketStore) AddXP(userID, amount int64) (UserRankInfo, error) {
 	rank := rankDefinitionForXP(user.XP)
 	user.RankID = rank.ID
 	user.Rank = rank.Name
-	s.users[userID] = user
+	s.updateUserLocked(user)
 	info := s.userRankInfoLocked(userID)
-	cash := s.balances[userID][defaultCurrency]
+	cash := s.getBalanceLocked(userID, defaultCurrency)
 	s.mu.Unlock()
 	s.persistUser(user, cash)
 	return info, nil
@@ -454,23 +454,23 @@ func (s *MarketStore) CompleteDailyMission(userID int64, missionID string, date 
 			progress.Rewarded[grade] = true
 			rewardValue := missionRewardForGrade(grade)
 			if rewardValue.XP > 0 {
-				user := s.users[userID]
+				user := s.ensureUserLocked(userID)
 				user.XP += rewardValue.XP
 				rank := rankDefinitionForXP(user.XP)
 				user.RankID = rank.ID
 				user.Rank = rank.Name
-				s.users[userID] = user
+				s.updateUserLocked(user)
 			}
 			if rewardValue.Cash > 0 {
-				s.balances[userID][defaultCurrency] += rewardValue.Cash
+				s.updateBalanceLocked(userID, defaultCurrency, rewardValue.Cash)
 				s.recordGovernmentSpendingLocked(fxArcadiaCountry, rewardValue.Cash, date)
 			}
 			reward = &rewardValue
 		}
 	}
 	info = s.userRankInfoLocked(userID)
-	user := s.users[userID]
-	cash := s.balances[userID][defaultCurrency]
+	user := s.ensureUserLocked(userID)
+	cash := s.getBalanceLocked(userID, defaultCurrency)
 	s.mu.Unlock()
 	if reward != nil {
 		s.persistUser(user, cash)
@@ -553,7 +553,7 @@ func (s *MarketStore) ensureContractKindLocked(now time.Time, kind contractKind)
 }
 
 func (s *MarketStore) contractKindForAssetLocked(assetID int64) contractKind {
-	asset := s.assets[assetID]
+	asset, _ := s.assetLocked(assetID)
 	if stringsEqualFold(asset.Sector, "ENERGY") {
 		return contractKindProcurement
 	}
@@ -572,7 +572,7 @@ func (s *MarketStore) generateContractLocked(now time.Time, kind contractKind) *
 	totalRequired := s.scaleContractRequirementLocked(asset.ID, template.baseRequired)
 	pricePerUnit := s.calculateContractPriceLocked(asset.ID, kind, now)
 	if pricePerUnit <= 0 {
-		pricePerUnit = s.basePrices[asset.ID]
+		pricePerUnit = s.marketPriceLocked(asset.ID)
 	}
 	if pricePerUnit <= 0 {
 		pricePerUnit = defaultAssetPrice
@@ -594,16 +594,16 @@ func (s *MarketStore) generateContractLocked(now time.Time, kind contractKind) *
 
 func (s *MarketStore) pickContractAssetLocked(kind contractKind) models.Asset {
 	if kind == contractKindCapex {
-		if asset, ok := s.assets[contractAssetAUR]; ok {
+		if asset, ok := s.assetLocked(contractAssetAUR); ok {
 			return asset
 		}
 	}
 	if kind == contractKindProcurement {
-		if asset, ok := s.assets[contractAssetNYX]; ok {
+		if asset, ok := s.assetLocked(contractAssetNYX); ok {
 			return asset
 		}
 	}
-	assets := sortedAssets(s.assets)
+	assets := s.Assets(AssetFilter{})
 	var selected models.Asset
 	var bestScore int64
 	for _, asset := range assets {
@@ -620,7 +620,7 @@ func (s *MarketStore) pickContractAssetLocked(kind contractKind) models.Asset {
 		volume := s.volumes[asset.ID]
 		score := volume
 		if score == 0 {
-			score = s.basePrices[asset.ID]
+			score = s.marketPriceLocked(asset.ID)
 		}
 		if selected.ID == 0 || score > bestScore {
 			selected = asset
@@ -698,7 +698,7 @@ func (s *MarketStore) calculateContractPriceLocked(assetID int64, kind contractK
 		base = s.lastPrices[assetID]
 	}
 	if base == 0 {
-		base = s.basePrices[assetID]
+		base = s.marketPriceLocked(assetID)
 	}
 	if base == 0 {
 		base = defaultAssetPrice
@@ -758,7 +758,7 @@ func (s *MarketStore) contractVWAPLocked(assetID int64, now time.Time) int64 {
 	cutoff := now.Add(-contractVWAPWindow)
 	var totalQty int64
 	var totalNotional int64
-	for _, exec := range s.executions {
+	for _, exec := range s.Executions(assetID, 1000) {
 		if exec.AssetID != assetID {
 			continue
 		}
@@ -843,7 +843,7 @@ func (s *MarketStore) DeliverContract(userID, contractID, quantity int64) (Contr
 		return ContractDeliveryResult{}, errors.New("contract fulfilled")
 	}
 	s.ensureUserLocked(userID)
-	user := s.users[userID]
+	user := s.ensureUserLocked(userID)
 	rankDef := resolveUserRank(user)
 	minRankDef, ok := rankDefinitionByName(contract.MinRank)
 	if ok && rankDef.ID < minRankDef.ID {
@@ -855,13 +855,13 @@ func (s *MarketStore) DeliverContract(userID, contractID, quantity int64) (Contr
 		s.mu.Unlock()
 		return ContractDeliveryResult{}, errors.New("quantity exceeds remaining")
 	}
-	available := s.positions[userID][contract.AssetID]
+	available := s.getPositionLocked(userID, contract.AssetID)
 	if available < quantity {
 		s.mu.Unlock()
 		return ContractDeliveryResult{}, errors.New("insufficient asset holdings")
 	}
 	contract.Delivered += quantity
-	s.positions[userID][contract.AssetID] -= quantity
+	s.setPositionLocked(userID, contract.AssetID, available-quantity)
 	contractProgress := s.ensureContractProgressLocked(userID)
 	contractProgress[contractID] += quantity
 	cashReward, ok := safeMultiplyInt64(quantity, contract.PricePerUnit)
@@ -874,7 +874,7 @@ func (s *MarketStore) DeliverContract(userID, contractID, quantity int64) (Contr
 		s.mu.Unlock()
 		return ContractDeliveryResult{}, errors.New("xp reward overflow")
 	}
-	s.balances[userID][defaultCurrency] += cashReward
+	s.updateBalanceLocked(userID, defaultCurrency, cashReward)
 	if cashReward > 0 && s.contractKindForAssetLocked(contract.AssetID) == contractKindProcurement {
 		s.recordGovernmentSpendingLocked(contractGovName, cashReward, time.UnixMilli(now))
 	}
@@ -883,12 +883,12 @@ func (s *MarketStore) DeliverContract(userID, contractID, quantity int64) (Contr
 		rank := rankDefinitionForXP(user.XP)
 		user.RankID = rank.ID
 		user.Rank = rank.Name
-		s.users[userID] = user
+		s.updateUserLocked(user)
 	}
 	status := s.contractStatusLocked(contract, userID)
 	info := s.userRankInfoLocked(userID)
-	cash := s.balances[userID][defaultCurrency]
-	assetQty := s.positions[userID][contract.AssetID]
+	cash := s.getBalanceLocked(userID, defaultCurrency)
+	assetQty := s.getPositionLocked(userID, contract.AssetID)
 	contractAssetID := contract.AssetID
 	contractIDSnapshot := contract.ID
 	contractSnapshot := *contract

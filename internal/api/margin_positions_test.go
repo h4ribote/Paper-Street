@@ -11,7 +11,7 @@ func TestMarginPositionTopUp(t *testing.T) {
 	store := NewMarketStore()
 	store.EnsureUser(1)
 	store.EnsureUser(2)
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 
 	submitEngineOrder(t, eng, &engine.Order{
 		AssetID:  101,
@@ -39,7 +39,7 @@ func TestMarginPositionTopUp(t *testing.T) {
 	if position.MarginUsed != 200 {
 		t.Fatalf("unexpected margin used: %d", position.MarginUsed)
 	}
-	before := store.balances[1][defaultCurrency]
+	before := store.GetBalance(1, defaultCurrency)
 	updated, err := store.AddMargin(1, position.ID, 50)
 	if err != nil {
 		t.Fatalf("failed to top up margin: %v", err)
@@ -47,7 +47,7 @@ func TestMarginPositionTopUp(t *testing.T) {
 	if updated.MarginUsed != 250 {
 		t.Fatalf("expected margin used 250, got %d", updated.MarginUsed)
 	}
-	if store.balances[1][defaultCurrency] != before-50 {
+	if store.GetBalance(1, defaultCurrency) != before-50 {
 		t.Fatalf("unexpected cash balance after top-up")
 	}
 }
@@ -57,7 +57,7 @@ func TestMarginLiquidationTriggered(t *testing.T) {
 	store.EnsureUser(1)
 	store.EnsureUser(2)
 	store.EnsureUser(3)
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 
 	submitEngineOrder(t, eng, &engine.Order{
 		AssetID:  101,
@@ -132,11 +132,9 @@ func TestMarginInterestAccrualUpdatesPool(t *testing.T) {
 	store := NewMarketStore()
 	store.EnsureUser(1)
 	store.EnsureUser(2)
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 
-	store.mu.Lock()
-	store.balances[1][defaultCurrency] = 2_000_000
-	store.mu.Unlock()
+	store.SetBalance(1, defaultCurrency, 2_000_000)
 
 	submitEngineOrder(t, eng, &engine.Order{
 		AssetID:  101,
@@ -201,7 +199,7 @@ func TestMarginMaintenanceLiquidatesOnFees(t *testing.T) {
 	store := NewMarketStore()
 	store.EnsureUser(1)
 	store.EnsureUser(2)
-	eng := engine.NewEngine(store)
+	eng := engine.NewEngine(nil, store)
 
 	submitEngineOrder(t, eng, &engine.Order{
 		AssetID:  101,

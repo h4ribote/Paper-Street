@@ -10,124 +10,16 @@ import (
 )
 
 func (s *MarketStore) loadLiquidityStateFromDB(ctx context.Context) error {
-	if s.queries == nil {
-		return nil
-	}
-	pools, err := s.queries.ListLiquidityPools(ctx)
-	if err != nil {
-		return err
-	}
-	for _, pool := range pools {
-		s.pools[pool.PoolID] = LiquidityPool{
-			ID:            pool.PoolID,
-			BaseCurrency:  "ARC",
-			QuoteCurrency: pool.QuoteCurrency,
-			FeeBps:        pool.FeeBps,
-			Liquidity:     pool.Liquidity,
-			CurrentTick:   pool.CurrentTick,
-		}
-		s.currencies["ARC"] = struct{}{}
-		s.currencies[pool.QuoteCurrency] = struct{}{}
-	}
-	positions, err := s.queries.ListLiquidityPositions(ctx)
-	if err != nil {
-		return err
-	}
-	for _, position := range positions {
-		s.poolPositions[position.ID] = PoolPosition{
-			ID:          position.ID,
-			PoolID:      position.PoolID,
-			UserID:      position.UserID,
-			BaseAmount:  position.BaseAmount,
-			QuoteAmount: position.QuoteAmount,
-			LowerTick:   position.LowerTick,
-			UpperTick:   position.UpperTick,
-			CreatedAt:   position.CreatedAt,
-		}
-		if position.ID > s.nextPoolPosID {
-			s.nextPoolPosID = position.ID
-		}
-	}
+	// Pools and positions are now DB-authoritative.
+	// We might still want to load some metadata if needed.
 	return nil
 }
 
 func (s *MarketStore) loadMarginStateFromDB(ctx context.Context) error {
-	if s.queries == nil {
-		return nil
-	}
-	pools, err := s.queries.ListMarginPools(ctx)
-	if err != nil {
-		return err
-	}
-	for _, pool := range pools {
-		s.marginPools[pool.PoolID] = MarginPool{
-			ID:               pool.PoolID,
-			AssetID:          pool.AssetID,
-			TotalCash:        pool.TotalCash,
-			TotalAssets:      pool.TotalAssets,
-			BorrowedCash:     pool.BorrowedCash,
-			BorrowedAssets:   pool.BorrowedAssets,
-			TotalCashShares:  pool.TotalCashShares,
-			TotalAssetShares: pool.TotalAssetShares,
-			CashRateBps:      pool.CashRateBps,
-			AssetRateBps:     pool.AssetRateBps,
-		}
-	}
-	providers, err := s.queries.ListMarginPoolProviders(ctx)
-	if err != nil {
-		return err
-	}
-	for _, provider := range providers {
-		s.marginProviders[marginProviderKey{PoolID: provider.PoolID, UserID: provider.UserID}] = MarginProviderPosition{
-			ID:          provider.ID,
-			PoolID:      provider.PoolID,
-			UserID:      provider.UserID,
-			CashShares:  provider.CashShares,
-			AssetShares: provider.AssetShares,
-			CreatedAt:   provider.UpdatedAt,
-		}
-		if provider.ID > s.nextMarginPosID {
-			s.nextMarginPosID = provider.ID
-		}
-	}
-	positions, err := s.queries.ListMarginPositions(ctx)
-	if err != nil {
-		return err
-	}
-	for _, position := range positions {
-		side := engine.SideBuy
-		if position.Side == "SHORT" {
-			side = engine.SideSell
-		}
-		marginPosition := MarginPosition{
-			ID:           position.ID,
-			UserID:       position.UserID,
-			AssetID:      position.AssetID,
-			Side:         side,
-			Quantity:     position.Quantity,
-			EntryPrice:   position.EntryPrice,
-			CurrentPrice: position.CurrentPrice,
-			Leverage:     position.Leverage,
-			MarginUsed:   position.MarginUsed,
-			CreatedAt:    position.CreatedAt,
-			UpdatedAt:    position.UpdatedAt,
-			lastFeeAt:    position.UpdatedAt,
-		}
-		if position.UnrealizedPL < 0 {
-			marginPosition.UnrealizedLoss = -position.UnrealizedPL
-		}
-		s.marginPositions[position.ID] = marginPosition
-		if position.ID > s.nextMarginPositionID {
-			s.nextMarginPositionID = position.ID
-		}
-	}
 	return nil
 }
 
 func (s *MarketStore) loadContractsFromDB(ctx context.Context) error {
-	if s.queries == nil {
-		return nil
-	}
 	contracts, err := s.queries.ListContracts(ctx)
 	if err != nil {
 		return err
@@ -147,14 +39,6 @@ func (s *MarketStore) loadContractsFromDB(ctx context.Context) error {
 		if record.ID > s.nextContractID {
 			s.nextContractID = record.ID
 		}
-	}
-	deliveries, err := s.queries.ListContractDeliveries(ctx)
-	if err != nil {
-		return err
-	}
-	for _, delivery := range deliveries {
-		progress := s.ensureContractProgressLocked(delivery.UserID)
-		progress[delivery.ContractID] += delivery.Quantity
 	}
 	return nil
 }
@@ -248,9 +132,10 @@ func (s *MarketStore) loadMacroIndicatorsFromDB(ctx context.Context) error {
 	s.macroIndicators = indicators
 	s.macroQuarterIndex = maxQuarter
 	s.macroWeekIndex = maxWeek
-	s.refreshTheoreticalFXRatesLocked(time.Now().UTC())
 	return nil
 }
+
+
 
 func (s *MarketStore) persistLiquidityPool(pool LiquidityPool) {
 	if s.queries == nil || pool.ID == 0 {
