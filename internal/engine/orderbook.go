@@ -191,6 +191,9 @@ func (ob *OrderBook) run() {
 				request.snapshot <- snap
 			case requestFind:
 				order, _ := ob.storage.FindOrder(request.ctx, request.orderID)
+				if order != nil && order.AssetID != ob.assetID {
+					order = nil
+				}
 				request.find <- order
 			}
 		case <-ob.shutdown:
