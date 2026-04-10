@@ -1,6 +1,7 @@
 package api
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -175,5 +176,89 @@ func TestMacroUnemploymentUsesUtilization(t *testing.T) {
 	}
 	if unempIndicator.Value != 462 {
 		t.Fatalf("expected unemployment basis 462, got %d", unempIndicator.Value)
+	}
+}
+
+func TestTaylorRuleMathCorrectness(t *testing.T) {
+	// Verifies Taylor Rule formula according to MACRO_ECONOMICS.md:
+	// i = r* + pi + 0.5(pi - pi*) + 0.5(y - y*)
+	store := NewMarketStore()
+	now := time.Date(2026, time.March, 1, 12, 0, 0, 0, time.UTC)
+	quarterIndex := macroPeriodIndex(now, macroQuarterPeriod)
+
+	store.mu.Lock()
+	store.macroQuarterIndex = quarterIndex
+	// Induce artificial volatility to test standard edge behavior over default configuration
+	store.macroGDPPrevTotals["Arcadia"] = 1000
+	store.macroCPIIndexPrev["Arcadia"] = 100
+	for _, state := range store.companyStates {
+		state.Country = "Arcadia"
+		state.LastB2CRevenue = 1040 // 4.0% total (which creates a gdpGap vs PotentialGDP)
+		break
+	}
+	for _, assetID := range []int64{101, 102} {
+		if base := store.marketPriceLocked(assetID); base > 0 {
+			store.lastPrices[assetID] = base * 105 / 100 // 5.0% inflation
+		}
+	}
+
+	store.refreshMacroIndicatorsLocked(now)
+	indicators := append([]MacroIndicator(nil), store.macroIndicators...)
+	store.mu.Unlock()
+
+	var gdpBasis, cpiBasis, interestBasis int64
+	var foundGDP, foundCPI, foundInterest bool
+
+	for _, ind := range indicators {
+		if ind.Country == "Arcadia" {
+			switch ind.Type {
+			case macroTypeGDPGrowth:
+				gdpBasis = ind.Value
+				foundGDP = true
+			case macroTypeCPI:
+				cpiBasis = ind.Value
+				foundCPI = true
+			case macroTypeInterest:
+				interestBasis = ind.Value
+				foundInterest = true
+			}
+		}
+	}
+
+	if !foundGDP || !foundCPI || !foundInterest {
+		t.Fatalf("could not find all indicators for Arcadia to perform Taylor Rule Math assertion")
+	}
+
+	var profile macroProfile
+	for _, p := range macroProfiles {
+		if p.Country == "Arcadia" {
+			profile = p
+			break
+		}
+	}
+
+	// Calculate manually based on float math exactly how central bank documents it
+	pi := float64(cpiBasis) / 100.0
+	y := float64(gdpBasis) / 100.0
+
+	rStar := profile.RealRate
+	piStar := profile.InflationTarget
+	yStar := profile.PotentialGDP
+
+	// i = r* + pi + 0.5(pi - pi*) + 0.5(y - y*)
+	expectedRate := rStar + pi + 0.5*(pi-piStar) + 0.5*(y-yStar)
+
+	// Central Bank clamping boundary 0.0 to 15.0
+	if expectedRate < 0.0 {
+		expectedRate = 0.0
+	} else if expectedRate > 15.0 {
+		expectedRate = 15.0
+	}
+
+	expectedBasis := int64(math.Round(expectedRate * 100.0))
+
+	if expectedBasis != interestBasis {
+		t.Fatalf("Taylor Rule Math verification failed. Expected Interest Rate %d basis, got %d basis. (GDP: %.2f%%, CPI: %.2f%%)",
+			expectedBasis, interestBasis, y, pi)
 	}
 }

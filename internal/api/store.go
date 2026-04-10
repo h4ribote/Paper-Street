@@ -415,6 +415,8 @@ type MarketStore struct {
 	currencyIDs  map[string]int64
 	WSHub        *wsHub
 
+	EngineSubmitOrder func(ctx context.Context, order *engine.Order) (engine.OrderResult, error)
+
 	// Keep these for now as they are for non-trading simulations (macro, etc.)
 	// or they are read-heavy but change slowly.
 	currencies         map[string]struct{}

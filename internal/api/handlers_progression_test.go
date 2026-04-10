@@ -160,3 +160,91 @@ func TestContractPriceUsesVWAPPremium(t *testing.T) {
 		t.Fatalf("expected price %d, got %d", expected, price)
 	}
 }
+
+func TestXPBarrierUpgradesRank(t *testing.T) {
+	store := NewMarketStore()
+	store.EnsureUser(1)
+
+	// Base XP is 0. Shrimp rank.
+	info, _ := store.UserRankInfo(1)
+	if info.Rank != "Shrimp" {
+		t.Fatalf("expected Rank Shrimp at 0 XP, got %s", info.Rank)
+	}
+
+	// 499 XP is not enough for Fish (requires 500 XP)
+	store.AddXP(1, 499)
+	info, _ = store.UserRankInfo(1)
+	if info.Rank != "Shrimp" {
+		t.Fatalf("expected Rank Shrimp at 499 XP, got %s", info.Rank)
+	}
+
+	// Exactly 500 XP crosses the barrier to Fish
+	store.AddXP(1, 1)
+	info, _ = store.UserRankInfo(1)
+	if info.Rank != "Fish" {
+		t.Fatalf("expected Rank Fish at 500 XP, got %s", info.Rank)
+	}
+}
+
+func TestRankUpgradeLowersFees(t *testing.T) {
+	store := NewMarketStore()
+	apiKeys := auth.NewAPIKeyCache()
+	if err := apiKeys.AddHex(testAPIKeyUser1); err != nil {
+		t.Fatalf("failed to add api key: %v", err)
+	}
+	if err := apiKeys.AddHex(testAPIKeyUser2); err != nil {
+		t.Fatalf("failed to add api key: %v", err)
+	}
+	store.RegisterAPIKey(testAPIKeyUser1, 1)
+	store.RegisterAPIKey(testAPIKeyUser2, 2)
+	store.EnsureUser(1)
+	store.EnsureUser(2)
+	store.SetBalance(1, defaultCurrency, 100_000_000)
+	store.SetBalance(2, defaultCurrency, 100_000_000)
+	store.SetPosition(2, 101, 10000)
+	store.SetPosition(2, 102, 10000)
+
+	eng := engine.NewEngine(nil, store)
+	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
+	defer server.Close()
+
+	// 1. Initial order as Shrimp
+	postJSON(t, server.URL+"/api/orders", testAPIKeyUser2, map[string]interface{}{
+		"asset_id": 101, "user_id": 2, "side": "SELL", "type": "LIMIT", "quantity": 10000, "price": 100,
+	}, nil)
+
+	postJSON(t, server.URL+"/api/orders", testAPIKeyUser1, map[string]interface{}{
+		"asset_id": 101, "user_id": 1, "side": "BUY", "type": "MARKET", "quantity": 10000,
+	}, nil)
+
+	time.Sleep(100 * time.Millisecond)
+
+	cash1 := store.GetBalance(1, defaultCurrency)
+	fee1 := 100_000_000 - cash1 - 1000000 // 1,000,000 is base cost (10000 * 100)
+
+	if fee1 <= 0 {
+		t.Fatalf("expected positive fee to be charged, got %d", fee1)
+	}
+
+	// 2. Upgrade Rank to Whale (requires 15,000 XP)
+	store.AddXP(1, 15_000)
+
+	cashBefore2 := store.GetBalance(1, defaultCurrency)
+
+	postJSON(t, server.URL+"/api/orders", testAPIKeyUser2, map[string]interface{}{
+		"asset_id": 102, "user_id": 2, "side": "SELL", "type": "LIMIT", "quantity": 10000, "price": 100,
+	}, nil)
+
+	postJSON(t, server.URL+"/api/orders", testAPIKeyUser1, map[string]interface{}{
+		"asset_id": 102, "user_id": 1, "side": "BUY", "type": "MARKET", "quantity": 10000,
+	}, nil)
+
+	time.Sleep(100 * time.Millisecond)
+
+	cashAfter := store.GetBalance(1, defaultCurrency)
+	fee2 := cashBefore2 - cashAfter - 1000000
+
+	if fee2 >= fee1 {
+		t.Fatalf("expected fee to actively lower after rank upgrade. Before: %d, After: %d", fee1, fee2)
+	}
+}
