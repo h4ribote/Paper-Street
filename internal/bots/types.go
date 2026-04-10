@@ -85,3 +85,21 @@ type Balance struct {
 	Currency string `json:"currency"`
 	Amount   int64  `json:"amount"`
 }
+
+type PortfolioAsset struct {
+	AssetID      int64 `json:"asset_id"`
+	Quantity     int64 `json:"quantity"`
+	AveragePrice int64 `json:"average_price,omitempty"`
+}
+
+type MarginPosition struct {
+	ID           int64  `json:"id"`
+	UserID       int64  `json:"user_id"`
+	BaseAssetID  int64  `json:"base_asset_id,omitempty"`
+	AssetID      int64  `json:"asset_id,omitempty"`
+	Side         string `json:"side"`
+	Quantity     int64  `json:"quantity"`
+	EntryPrice   int64  `json:"entry_price"`
+	Leverage     int    `json:"leverage,omitempty"`
+	LiquidationP int64  `json:"liquidation_price,omitempty"`
+}
