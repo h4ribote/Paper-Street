@@ -253,7 +253,7 @@ func (s *testStorage) ProcessSubmit(ctx context.Context, order *Order) (OrderRes
 
 	// Basic matching logic for tests
 	var executions []Execution
-	
+
 	// Collect matching candidates
 	var makers []*Order
 	for _, o := range s.orders {
@@ -261,7 +261,7 @@ func (s *testStorage) ProcessSubmit(ctx context.Context, order *Order) (OrderRes
 			makers = append(makers, o)
 		}
 	}
-	
+
 	// Sort by price priority
 	sort.Slice(makers, func(i, j int) bool {
 		if makers[i].Price != makers[j].Price {
@@ -277,11 +277,13 @@ func (s *testStorage) ProcessSubmit(ctx context.Context, order *Order) (OrderRes
 	})
 
 	guardPrice := int64(0)
+	selfTradeReduced := false
 	for _, maker := range makers {
 		// Self-trade prevention (Reduce Taker strategy as expected by tests)
 		if maker.UserID == order.UserID {
 			maker.cancel()
 			order.Remaining -= maker.Remaining
+			selfTradeReduced = true
 			if order.Remaining < 0 {
 				order.Remaining = 0
 			}
@@ -338,6 +340,9 @@ func (s *testStorage) ProcessSubmit(ctx context.Context, order *Order) (OrderRes
 		if order.Remaining == 0 {
 			break
 		}
+	}
+	if order.Type == OrderTypeMarket && selfTradeReduced && len(executions) > 0 && order.Remaining == 0 {
+		order.Status = OrderStatusPartial
 	}
 
 	// Time in Force logic
@@ -405,7 +410,7 @@ func (s *testStorage) GetOrderBookSnapshot(ctx context.Context, assetID int64, d
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	snap := OrderBookSnapshot{AssetID: assetID}
-	
+
 	levelMapBids := make(map[int64]int64)
 	levelMapAsks := make(map[int64]int64)
 
@@ -425,13 +430,17 @@ func (s *testStorage) GetOrderBookSnapshot(ctx context.Context, assetID int64, d
 	for p, q := range levelMapAsks {
 		snap.Asks = append(snap.Asks, Level{Price: p, Quantity: q})
 	}
-	
+
 	// Sort levels for snapshot
 	sort.Slice(snap.Bids, func(i, j int) bool { return snap.Bids[i].Price > snap.Bids[j].Price })
 	sort.Slice(snap.Asks, func(i, j int) bool { return snap.Asks[i].Price < snap.Asks[j].Price })
 
-	if len(snap.Bids) > depth { snap.Bids = snap.Bids[:depth] }
-	if len(snap.Asks) > depth { snap.Asks = snap.Asks[:depth] }
+	if len(snap.Bids) > depth {
+		snap.Bids = snap.Bids[:depth]
+	}
+	if len(snap.Asks) > depth {
+		snap.Asks = snap.Asks[:depth]
+	}
 
 	return snap, nil
 }

@@ -99,7 +99,6 @@ func TestPoolPositionCollectsFeesOnClose(t *testing.T) {
 	store.SetBalance(2, pool.QuoteCurrency, 20_000)
 	startBase := store.GetBalance(1, pool.BaseCurrency)
 	startQuote := store.GetBalance(1, pool.QuoteCurrency)
-	store.mu.Unlock()
 
 	position, err := store.CreatePoolPosition(pool.ID, 1, 5_000, 5_000, lower, upper)
 	if err != nil {

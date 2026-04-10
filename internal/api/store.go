@@ -407,25 +407,25 @@ type PublicOrderEvent struct {
 }
 
 type MarketStore struct {
-	mu                      sync.RWMutex
-	apiKeyToUser            map[string]int64
-	roleToUserID            map[string]int64
-	roleToAPIKey            map[string]string
-	queries                 *db.Queries
-	currencyIDs             map[string]int64
-	WSHub                   *wsHub
+	mu           sync.RWMutex
+	apiKeyToUser map[string]int64
+	roleToUserID map[string]int64
+	roleToAPIKey map[string]string
+	queries      *db.Queries
+	currencyIDs  map[string]int64
+	WSHub        *wsHub
 
 	// Keep these for now as they are for non-trading simulations (macro, etc.)
 	// or they are read-heavy but change slowly.
-	currencies              map[string]struct{}
-	seasons                 []Season
-	regions                 []Region
-	worldEvents             []WorldEvent
-	macroIndicators         []MacroIndicator
-	theoreticalFXRates      []TheoreticalFXRate
-	macroQuarterIndex       int64
-	macroWeekIndex          int64
-	
+	currencies         map[string]struct{}
+	seasons            []Season
+	regions            []Region
+	worldEvents        []WorldEvent
+	macroIndicators    []MacroIndicator
+	theoreticalFXRates []TheoreticalFXRate
+	macroQuarterIndex  int64
+	macroWeekIndex     int64
+
 	companyRecipes          map[int64][]ProductionRecipe
 	financialReports        map[int64][]CompanyFinancialReport
 	companyDividends        map[int64][]CompanyDividendRecord
@@ -441,49 +441,51 @@ type MarketStore struct {
 	nextMarginPosID         int64
 	nextMarginPositionID    int64
 	nextLiquidationID       int64
+	nextOrderID             int64
 
-	pools                   map[int64]LiquidityPool
-	poolPositions           map[int64]PoolPosition
-	marginPools             map[int64]MarginPool
-	marginProviders         map[marginProviderKey]MarginProviderPosition
-	marginPositions         map[int64]MarginPosition
-	marginLiquidations      []MarginLiquidation
-	indexes                 map[int64]IndexDefinition
-	indexHoldings           map[int64]map[int64]int64
-	dailyMissions           map[string][]DailyMission
-	missionProgress         map[int64]map[string]*DailyMissionProgress
-	contracts               map[int64]*Contract
-	contractProgress        map[int64]map[int64]int64
-	companyStates           map[int64]*companyState
+	pools              map[int64]LiquidityPool
+	poolPositions      map[int64]PoolPosition
+	marginPools        map[int64]MarginPool
+	marginProviders    map[marginProviderKey]MarginProviderPosition
+	marginPositions    map[int64]MarginPosition
+	marginLiquidations []MarginLiquidation
+	indexes            map[int64]IndexDefinition
+	indexHoldings      map[int64]map[int64]int64
+	dailyMissions      map[string][]DailyMission
+	missionProgress    map[int64]map[string]*DailyMissionProgress
+	contracts          map[int64]*Contract
+	contractProgress   map[int64]map[int64]int64
+	companyStates      map[int64]*companyState
+	testOrders         map[int64]*engine.Order
 
 	// These are caches for ticker information
-	lastPrices              map[int64]int64
-	prevPrices              map[int64]int64
-	volumes                 map[int64]int64
-	needsInitialAlloc       bool
-	initialAllocDone        bool
+	lastPrices        map[int64]int64
+	prevPrices        map[int64]int64
+	volumes           map[int64]int64
+	needsInitialAlloc bool
+	initialAllocDone  bool
 
-	macroGDPTotals          map[string]float64
-	macroGDPPrevTotals      map[string]float64
-	macroCPIIndexCurrent    map[string]float64
-	macroCPIIndexPrev       map[string]float64
-	macroQuarterTracking    map[int64]bool
-	macroGovSpending      map[string]int64
-	macroGovQuarterIndex  int64
+	macroGDPTotals       map[string]float64
+	macroGDPPrevTotals   map[string]float64
+	macroCPIIndexCurrent map[string]float64
+	macroCPIIndexPrev    map[string]float64
+	macroQuarterTracking map[int64]bool
+	macroGovSpending     map[string]int64
+	macroGovQuarterIndex int64
 
 	// Fallback for tests or short-term cache
-	recentExecutions      []engine.Execution
-	testBalances          map[int64]map[string]int64
-	testPositions         map[int64]map[int64]int64
-	testAssetAcquiredAt   map[int64]map[int64]int64
-	testUsers             map[int64]models.User
-	testAssets            map[int64]models.Asset
-	testNews              []NewsItem
-	testContracts         map[int64]*Contract
-	testPerpetualBonds    map[int64]PerpetualBondDefinition
-	testPools             map[int64]LiquidityPool
-	testMarginPools       map[int64]MarginPool
-	testIndexes           map[int64]IndexDefinition
+	recentExecutions    []engine.Execution
+	testBalances        map[int64]map[string]int64
+	testPositions       map[int64]map[int64]int64
+	testAssetAcquiredAt map[int64]map[int64]int64
+	testUsers           map[int64]models.User
+	testAssets          map[int64]models.Asset
+	testNews            []NewsItem
+	testContracts       map[int64]*Contract
+	testPerpetualBonds  map[int64]PerpetualBondDefinition
+	testPools           map[int64]LiquidityPool
+	testMarginPools     map[int64]MarginPool
+	testIndexes         map[int64]IndexDefinition
 }
 
 func (s *MarketStore) SetWSHub(hub *wsHub) {
@@ -539,8 +541,8 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 		macroCPIIndexCurrent:    make(map[string]float64),
 		macroCPIIndexPrev:       make(map[string]float64),
 		macroQuarterTracking:    make(map[int64]bool),
-		macroGovSpending:      make(map[string]int64),
-		macroGovQuarterIndex:  0,
+		macroGovSpending:        make(map[string]int64),
+		macroGovQuarterIndex:    0,
 		nextUserID:              userIDSeed,
 		nextNewsID:              0,
 		seasons: []Season{
@@ -561,18 +563,19 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 			{ID: 6, Name: "Arcadia Privacy Act", Description: "New data privacy law threatens ad-tech and analytics revenue.", StartsAt: now.Add(60 * time.Hour).UnixMilli(), EndsAt: now.Add(72 * time.Hour).UnixMilli()},
 			{ID: 7, Name: "El Dorado Succession", Description: "Royal succession tensions raise civil unrest risks and currency volatility.", StartsAt: now.Add(84 * time.Hour).UnixMilli(), EndsAt: now.Add(96 * time.Hour).UnixMilli()},
 		},
-		queries:            queries,
-		currencyIDs:        make(map[string]int64),
-		testBalances:       make(map[int64]map[string]int64),
-		testPositions:      make(map[int64]map[int64]int64),
+		queries:             queries,
+		currencyIDs:         make(map[string]int64),
+		testBalances:        make(map[int64]map[string]int64),
+		testPositions:       make(map[int64]map[int64]int64),
 		testAssetAcquiredAt: make(map[int64]map[int64]int64),
-		testUsers:          make(map[int64]models.User),
-		testAssets:         make(map[int64]models.Asset),
-		testContracts:      make(map[int64]*Contract),
-		testPerpetualBonds: make(map[int64]PerpetualBondDefinition),
-		testPools:          make(map[int64]LiquidityPool),
-		testMarginPools:    make(map[int64]MarginPool),
-		testIndexes:        make(map[int64]IndexDefinition),
+		testUsers:           make(map[int64]models.User),
+		testAssets:          make(map[int64]models.Asset),
+		testOrders:          make(map[int64]*engine.Order),
+		testContracts:       make(map[int64]*Contract),
+		testPerpetualBonds:  make(map[int64]PerpetualBondDefinition),
+		testPools:           make(map[int64]LiquidityPool),
+		testMarginPools:     make(map[int64]MarginPool),
+		testIndexes:         make(map[int64]IndexDefinition),
 	}
 	if queries == nil {
 		store.seedAssets()
@@ -666,7 +669,6 @@ func (s *MarketStore) GetBalance(userID int64, currency string) int64 {
 	).Scan(&amount)
 	return amount
 }
-
 
 func (s *MarketStore) UpdateBalance(userID int64, currency string, delta int64) error {
 	if s.queries == nil {
@@ -982,6 +984,33 @@ func (s *MarketStore) Asset(assetID int64) (models.Asset, bool) {
 }
 
 func (s *MarketStore) Orders(filter OrderFilter) []engine.Order {
+	if s.queries == nil {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		res := make([]engine.Order, 0, len(s.testOrders))
+		for _, o := range s.testOrders {
+			if o == nil {
+				continue
+			}
+			if filter.UserID != 0 && o.UserID != filter.UserID {
+				continue
+			}
+			if filter.AssetID != 0 && o.AssetID != filter.AssetID {
+				continue
+			}
+			if filter.Status != "" && o.Status != filter.Status {
+				continue
+			}
+			res = append(res, *o)
+		}
+		sort.Slice(res, func(i, j int) bool {
+			if !res[i].UpdatedAt.Equal(res[j].UpdatedAt) {
+				return res[i].UpdatedAt.After(res[j].UpdatedAt)
+			}
+			return res[i].ID > res[j].ID
+		})
+		return res
+	}
 	ctx, cancel := s.dbContext()
 	defer cancel()
 	// NOTE: Ideally we'd have a filtered ListOrders in db.Queries.
@@ -1003,11 +1032,25 @@ func (s *MarketStore) Orders(filter OrderFilter) []engine.Order {
 		}
 		res = append(res, *o)
 	}
-	sort.Slice(res, func(i, j int) bool { return res[i].UpdatedAt.After(res[j].UpdatedAt) })
+	sort.Slice(res, func(i, j int) bool {
+		if !res[i].UpdatedAt.Equal(res[j].UpdatedAt) {
+			return res[i].UpdatedAt.After(res[j].UpdatedAt)
+		}
+		return res[i].ID > res[j].ID
+	})
 	return res
 }
 
 func (s *MarketStore) Order(orderID int64) (*engine.Order, bool) {
+	if s.queries == nil {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		o, ok := s.testOrders[orderID]
+		if !ok || o == nil {
+			return nil, false
+		}
+		return cloneOrder(o), true
+	}
 	ctx, cancel := s.dbContext()
 	defer cancel()
 	o, err := s.FindOrder(ctx, orderID)
@@ -1018,6 +1061,15 @@ func (s *MarketStore) Order(orderID int64) (*engine.Order, bool) {
 }
 
 func (s *MarketStore) OrderForAsset(orderID int64, assetID int64) (*engine.Order, bool) {
+	if s.queries == nil {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		o, ok := s.testOrders[orderID]
+		if !ok || o == nil || o.AssetID != assetID {
+			return nil, false
+		}
+		return cloneOrder(o), true
+	}
 	ctx, cancel := s.dbContext()
 	defer cancel()
 	o, err := s.FindOrder(ctx, orderID)
@@ -1097,7 +1149,9 @@ func (s *MarketStore) Balances(userID int64) []models.Balance {
 	ctx, cancel := s.dbContext()
 	defer cancel()
 	balances, err := s.queries.ListCurrencyBalances(ctx)
-	if err != nil { return nil }
+	if err != nil {
+		return nil
+	}
 	var res []models.Balance
 	for _, b := range balances {
 		if b.UserID == userID {
@@ -1125,7 +1179,9 @@ func (s *MarketStore) Positions(userID int64) []models.Position {
 	ctx, cancel := s.dbContext()
 	defer cancel()
 	positions, err := s.queries.ListAssetBalances(ctx)
-	if err != nil { return nil }
+	if err != nil {
+		return nil
+	}
 	var res []models.Position
 	for _, p := range positions {
 		if p.UserID == userID && p.Quantity != 0 {
@@ -1139,6 +1195,21 @@ func (s *MarketStore) Positions(userID int64) []models.Position {
 func (s *MarketStore) PortfolioAssets(userID int64) []PortfolioAsset {
 	if userID == 0 {
 		return []PortfolioAsset{}
+	}
+	if s.queries == nil {
+		positions := s.Positions(userID)
+		assets := make([]PortfolioAsset, 0, len(positions))
+		for _, p := range positions {
+			if p.Quantity <= 0 {
+				continue
+			}
+			asset, ok := s.Asset(p.AssetID)
+			if ok {
+				assets = append(assets, PortfolioAsset{Asset: asset, Quantity: p.Quantity})
+			}
+		}
+		sort.Slice(assets, func(i, j int) bool { return assets[i].Asset.ID < assets[j].Asset.ID })
+		return assets
 	}
 	ctx, cancel := s.dbContext()
 	defer cancel()
@@ -1891,8 +1962,6 @@ func (s *MarketStore) ensureAssetLocked(assetID int64) models.Asset {
 	return asset
 }
 
-
-
 func (s *MarketStore) AddExecution(exec engine.Execution) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -2156,8 +2225,6 @@ func (s *MarketStore) executionParties(taker *engine.Order, maker *engine.Order)
 	}
 	return maker.UserID, taker.UserID
 }
-
-
 
 func (s *MarketStore) persistUser(user models.User, cashBalance int64) {
 	if s.queries == nil || user.ID == 0 {

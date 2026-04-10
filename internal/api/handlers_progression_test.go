@@ -101,9 +101,7 @@ func TestContractDeliveryAwardsXP(t *testing.T) {
 	}
 
 	var delivery ContractDeliveryResult
-	store.mu.Lock()
-	store.SetPosition(11, target.AssetID, 25)
-	store.mu.Unlock()
+	store.SetPosition(1, target.AssetID, 25)
 
 	postJSON(t, server.URL+"/api/contracts/"+fmt.Sprint(target.ID)+"/deliver", testAPIKeyUser1, contractDeliveryRequest{UserID: 1, Quantity: 10}, &delivery)
 
@@ -135,7 +133,6 @@ func TestContractDeliveryAwardsXP(t *testing.T) {
 func TestContractPriceUsesVWAPPremium(t *testing.T) {
 	store := NewMarketStore()
 	now := time.Now().UTC()
-	store.mu.Lock()
 	store.AddExecution(engine.Execution{
 		AssetID:       contractAssetAUR,
 		Price:         100,
@@ -148,6 +145,7 @@ func TestContractPriceUsesVWAPPremium(t *testing.T) {
 		Quantity:      10,
 		OccurredAtUTC: now.Add(-30 * time.Minute),
 	})
+	store.mu.Lock()
 	premium := store.contractPremiumBpsLocked(contractAssetAUR, contractKindProcurement)
 	price := store.calculateContractPriceLocked(contractAssetAUR, contractKindProcurement, now)
 	store.mu.Unlock()

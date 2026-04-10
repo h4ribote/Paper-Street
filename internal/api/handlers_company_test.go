@@ -132,9 +132,8 @@ func TestCompanyProcurementRespectsCashBalance(t *testing.T) {
 	}
 	inputPrice := int64(10)
 	inputQuantity := int64(2)
-	ctx, cancel := store.dbContext()
-	_ = store.queries.UpsertAsset(ctx, inputAsset, inputPrice)
-	cancel()
+	store.updateAssetLocked(inputAsset, inputPrice)
+	store.lastPrices[inputAsset.ID] = inputPrice
 	state.MaxProductionCapacity = 10
 	store.companyRecipes[state.Company.ID] = []ProductionRecipe{
 		{

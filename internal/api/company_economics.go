@@ -733,22 +733,38 @@ func (s *MarketStore) queueCompanyDividendLocked(state *companyState, report Com
 		amount int64
 	}
 	spotCredits := make([]spotCredit, 0)
-	ctx, cancel := s.dbContext()
-	defer cancel()
-	balances, _ := s.queries.ListAssetBalances(ctx)
-	for _, b := range balances {
-		if b.AssetID != state.Company.ID || b.Quantity <= 0 {
-			continue
+	if s.queries == nil {
+		for userID, positions := range s.testPositions {
+			qty := positions[state.Company.ID]
+			if qty <= 0 {
+				continue
+			}
+			payoutAmount, ok := safeMultiplyInt64(qty, dividendPerShare)
+			if !ok || payoutAmount <= 0 {
+				continue
+			}
+			planned = append(planned, payoutAmount)
+			spotCredits = append(spotCredits, spotCredit{userID: userID, amount: payoutAmount})
+			eligibleSpotShares += qty
 		}
-		// Skipping bonus logic for now as assetAcquiredAt map was removed.
-		// baseAmount, ok := safeMultiplyInt64(b.Quantity, dividendPerShare)
-		payoutAmount, ok := safeMultiplyInt64(b.Quantity, dividendPerShare)
-		if !ok || payoutAmount <= 0 {
-			continue
+	} else {
+		ctx, cancel := s.dbContext()
+		defer cancel()
+		balances, _ := s.queries.ListAssetBalances(ctx)
+		for _, b := range balances {
+			if b.AssetID != state.Company.ID || b.Quantity <= 0 {
+				continue
+			}
+			// Skipping bonus logic for now as assetAcquiredAt map was removed.
+			// baseAmount, ok := safeMultiplyInt64(b.Quantity, dividendPerShare)
+			payoutAmount, ok := safeMultiplyInt64(b.Quantity, dividendPerShare)
+			if !ok || payoutAmount <= 0 {
+				continue
+			}
+			planned = append(planned, payoutAmount)
+			spotCredits = append(spotCredits, spotCredit{userID: b.UserID, amount: payoutAmount})
+			eligibleSpotShares += b.Quantity
 		}
-		planned = append(planned, payoutAmount)
-		spotCredits = append(spotCredits, spotCredit{userID: b.UserID, amount: payoutAmount})
-		eligibleSpotShares += b.Quantity
 	}
 	type longCredit struct {
 		positionID int64
@@ -1380,7 +1396,7 @@ func (s *MarketStore) procureInputsLocked(state *companyState, production int64,
 			break
 		}
 	}
-	s.UpdateBalance(state.UserID, defaultCurrency, cash - s.GetBalance(state.UserID, defaultCurrency))
+	s.UpdateBalance(state.UserID, defaultCurrency, cash-s.GetBalance(state.UserID, defaultCurrency))
 	return production
 }
 
