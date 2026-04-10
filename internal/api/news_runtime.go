@@ -194,9 +194,7 @@ func (s *MarketStore) ensureNewsBotsLocked() {
 			if strings.TrimSpace(name) != "" {
 				user.Username = name
 			}
-			ctx, cancel := s.dbContext()
-			defer cancel()
-			_ = s.queries.UpsertUser(ctx, user, time.Now().UTC())
+			s.updateUserLocked(user)
 		}
 	}
 	ensureBot(newsReactorUserID, "news-reactor")

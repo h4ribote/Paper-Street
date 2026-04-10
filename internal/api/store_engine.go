@@ -534,7 +534,7 @@ func (s *MarketStore) processSubmitInMemory(order *engine.Order) engine.OrderRes
 			OccurredAtUTC: time.Now().UTC(),
 		}
 		s.nextExecutionID = exec.ID
-		s.applyExecutionInMemory(exec, order.Side)
+		s.applyExecutionInMemory(exec, order.Side, order, maker)
 		executions = append(executions, exec)
 		s.recentExecutions = append(s.recentExecutions, exec)
 		if len(s.recentExecutions) > 1000 {
@@ -579,7 +579,7 @@ func (s *MarketStore) processSubmitInMemory(order *engine.Order) engine.OrderRes
 	return engine.OrderResult{Order: cloneOrder(order), Executions: executions}
 }
 
-func (s *MarketStore) applyExecutionInMemory(exec engine.Execution, takerSide engine.Side) {
+func (s *MarketStore) applyExecutionInMemory(exec engine.Execution, takerSide engine.Side, takerOrder *engine.Order, makerOrder *engine.Order) {
 	cashDelta := exec.Price * exec.Quantity
 	takerFee := int64(1)
 	buyerID := exec.TakerUserID
@@ -593,4 +593,45 @@ func (s *MarketStore) applyExecutionInMemory(exec engine.Execution, takerSide en
 	s.updateBalanceLocked(exec.TakerUserID, defaultCurrency, -takerFee)
 	s.setPositionLocked(buyerID, exec.AssetID, s.getPositionLocked(buyerID, exec.AssetID)+exec.Quantity)
 	s.setPositionLocked(sellerID, exec.AssetID, s.getPositionLocked(sellerID, exec.AssetID)-exec.Quantity)
+	now := exec.OccurredAtUTC.UnixMilli()
+	s.openMarginPositionForExecutionLocked(takerOrder, exec.Quantity, exec.Price, now)
+	s.openMarginPositionForExecutionLocked(makerOrder, exec.Quantity, exec.Price, now)
+}
+
+func (s *MarketStore) openMarginPositionForExecutionLocked(order *engine.Order, quantity, price, now int64) {
+	if order == nil || quantity <= 0 || price <= 0 {
+		return
+	}
+	leverage := normalizeLeverage(order.Leverage)
+	if leverage <= 1 {
+		return
+	}
+	notional, ok := safeMultiplyInt64(quantity, price)
+	if !ok || notional <= 0 {
+		return
+	}
+	marginUsed, err := requiredMargin(notional, leverage)
+	if err != nil {
+		return
+	}
+	borrowed := int64(0)
+	if order.Side == engine.SideBuy {
+		borrowed = notional - marginUsed
+	} else {
+		marginQty, err := requiredMargin(quantity, leverage)
+		if err != nil {
+			return
+		}
+		borrowed = quantity - marginQty
+	}
+	if borrowed < 0 {
+		borrowed = 0
+	}
+	if err := s.canBorrowMarginLocked(order.AssetID, order.Side, borrowed); err != nil {
+		return
+	}
+	if err := s.applyMarginBorrowLocked(order.AssetID, order.Side, borrowed); err != nil {
+		return
+	}
+	s.openMarginPositionLocked(order.UserID, order.AssetID, order.Side, quantity, price, marginUsed, leverage, borrowed, now)
 }

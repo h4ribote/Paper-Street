@@ -49,6 +49,12 @@ func TestApplyNewsImpactMovesPrice(t *testing.T) {
 		Sentiment: 0.5,
 		Impact:    "POSITIVE",
 	}
+	store.mu.RLock()
+	basePrice := store.marketPriceLocked(item.AssetID)
+	store.mu.RUnlock()
+	if basePrice == 0 {
+		t.Fatal("expected base price for asset")
+	}
 	rng := rand.New(rand.NewSource(7))
 	store.applyNewsImpact(item, eng, rng, cfg)
 	store.mu.RLock()
@@ -56,12 +62,6 @@ func TestApplyNewsImpactMovesPrice(t *testing.T) {
 	store.mu.RUnlock()
 	if price == 0 {
 		t.Fatal("expected price impact to update last price")
-	}
-	store.mu.RLock()
-	basePrice := store.marketPriceLocked(item.AssetID)
-	store.mu.RUnlock()
-	if basePrice == 0 {
-		t.Fatal("expected base price for asset")
 	}
 	delta := int64(math.Round(float64(basePrice) * cfg.ImpactFactor * item.Sentiment))
 	expected := basePrice + delta

@@ -480,6 +480,7 @@ type MarketStore struct {
 	testAssetAcquiredAt map[int64]map[int64]int64
 	testUsers           map[int64]models.User
 	testAssets          map[int64]models.Asset
+	assetBasePrices     map[int64]int64
 	testNews            []NewsItem
 	testContracts       map[int64]*Contract
 	testPerpetualBonds  map[int64]PerpetualBondDefinition
@@ -570,6 +571,7 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 		testAssetAcquiredAt: make(map[int64]map[int64]int64),
 		testUsers:           make(map[int64]models.User),
 		testAssets:          make(map[int64]models.Asset),
+		assetBasePrices:     make(map[int64]int64),
 		testOrders:          make(map[int64]*engine.Order),
 		testContracts:       make(map[int64]*Contract),
 		testPerpetualBonds:  make(map[int64]PerpetualBondDefinition),
@@ -1761,6 +1763,47 @@ func (s *MarketStore) macroPriceIndexLocked() macroPriceIndex {
 	energy := macroIndexAccumulator{}
 	goods := macroIndexAccumulator{}
 	services := macroIndexAccumulator{}
+	if s.queries == nil {
+		for _, state := range s.companyStates {
+			if state == nil || state.OutputAssetID == 0 {
+				continue
+			}
+			assetID := state.OutputAssetID
+			asset, ok := s.testAssets[assetID]
+			if !ok {
+				continue
+			}
+			base := defaultAssetPrice
+			if base <= 0 {
+				continue
+			}
+			price := s.lastPrices[assetID]
+			if price <= 0 {
+				price = base
+			}
+			overall.add(price, base)
+			switch strings.ToUpper(strings.TrimSpace(asset.Sector)) {
+			case "FOOD", "AGRI":
+				food.add(price, base)
+			case "ENERGY":
+				energy.add(price, base)
+			case "METAL", "CONS", "DEF", "BASIC", "INDUSTRIAL":
+				goods.add(price, base)
+			case "TECH", "FIN", "LOG", "BIO", "SERVICES":
+				services.add(price, base)
+			default:
+				goods.add(price, base)
+			}
+		}
+		overallIndex := overall.ratioOrDefault(1.0)
+		return macroPriceIndex{
+			Food:     food.ratioOrDefault(overallIndex),
+			Energy:   energy.ratioOrDefault(overallIndex),
+			Goods:    goods.ratioOrDefault(overallIndex),
+			Services: services.ratioOrDefault(overallIndex),
+			Overall:  overallIndex,
+		}
+	}
 	assets := s.AssetsWithPrice(AssetFilter{})
 	for _, a := range assets {
 		base := a.BasePrice
@@ -1985,6 +2028,9 @@ func (s *MarketStore) updateUserLocked(user models.User) {
 func (s *MarketStore) updateAssetLocked(asset models.Asset, basePrice int64) {
 	if s.queries == nil {
 		s.testAssets[asset.ID] = asset
+		if basePrice > 0 {
+			s.assetBasePrices[asset.ID] = basePrice
+		}
 		return
 	}
 	ctx, cancel := s.dbContext()
