@@ -47,6 +47,14 @@ func main() {
 }
 
 func runOnce(client *bots.APIClient, cfg config, state *executionState) {
+	// Asset check
+	ctxA, cancelA := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+	_, errA := client.Asset(ctxA, cfg.AssetID)
+	cancelA()
+	if errA != nil {
+		return // skip non-existent
+	}
+
 	if state.remaining <= 0 {
 		state.remaining = cfg.TotalQuantity
 	}
@@ -90,6 +98,43 @@ func runOnce(client *bots.APIClient, cfg config, state *executionState) {
 	if vwap > 0 {
 		price = int64(math.Round((float64(price) + float64(vwap)) / 2))
 	}
+
+	ctxB, cancelB := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+	balances, _ := client.Balances(ctxB, cfg.UserID)
+	cancelB()
+	var cash int64
+	for _, b := range balances {
+		if b.Currency == "USD" {
+			cash = b.Amount
+			break
+		}
+	}
+
+	ctxI, cancelI := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+	assets, _ := client.PortfolioAssets(ctxI, cfg.UserID)
+	cancelI()
+	var inventory int64
+	for _, a := range assets {
+		if a.AssetID == cfg.AssetID {
+			inventory = a.Quantity
+			break
+		}
+	}
+
+	if cfg.Side == "BUY" {
+		if cash < price*sliceQty {
+			sliceQty = cash / price
+		}
+	} else {
+		if inventory < sliceQty {
+			sliceQty = inventory
+		}
+	}
+
+	if sliceQty <= 0 {
+		return
+	}
+
 	req := bots.OrderRequest{
 		AssetID:  cfg.AssetID,
 		UserID:   cfg.UserID,

@@ -53,6 +53,14 @@ func main() {
 
 func runOnce(client *bots.APIClient, cfg config, state map[int64]*orderState) {
 	for _, assetID := range cfg.AssetIDs {
+		// Asset check
+		ctxA, cancelA := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+		_, errA := client.Asset(ctxA, assetID)
+		cancelA()
+		if errA != nil {
+			continue // skip non-existent
+		}
+
 		entry := state[assetID]
 		if entry == nil {
 			entry = &orderState{}
@@ -84,40 +92,76 @@ func runOnce(client *bots.APIClient, cfg config, state map[int64]*orderState) {
 		entry.sellID = 0
 		entry.lastBuy = signal.BuyPrice
 		entry.lastSell = signal.TakeProfit
-		buyReq := bots.OrderRequest{
-			AssetID:  assetID,
-			UserID:   cfg.UserID,
-			Side:     "BUY",
-			Type:     "LIMIT",
-			Quantity: cfg.Quantity,
-			Price:    signal.BuyPrice,
+
+		ctxB, cancelB := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+		balances, _ := client.Balances(ctxB, cfg.UserID)
+		cancelB()
+		var cash int64
+		for _, b := range balances {
+			if b.Currency == "USD" {
+				cash = b.Amount
+				break
+			}
 		}
-		ctx, cancel = context.WithTimeout(context.Background(), cfg.RequestTimeout)
-		order, err := client.SubmitOrder(ctx, buyReq)
-		cancel()
-		if err != nil {
-			log.Printf("dip buyer: submit buy failed asset=%d: %v", assetID, err)
-		} else {
-			entry.buyID = order.ID
-			log.Printf("dip buyer: buy order placed id=%d asset=%d price=%d", order.ID, assetID, order.Price)
+
+		ctxI, cancelI := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+		assets, _ := client.PortfolioAssets(ctxI, cfg.UserID)
+		cancelI()
+		var inventory int64
+		for _, a := range assets {
+			if a.AssetID == assetID {
+				inventory = a.Quantity
+				break
+			}
 		}
-		if cfg.PlaceTakeProfit && signal.TakeProfit > signal.BuyPrice {
+
+		buyQty := cfg.Quantity
+		if cash < signal.BuyPrice*buyQty {
+			buyQty = cash / signal.BuyPrice
+		}
+
+		sellQty := cfg.Quantity
+		if inventory < sellQty {
+			sellQty = inventory
+		}
+
+		if buyQty > 0 {
+			buyReq := bots.OrderRequest{
+				AssetID:  assetID,
+				UserID:   cfg.UserID,
+				Side:     "BUY",
+				Type:     "LIMIT",
+				Quantity: buyQty,
+				Price:    signal.BuyPrice,
+			}
+			ctx, cancel = context.WithTimeout(context.Background(), cfg.RequestTimeout)
+			order, err := client.SubmitOrder(ctx, buyReq)
+			cancel()
+			if err != nil {
+				log.Printf("dip buyer: submit buy failed asset=%d: %v", assetID, err)
+			} else {
+				entry.buyID = order.ID
+				log.Printf("dip buyer: buy order placed id=%d asset=%d qty=%d price=%d", order.ID, assetID, buyQty, order.Price)
+			}
+		}
+
+		if cfg.PlaceTakeProfit && signal.TakeProfit > signal.BuyPrice && sellQty > 0 {
 			sellReq := bots.OrderRequest{
 				AssetID:  assetID,
 				UserID:   cfg.UserID,
 				Side:     "SELL",
 				Type:     "LIMIT",
-				Quantity: cfg.Quantity,
+				Quantity: sellQty,
 				Price:    signal.TakeProfit,
 			}
 			ctx, cancel = context.WithTimeout(context.Background(), cfg.RequestTimeout)
-			order, err = client.SubmitOrder(ctx, sellReq)
+			order, err := client.SubmitOrder(ctx, sellReq)
 			cancel()
 			if err != nil {
 				log.Printf("dip buyer: submit sell failed asset=%d: %v", assetID, err)
 			} else {
 				entry.sellID = order.ID
-				log.Printf("dip buyer: take profit order placed id=%d asset=%d price=%d", order.ID, assetID, order.Price)
+				log.Printf("dip buyer: take profit order placed id=%d asset=%d qty=%d price=%d", order.ID, assetID, sellQty, order.Price)
 			}
 		}
 	}

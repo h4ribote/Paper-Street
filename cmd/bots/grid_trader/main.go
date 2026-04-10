@@ -68,17 +68,65 @@ func runOnce(client *bots.APIClient, cfg config, state map[int64]*gridState) {
 		if entry.lastMid != 0 && math.Abs(float64(entry.lastMid-mid)) < float64(step)/2 {
 			continue
 		}
+
+		ctxBal, cancelBal := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+		balances, _ := client.Balances(ctxBal, cfg.UserID)
+		cancelBal()
+		var cash int64
+		for _, b := range balances {
+			if b.Currency == "USD" {
+				cash = b.Amount
+				break
+			}
+		}
+
+		ctxAst, cancelAst := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+		assets, _ := client.PortfolioAssets(ctxAst, cfg.UserID)
+		cancelAst()
+		var inventory int64
+		for _, a := range assets {
+			if a.AssetID == assetID {
+				inventory = a.Quantity
+				break
+			}
+		}
+
 		cancelOrders(client, cfg.RequestTimeout, assetID, entry.orderIDs)
 		entry.orderIDs = nil
 		entry.lastMid = mid
 		levels := bots.GridLevels(mid, cfg.StepBps, cfg.Levels)
+		
+		usedCash := int64(0)
+		usedInventory := int64(0)
+		placedCount := 0
+
 		for _, level := range levels {
+			qty := cfg.Quantity
+			if level.Side == "BUY" {
+				cost := level.Price * qty
+				if cash < usedCash+cost {
+					qty = (cash - usedCash) / level.Price
+				}
+				if qty <= 0 {
+					continue
+				}
+				usedCash += level.Price * qty
+			} else {
+				if inventory < usedInventory+qty {
+					qty = inventory - usedInventory
+				}
+				if qty <= 0 {
+					continue
+				}
+				usedInventory += qty
+			}
+
 			req := bots.OrderRequest{
 				AssetID:  assetID,
 				UserID:   cfg.UserID,
 				Side:     level.Side,
 				Type:     "LIMIT",
-				Quantity: cfg.Quantity,
+				Quantity: qty,
 				Price:    level.Price,
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), cfg.RequestTimeout)
@@ -89,8 +137,9 @@ func runOnce(client *bots.APIClient, cfg config, state map[int64]*gridState) {
 				continue
 			}
 			entry.orderIDs = append(entry.orderIDs, order.ID)
+			placedCount++
 		}
-		log.Printf("grid trader: placed %d grid orders asset=%d mid=%d", len(entry.orderIDs), assetID, mid)
+		log.Printf("grid trader: placed %d grid orders asset=%d mid=%d", placedCount, assetID, mid)
 	}
 }
 

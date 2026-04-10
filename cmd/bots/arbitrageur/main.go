@@ -100,8 +100,9 @@ func runIndexArb(client *bots.APIClient, cfg config, nav int64) {
 			AssetID:  cfg.IndexAssetID,
 			UserID:   cfg.UserID,
 			Side:     "SELL",
-			Type:     "MARKET",
+			Type:     "LIMIT",
 			Quantity: cfg.OrderQuantity,
+			Price:    nav * 105 / 100, // 5% worse than NAV max
 		}
 		ctx, cancel = context.WithTimeout(context.Background(), cfg.RequestTimeout)
 		order, err := client.SubmitOrder(ctx, sellReq)
@@ -112,12 +113,29 @@ func runIndexArb(client *bots.APIClient, cfg config, nav int64) {
 		}
 		log.Printf("arbitrageur: premium arb sell id=%d qty=%d spread_bps=%d", order.ID, order.Quantity, spread)
 	case spread < -cfg.ThresholdBps:
+		ctxBal, cancelBal := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+		balances, _ := client.Balances(ctxBal, cfg.UserID)
+		cancelBal()
+		var cash int64
+		for _, b := range balances {
+			if b.Currency == "USD" {
+				cash = b.Amount
+				break
+			}
+		}
+		cost := indexPrice * cfg.OrderQuantity
+		if cash < cost {
+			log.Printf("arbitrageur: insufficient USD balance for discount arb (need %d, have %d)", cost, cash)
+			return
+		}
+
 		buyReq := bots.OrderRequest{
 			AssetID:  cfg.IndexAssetID,
 			UserID:   cfg.UserID,
 			Side:     "BUY",
-			Type:     "MARKET",
+			Type:     "LIMIT",
 			Quantity: cfg.OrderQuantity,
+			Price:    nav * 105 / 100, // 5% worse than NAV max
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), cfg.RequestTimeout)
 		order, err := client.SubmitOrder(ctx, buyReq)

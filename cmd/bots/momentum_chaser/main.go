@@ -48,6 +48,14 @@ func main() {
 
 func runOnce(client *bots.APIClient, cfg config, rng *rand.Rand) {
 	for _, assetID := range cfg.AssetIDs {
+		// Asset check
+		ctxA, cancelA := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+		_, errA := client.Asset(ctxA, assetID)
+		cancelA()
+		if errA != nil {
+			continue // skip non-existent assets
+		}
+
 		ctx, cancel := context.WithTimeout(context.Background(), cfg.RequestTimeout)
 		candles, err := client.Candles(ctx, assetID, cfg.Timeframe, cfg.CandleLimit)
 		cancel()
@@ -59,14 +67,57 @@ func runOnce(client *bots.APIClient, cfg config, rng *rand.Rand) {
 		if !ok {
 			continue
 		}
+
+		// Balance check to adjust quantity and avoid immediate bankruptcy
+		ctxB, cancelB := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+		balances, _ := client.Balances(ctxB, cfg.UserID)
+		cancelB()
+		var cash int64
+		for _, b := range balances {
+			if b.Currency == "USD" {
+				cash = b.Amount
+				break
+			}
+		}
+
+		// Calculate order size based on remaining cash (for buys)
+		lastPrice := candles[0].Close
+		multiplier := 1.0 + math.Min(signal.Strength*5, 2.0)
+		quantity := bots.ClampQuantity(cfg.BaseQuantity, multiplier)
+		if signal.Side == "BUY" && cash > 0 {
+			maxQty := cash / lastPrice
+			if quantity > maxQty {
+				quantity = maxQty
+			}
+		}
+
+		// Check inventory for sells
+		if signal.Side == "SELL" {
+			ctxI, cancelI := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+			assets, _ := client.PortfolioAssets(ctxI, cfg.UserID)
+			cancelI()
+			var inventory int64
+			for _, a := range assets {
+				if a.AssetID == assetID {
+					inventory = a.Quantity
+				}
+			}
+			if quantity > inventory {
+				quantity = inventory
+			}
+		}
+
+		if quantity <= 0 {
+			continue // skip if we have no money/inventory
+		}
+
 		if cfg.Jitter > 0 {
 			jitterNs := cfg.Jitter.Nanoseconds()
 			if jitterNs > 0 {
 				time.Sleep(time.Duration(rng.Int63n(jitterNs + 1)))
 			}
 		}
-		multiplier := 1.0 + math.Min(signal.Strength*5, 2.0)
-		quantity := bots.ClampQuantity(cfg.BaseQuantity, multiplier)
+
 		req := bots.OrderRequest{
 			AssetID:  assetID,
 			UserID:   cfg.UserID,

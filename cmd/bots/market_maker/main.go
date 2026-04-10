@@ -71,44 +71,90 @@ func runOnce(client *bots.APIClient, cfg config, state *orderState) error {
 	if !missingOrders && !quoteChanged {
 		return nil
 	}
+
+	ctxBalances, cancelBal := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+	balances, _ := client.Balances(ctxBalances, cfg.UserID)
+	cancelBal()
+	var cash int64
+	for _, b := range balances {
+		if b.Currency == "USD" {
+			cash = b.Amount
+			break
+		}
+	}
+
+	ctxAssets, cancelAst := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+	assets, _ := client.PortfolioAssets(ctxAssets, cfg.UserID)
+	cancelAst()
+	var inventory int64
+	for _, a := range assets {
+		if a.AssetID == cfg.AssetID {
+			inventory = a.Quantity
+			break
+		}
+	}
+
+	buyQty := cfg.Quantity
+	if quote.BidPrice > 0 && cash < quote.BidPrice*buyQty {
+		buyQty = cash / quote.BidPrice
+	}
+	sellQty := cfg.Quantity
+	if inventory < sellQty {
+		sellQty = inventory
+	}
+
 	cancelOrder(client, cfg.RequestTimeout, cfg.AssetID, state.buyID)
 	cancelOrder(client, cfg.RequestTimeout, cfg.AssetID, state.sellID)
 
-	buyReq := bots.OrderRequest{
-		AssetID:  cfg.AssetID,
-		UserID:   cfg.UserID,
-		Side:     "BUY",
-		Type:     "LIMIT",
-		Quantity: cfg.Quantity,
-		Price:    quote.BidPrice,
-	}
-	sellReq := bots.OrderRequest{
-		AssetID:  cfg.AssetID,
-		UserID:   cfg.UserID,
-		Side:     "SELL",
-		Type:     "LIMIT",
-		Quantity: cfg.Quantity,
-		Price:    quote.AskPrice,
-	}
 	submitOrder := func(req bots.OrderRequest) (*engine.Order, error) {
-		ctx, cancel := context.WithTimeout(context.Background(), cfg.RequestTimeout)
-		defer cancel()
-		return client.SubmitOrder(ctx, req)
+		if req.Quantity <= 0 {
+			return nil, errors.New("insufficient balance/inventory")
+		}
+		ctxSubmit, cancelSubmit := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+		defer cancelSubmit()
+		return client.SubmitOrder(ctxSubmit, req)
 	}
-	if order, err := submitOrder(buyReq); err != nil {
-		log.Printf("submit buy order failed: %v", err)
+
+	if buyQty > 0 {
+		buyReq := bots.OrderRequest{
+			AssetID:  cfg.AssetID,
+			UserID:   cfg.UserID,
+			Side:     "BUY",
+			Type:     "LIMIT",
+			Quantity: buyQty,
+			Price:    quote.BidPrice,
+		}
+		if order, err := submitOrder(buyReq); err != nil {
+			log.Printf("submit buy order failed: %v", err)
+			state.buyID = 0
+		} else {
+			state.buyID = order.ID
+			log.Printf("buy order placed id=%d price=%d qty=%d", order.ID, order.Price, order.Quantity)
+		}
+	} else {
 		state.buyID = 0
-	} else {
-		state.buyID = order.ID
-		log.Printf("buy order placed id=%d price=%d qty=%d", order.ID, order.Price, order.Quantity)
 	}
-	if order, err := submitOrder(sellReq); err != nil {
-		log.Printf("submit sell order failed: %v", err)
+
+	if sellQty > 0 {
+		sellReq := bots.OrderRequest{
+			AssetID:  cfg.AssetID,
+			UserID:   cfg.UserID,
+			Side:     "SELL",
+			Type:     "LIMIT",
+			Quantity: sellQty,
+			Price:    quote.AskPrice,
+		}
+		if order, err := submitOrder(sellReq); err != nil {
+			log.Printf("submit sell order failed: %v", err)
+			state.sellID = 0
+		} else {
+			state.sellID = order.ID
+			log.Printf("sell order placed id=%d price=%d qty=%d", order.ID, order.Price, order.Quantity)
+		}
+	} else {
 		state.sellID = 0
-	} else {
-		state.sellID = order.ID
-		log.Printf("sell order placed id=%d price=%d qty=%d", order.ID, order.Price, order.Quantity)
 	}
+
 	state.lastBid = quote.BidPrice
 	state.lastAsk = quote.AskPrice
 	return nil
