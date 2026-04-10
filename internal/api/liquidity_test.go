@@ -48,6 +48,61 @@ func TestSwapPoolTickMath(t *testing.T) {
 	}
 }
 
+func TestUtilizationRate_KinkJumpModel(t *testing.T) {
+	tests := []struct {
+		name     string
+		borrowed int64
+		total    int64
+		expected int64
+	}{
+		{
+			name:     "0% utilization",
+			borrowed: 0,
+			total:    1000,
+			expected: 10, // marginBaseRateBps
+		},
+		{
+			name:     "35% utilization (halfway to kink)",
+			borrowed: 350,
+			total:    1000,
+			expected: 30, // 10 + 40 * (3500/7000)
+		},
+		{
+			name:     "70% utilization (at kink point)",
+			borrowed: 700,
+			total:    1000,
+			expected: 50, // 10 + 40
+		},
+		{
+			name:     "80% utilization (past kink point)",
+			borrowed: 800,
+			total:    1000,
+			expected: 100, // 50 + 500 * (1000/10000)
+		},
+		{
+			name:     "100% utilization (max)",
+			borrowed: 1000,
+			total:    1000,
+			expected: 200, // 50 + 500 * (3000/10000)
+		},
+		{
+			name:     "total <= 0",
+			borrowed: 0,
+			total:    0,
+			expected: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rate := utilizationRate(tt.borrowed, tt.total)
+			if rate != tt.expected {
+				t.Errorf("utilizationRate(%d, %d) = %d, want %d", tt.borrowed, tt.total, rate, tt.expected)
+			}
+		})
+	}
+}
+
 func TestSwapPoolRouterMultiHop(t *testing.T) {
 	store := NewMarketStore()
 	store.EnsureUser(1)

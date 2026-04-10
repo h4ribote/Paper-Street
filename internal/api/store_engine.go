@@ -240,11 +240,13 @@ func (s *MarketStore) performMatchingTx(ctx context.Context, tx *sql.Tx, order *
 				maker.Status = engine.OrderStatusCancelled
 				maker.UpdatedAt = time.Now().UTC()
 				_ = s.queries.UpdateOrderTx(ctx, tx, maker)
-				s.notifyOrderUpdate(maker)
-				continue
-			}
 
-			if guardEnabled && guardPrice == 0 {
+				if maker.Remaining > order.Remaining {
+					order.Remaining = 0
+				} else {
+					order.Remaining -= maker.Remaining
+				}
+
 				guardPrice = s.guardFrom(maker.Price, order.Side)
 			}
 			if guardEnabled && !s.guardSatisfied(maker.Price, guardPrice, order.Side) {
@@ -315,9 +317,31 @@ func (s *MarketStore) performMatchingTx(ctx context.Context, tx *sql.Tx, order *
 
 func (s *MarketStore) applyExecutionTx(ctx context.Context, tx *sql.Tx, exec engine.Execution, takerSide engine.Side) error {
 	// Logic from applyExecutionLocked but using tx
-	// Simplified here - ideally we use full fee/margin logic
+	// Full fee/margin logic
 
 	cashDelta := exec.Price * exec.Quantity
+
+	takerRankInfo := s.userRankInfoLocked(exec.TakerUserID)
+	takerFee := int64(0)
+	if takerRankInfo.TakerFeeBps > 0 {
+		product, ok := safeMultiplyInt64(cashDelta, takerRankInfo.TakerFeeBps)
+		if ok {
+			takerFee = (product + bpsDenominator - 1) / bpsDenominator
+		} else {
+			takerFee = 1
+		}
+	}
+
+	makerRankInfo := s.userRankInfoLocked(exec.MakerUserID)
+	makerFee := int64(0)
+	if makerRankInfo.MakerFeeBps > 0 {
+		product, ok := safeMultiplyInt64(cashDelta, makerRankInfo.MakerFeeBps)
+		if ok {
+			makerFee = (product + bpsDenominator - 1) / bpsDenominator
+		} else {
+			makerFee = 1
+		}
+	}
 
 	// Identify buyer/seller
 	buyerID := exec.TakerUserID
@@ -338,6 +362,18 @@ func (s *MarketStore) applyExecutionTx(ctx context.Context, tx *sql.Tx, exec eng
 	// Add to seller
 	if err := s.queries.AdjustCurrencyBalance(ctx, tx, sellerID, defaultCurrency, cashDelta); err != nil {
 		return err
+	}
+	// Deduct taker fee
+	if takerFee > 0 {
+		if err := s.queries.AdjustCurrencyBalance(ctx, tx, exec.TakerUserID, defaultCurrency, -takerFee); err != nil {
+			return err
+		}
+	}
+	// Deduct maker fee
+	if makerFee > 0 {
+		if err := s.queries.AdjustCurrencyBalance(ctx, tx, exec.MakerUserID, defaultCurrency, -makerFee); err != nil {
+			return err
+		}
 	}
 
 	// 2. Move assets
@@ -504,6 +540,13 @@ func (s *MarketStore) processSubmitInMemory(order *engine.Order) engine.OrderRes
 		if maker.UserID == order.UserID {
 			maker.Status = engine.OrderStatusCancelled
 			maker.UpdatedAt = time.Now().UTC()
+
+			if maker.Remaining > order.Remaining {
+				order.Remaining = 0
+			} else {
+				order.Remaining -= maker.Remaining
+			}
+
 			continue
 		}
 		if guardEnabled && guardPrice == 0 {
@@ -581,7 +624,29 @@ func (s *MarketStore) processSubmitInMemory(order *engine.Order) engine.OrderRes
 
 func (s *MarketStore) applyExecutionInMemory(exec engine.Execution, takerSide engine.Side, takerOrder *engine.Order, makerOrder *engine.Order) {
 	cashDelta := exec.Price * exec.Quantity
-	takerFee := int64(1)
+
+	takerRankInfo := s.userRankInfoLocked(exec.TakerUserID)
+	takerFee := int64(0)
+	if takerRankInfo.TakerFeeBps > 0 {
+		product, ok := safeMultiplyInt64(cashDelta, takerRankInfo.TakerFeeBps)
+		if ok {
+			takerFee = (product + bpsDenominator - 1) / bpsDenominator
+		} else {
+			takerFee = 1
+		}
+	}
+
+	makerRankInfo := s.userRankInfoLocked(exec.MakerUserID)
+	makerFee := int64(0)
+	if makerRankInfo.MakerFeeBps > 0 {
+		product, ok := safeMultiplyInt64(cashDelta, makerRankInfo.MakerFeeBps)
+		if ok {
+			makerFee = (product + bpsDenominator - 1) / bpsDenominator
+		} else {
+			makerFee = 1
+		}
+	}
+
 	buyerID := exec.TakerUserID
 	sellerID := exec.MakerUserID
 	if takerSide == engine.SideSell {
@@ -591,6 +656,7 @@ func (s *MarketStore) applyExecutionInMemory(exec engine.Execution, takerSide en
 	s.updateBalanceLocked(buyerID, defaultCurrency, -cashDelta)
 	s.updateBalanceLocked(sellerID, defaultCurrency, cashDelta)
 	s.updateBalanceLocked(exec.TakerUserID, defaultCurrency, -takerFee)
+	s.updateBalanceLocked(exec.MakerUserID, defaultCurrency, -makerFee)
 	s.setPositionLocked(buyerID, exec.AssetID, s.getPositionLocked(buyerID, exec.AssetID)+exec.Quantity)
 	s.setPositionLocked(sellerID, exec.AssetID, s.getPositionLocked(sellerID, exec.AssetID)-exec.Quantity)
 	now := exec.OccurredAtUTC.UnixMilli()

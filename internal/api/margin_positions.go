@@ -467,7 +467,7 @@ func (s *MarketStore) liquidateMarginPositionLocked(position MarginPosition, now
 	if remaining > 0 {
 		product, ok := safeMultiplyInt64(remaining, liquidationFeeBps)
 		if ok {
-			fee = product / bpsDenominator
+			fee = (product + bpsDenominator - 1) / bpsDenominator
 		}
 		if fee > remaining {
 			fee = remaining

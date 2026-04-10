@@ -89,7 +89,7 @@ func TestMarginLiquidationTriggered(t *testing.T) {
 		Side:     engine.SideBuy,
 		Type:     engine.OrderTypeLimit,
 		Quantity: 1,
-		Price:    60,
+		Price:    85,
 	})
 	submitEngineOrder(t, eng, &engine.Order{
 		AssetID:  101,
@@ -97,7 +97,7 @@ func TestMarginLiquidationTriggered(t *testing.T) {
 		Side:     engine.SideSell,
 		Type:     engine.OrderTypeLimit,
 		Quantity: 1,
-		Price:    60,
+		Price:    85,
 	})
 
 	positions = store.MarginPositions(1)
@@ -107,6 +107,18 @@ func TestMarginLiquidationTriggered(t *testing.T) {
 	events := store.MarginLiquidations(1)
 	if len(events) != 1 {
 		t.Fatalf("expected 1 liquidation event, got %d", len(events))
+	}
+
+	remainingMargin := int64(50)              // 200 - 150 (loss)
+	expectedFee := remainingMargin * 10 / 100 // 10% fee
+	expectedPayout := remainingMargin - expectedFee
+
+	event := events[0]
+	if event.LiquidationFee != expectedFee {
+		t.Fatalf("expected liquidation fee %d, got %d", expectedFee, event.LiquidationFee)
+	}
+	if event.RemainingMargin != expectedPayout {
+		t.Fatalf("expected remaining margin %d, got %d", expectedPayout, event.RemainingMargin)
 	}
 	if events[0].PositionID != positionID {
 		t.Fatalf("unexpected liquidation position id: %d", events[0].PositionID)
