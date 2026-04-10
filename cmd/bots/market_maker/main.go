@@ -77,7 +77,7 @@ func runOnce(client *bots.APIClient, cfg config, state *orderState) error {
 	cancelBal()
 	var cash int64
 	for _, b := range balances {
-		if b.Currency == "USD" {
+		if b.Currency == "ARC" {
 			cash = b.Amount
 			break
 		}

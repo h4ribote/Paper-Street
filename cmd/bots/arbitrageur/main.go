@@ -118,14 +118,14 @@ func runIndexArb(client *bots.APIClient, cfg config, nav int64) {
 		cancelBal()
 		var cash int64
 		for _, b := range balances {
-			if b.Currency == "USD" {
+			if b.Currency == "ARC" {
 				cash = b.Amount
 				break
 			}
 		}
 		cost := indexPrice * cfg.OrderQuantity
 		if cash < cost {
-			log.Printf("arbitrageur: insufficient USD balance for discount arb (need %d, have %d)", cost, cash)
+			log.Printf("arbitrageur: insufficient ARC balance for discount arb (need %d, have %d)", cost, cash)
 			return
 		}
 

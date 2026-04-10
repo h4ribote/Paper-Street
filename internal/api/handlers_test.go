@@ -68,10 +68,10 @@ func TestTradeFlowUpdatesMarketData(t *testing.T) {
 
 	var balances []models.Balance
 	getJSON(t, server.URL+"/api/portfolio/balances?user_id=1", testAPIKeyUser1, &balances)
-	usd := balanceAmount(balances, defaultCurrency)
+	arc := balanceAmount(balances, defaultCurrency)
 	expectedCash := defaultCashBalance - 100*10 - 1
-	if usd != expectedCash {
-		t.Fatalf("expected cash %d, got %d", expectedCash, usd)
+	if arc != expectedCash {
+		t.Fatalf("expected cash %d, got %d", expectedCash, arc)
 	}
 
 	var assets []PortfolioAsset

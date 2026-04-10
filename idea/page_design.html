@@ -85,7 +85,7 @@
             <div class="flex items-center gap-3 mr-4">
                 <div class="text-right hidden sm:block">
                     <div class="text-xs text-dark-muted">推定残高</div>
-                    <div class="font-mono font-bold">12,450.00 USD</div>
+                    <div class="font-mono font-bold">12,450.00 ARC</div>
                 </div>
             </div>
             <button class="text-dark-muted hover:text-white"><i class="fa-solid fa-bell"></i></button>
@@ -109,22 +109,22 @@
                 <!-- Ticker Cards -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div class="panel p-4 flex flex-col gap-2 hover:border-brand-500 border border-transparent transition-colors cursor-pointer" onclick="switchTab('trade')">
-                        <div class="flex justify-between items-center"><span class="text-dark-muted font-bold font-mono">BTC/USD</span><span class="text-trading-up text-xs font-bold">+2.45%</span></div>
+                        <div class="flex justify-between items-center"><span class="text-dark-muted font-bold font-mono">BTC/ARC</span><span class="text-trading-up text-xs font-bold">+2.45%</span></div>
                         <div class="text-2xl font-mono text-white font-bold" id="dash-btc-price">64,230.50</div>
                         <div class="text-xs text-dark-muted font-mono">Vol: 12.4K BTC</div>
                     </div>
                     <div class="panel p-4 flex flex-col gap-2 hover:border-brand-500 border border-transparent transition-colors cursor-pointer">
-                        <div class="flex justify-between items-center"><span class="text-dark-muted font-bold font-mono">ETH/USD</span><span class="text-trading-up text-xs font-bold">+1.20%</span></div>
+                        <div class="flex justify-between items-center"><span class="text-dark-muted font-bold font-mono">ETH/ARC</span><span class="text-trading-up text-xs font-bold">+1.20%</span></div>
                         <div class="text-2xl font-mono text-white font-bold">3,450.20</div>
                         <div class="text-xs text-dark-muted font-mono">Vol: 145.2K ETH</div>
                     </div>
                     <div class="panel p-4 flex flex-col gap-2 hover:border-brand-500 border border-transparent transition-colors cursor-pointer">
-                        <div class="flex justify-between items-center"><span class="text-dark-muted font-bold font-mono">SOL/USD</span><span class="text-trading-down text-xs font-bold">-3.40%</span></div>
+                        <div class="flex justify-between items-center"><span class="text-dark-muted font-bold font-mono">SOL/ARC</span><span class="text-trading-down text-xs font-bold">-3.40%</span></div>
                         <div class="text-2xl font-mono text-white font-bold">145.30</div>
                         <div class="text-xs text-dark-muted font-mono">Vol: 2.1M SOL</div>
                     </div>
                     <div class="panel p-4 flex flex-col gap-2 hover:border-brand-500 border border-transparent transition-colors cursor-pointer">
-                        <div class="flex justify-between items-center"><span class="text-dark-muted font-bold font-mono">PAPER/USD</span><span class="text-trading-up text-xs font-bold">+12.5%</span></div>
+                        <div class="flex justify-between items-center"><span class="text-dark-muted font-bold font-mono">PAPER/ARC</span><span class="text-trading-up text-xs font-bold">+12.5%</span></div>
                         <div class="text-2xl font-mono text-brand-500 font-bold">1.245</div>
                         <div class="text-xs text-brand-500/70 font-mono">Exchange Token</div>
                     </div>
@@ -150,21 +150,21 @@
                             </thead>
                             <tbody class="font-mono text-white">
                                 <tr class="border-b border-dark-border/50 hover:bg-dark-bg">
-                                    <td class="py-3 px-4 flex items-center gap-2"><span class="font-bold">PEPE/USD</span></td>
+                                    <td class="py-3 px-4 flex items-center gap-2"><span class="font-bold">PEPE/ARC</span></td>
                                     <td class="py-3 px-4 text-right">0.0000084</td>
                                     <td class="py-3 px-4 text-right text-trading-up">+12.40%</td>
                                     <td class="py-3 px-4 text-right hidden sm:table-cell">84.5M</td>
                                     <td class="py-3 px-4 text-right text-brand-500 font-sans"><a href="#" onclick="switchTab('trade')" class="hover:underline">取引</a></td>
                                 </tr>
                                 <tr class="border-b border-dark-border/50 hover:bg-dark-bg">
-                                    <td class="py-3 px-4 flex items-center gap-2"><span class="font-bold">DOGE/USD</span></td>
+                                    <td class="py-3 px-4 flex items-center gap-2"><span class="font-bold">DOGE/ARC</span></td>
                                     <td class="py-3 px-4 text-right">0.1540</td>
                                     <td class="py-3 px-4 text-right text-trading-up">+5.60%</td>
                                     <td class="py-3 px-4 text-right hidden sm:table-cell">120.2M</td>
                                     <td class="py-3 px-4 text-right text-brand-500 font-sans"><a href="#" onclick="switchTab('trade')" class="hover:underline">取引</a></td>
                                 </tr>
                                 <tr class="border-b border-dark-border/50 hover:bg-dark-bg">
-                                    <td class="py-3 px-4 flex items-center gap-2"><span class="font-bold">AVAX/USD</span></td>
+                                    <td class="py-3 px-4 flex items-center gap-2"><span class="font-bold">AVAX/ARC</span></td>
                                     <td class="py-3 px-4 text-right">35.20</td>
                                     <td class="py-3 px-4 text-right text-trading-up">+2.10%</td>
                                     <td class="py-3 px-4 text-right hidden sm:table-cell">45.1M</td>
@@ -245,7 +245,7 @@
                     <!-- Ticker Header -->
                     <div class="panel h-16 flex items-center px-4 shrink-0 gap-6 overflow-x-auto hide-scrollbar">
                         <div class="flex items-center gap-3 shrink-0">
-                            <h1 class="text-2xl font-bold font-mono">BTC/USD</h1>
+                            <h1 class="text-2xl font-bold font-mono">BTC/ARC</h1>
                             <span class="text-trading-up underline decoration-dashed underline-offset-4 cursor-pointer">Bitcoin</span>
                         </div>
                         <div class="flex flex-col shrink-0">
@@ -314,7 +314,7 @@
                                     <tr class="border-b border-dark-border/50 hover:bg-dark-bg/50">
                                         <td class="py-3 px-4 flex items-center gap-2">
                                             <div class="w-1 h-4 bg-trading-up rounded-sm"></div>
-                                            <span class="font-bold">BTC/USD</span>
+                                            <span class="font-bold">BTC/ARC</span>
                                             <span class="text-trading-up text-xxs border border-trading-up px-1 rounded">20x</span>
                                         </td>
                                         <td class="py-3 px-4 text-trading-up">0.500</td>
@@ -346,7 +346,7 @@
                             </div>
                         </div>
                         <div class="flex justify-between px-3 py-1 text-xxs text-dark-muted font-mono shrink-0">
-                            <span>価格(USD)</span>
+                            <span>価格(ARC)</span>
                             <span>数量(BTC)</span>
                             <span>合計</span>
                         </div>
@@ -385,14 +385,14 @@
 
                         <div class="flex justify-between text-xs text-dark-muted mb-2">
                             <span>利用可能</span>
-                            <span class="font-mono text-white">12,450.00 USD</span>
+                            <span class="font-mono text-white">12,450.00 ARC</span>
                         </div>
 
                         <div class="space-y-3">
                             <div class="flex items-center bg-dark-bg border border-dark-border rounded px-3 py-2 focus-within:border-brand-500 transition-colors">
                                 <span class="text-dark-muted text-xs w-12">価格</span>
                                 <input type="text" value="64230.50" class="flex-1 bg-transparent text-right font-mono text-sm outline-none text-white">
-                                <span class="text-dark-muted text-xs ml-2">USD</span>
+                                <span class="text-dark-muted text-xs ml-2">ARC</span>
                             </div>
                             <div class="flex items-center bg-dark-bg border border-dark-border rounded px-3 py-2 focus-within:border-brand-500 transition-colors">
                                 <span class="text-dark-muted text-xs w-12">数量</span>
@@ -411,7 +411,7 @@
                             <div class="flex items-center bg-dark-bg border border-dark-border rounded px-3 py-2 opacity-50">
                                 <span class="text-dark-muted text-xs w-12">合計</span>
                                 <input type="text" readonly placeholder="0.00" class="flex-1 bg-transparent text-right font-mono text-sm outline-none text-white cursor-not-allowed">
-                                <span class="text-dark-muted text-xs ml-2">USD</span>
+                                <span class="text-dark-muted text-xs ml-2">ARC</span>
                             </div>
                         </div>
 
@@ -494,7 +494,7 @@
                             <p class="text-sm text-dark-muted leading-relaxed mb-3">米連邦準備制度理事会(FRB)は本日のFOMCで政策金利の据え置きを決定しました。市場の予想通りとなりましたが、パウエル議長の会見でのハト派的な発言を受け、リスク資産全般が買われる展開となり、ビットコインは64,000ドル台を回復しました。</p>
                             <div class="flex gap-2">
                                 <span class="text-xs font-mono text-dark-muted bg-dark-bg px-2 py-1 rounded border border-dark-border">BTC</span>
-                                <span class="text-xs font-mono text-dark-muted bg-dark-bg px-2 py-1 rounded border border-dark-border">USD</span>
+                                <span class="text-xs font-mono text-dark-muted bg-dark-bg px-2 py-1 rounded border border-dark-border">ARC</span>
                             </div>
                         </div>
                         <!-- News Item 2 -->
@@ -540,7 +540,7 @@
                     <!-- Balance Summary -->
                     <div class="panel p-6 lg:col-span-2 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border border-dark-border">
                         <div>
-                            <div class="text-dark-muted text-sm mb-2">推定総資産 (USD)</div>
+                            <div class="text-dark-muted text-sm mb-2">推定総資産 (ARC)</div>
                             <div class="text-4xl md:text-5xl font-mono font-bold text-white mb-3 tracking-tight">12,450.00</div>
                             <div class="flex items-center gap-4 text-sm">
                                 <span class="bg-trading-up_bg text-trading-up px-2 py-1 rounded font-medium"><i class="fa-solid fa-arrow-up mr-1"></i>+$450.00 (今日の損益)</span>
@@ -563,7 +563,7 @@
                         <div class="flex h-3 rounded-full overflow-hidden mb-6 bg-dark-bg">
                             <div class="bg-[#f7931a] w-[60%] hover:opacity-80 transition-opacity cursor-pointer" title="Bitcoin: 60%"></div>
                             <div class="bg-[#627eea] w-[25%] hover:opacity-80 transition-opacity cursor-pointer" title="Ethereum: 25%"></div>
-                            <div class="bg-[#26a17b] w-[15%] hover:opacity-80 transition-opacity cursor-pointer" title="USD (Cash): 15%"></div>
+                            <div class="bg-[#26a17b] w-[15%] hover:opacity-80 transition-opacity cursor-pointer" title="ARC (Cash): 15%"></div>
                         </div>
                         <div class="flex flex-col gap-3 text-sm">
                             <div class="flex justify-between items-center">
@@ -575,7 +575,7 @@
                                 <span class="text-dark-muted">25%</span>
                             </div>
                             <div class="flex justify-between items-center">
-                                <span class="flex items-center gap-2 text-white font-mono"><span class="w-2.5 h-2.5 rounded-full bg-[#26a17b]"></span>USD</span>
+                                <span class="flex items-center gap-2 text-white font-mono"><span class="w-2.5 h-2.5 rounded-full bg-[#26a17b]"></span>ARC</span>
                                 <span class="text-dark-muted">15%</span>
                             </div>
                         </div>
@@ -597,7 +597,7 @@
                                     <th class="py-3 px-6 font-normal text-right">総額</th>
                                     <th class="py-3 px-6 font-normal text-right">利用可能</th>
                                     <th class="py-3 px-6 font-normal text-right">注文中</th>
-                                    <th class="py-3 px-6 font-normal text-right">USD評価額</th>
+                                    <th class="py-3 px-6 font-normal text-right">ARC評価額</th>
                                     <th class="py-3 px-6 font-normal text-center">操作</th>
                                 </tr>
                             </thead>
@@ -636,12 +636,12 @@
                                         <button class="text-brand-500 hover:text-white hover:bg-brand-500 px-3 py-1 rounded border border-brand-500 transition-colors mx-1" onclick="switchTab('trade')">取引</button>
                                     </td>
                                 </tr>
-                                <!-- USD -->
+                                <!-- ARC -->
                                 <tr class="hover:bg-dark-bg/50 transition-colors">
                                     <td class="py-4 px-6 flex items-center gap-3 font-sans">
                                         <div class="w-8 h-8 rounded-full bg-[#26a17b]/20 flex items-center justify-center text-[#26a17b]"><i class="fa-solid fa-dollar-sign"></i></div>
                                         <div>
-                                            <div class="font-bold">USD</div>
+                                            <div class="font-bold">ARC</div>
                                             <div class="text-xs text-dark-muted">US Dollar</div>
                                         </div>
                                     </td>
@@ -769,11 +769,11 @@
         // マーケット一覧 (トレード画面左サイドバー)
         // ==========================================
         const pairs = [
-            { s: 'ETH/USD', p: 3450.20, c: 1.2 }, { s: 'SOL/USD', p: 145.30, c: -3.4 },
-            { s: 'XRP/USD', p: 0.5840, c: 0.5 }, { s: 'ADA/USD', p: 0.4520, c: -1.2 },
-            { s: 'DOGE/USD', p: 0.1540, c: 5.6 }, { s: 'AVAX/USD', p: 35.20, c: 2.1 },
-            { s: 'LINK/USD', p: 18.50, c: -0.5 }, { s: 'DOT/USD', p: 7.20, c: 0.1 },
-            { s: 'MATIC/USD', p: 0.95, c: -2.3 }, { s: 'UNI/USD', p: 10.40, c: 1.8 }
+            { s: 'ETH/ARC', p: 3450.20, c: 1.2 }, { s: 'SOL/ARC', p: 145.30, c: -3.4 },
+            { s: 'XRP/ARC', p: 0.5840, c: 0.5 }, { s: 'ADA/ARC', p: 0.4520, c: -1.2 },
+            { s: 'DOGE/ARC', p: 0.1540, c: 5.6 }, { s: 'AVAX/ARC', p: 35.20, c: 2.1 },
+            { s: 'LINK/ARC', p: 18.50, c: -0.5 }, { s: 'DOT/ARC', p: 7.20, c: 0.1 },
+            { s: 'MATIC/ARC', p: 0.95, c: -2.3 }, { s: 'UNI/ARC', p: 10.40, c: 1.8 }
         ];
 
         function renderMarketList() {

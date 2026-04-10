@@ -84,7 +84,7 @@ func TestNewsEngineReactsToNews(t *testing.T) {
 	store.mu.Lock()
 	if store.currencies == nil {
 		store.currencies = make(map[string]struct{})
-		store.currencies["USD"] = struct{}{}
+		store.currencies["ARC"] = struct{}{}
 	}
 	s := models.Asset{ID: assetID, Name: "Test Inc", Symbol: "TEST"}
 

@@ -74,7 +74,7 @@ func runOnce(client *bots.APIClient, cfg config, state map[int64]*gridState) {
 		cancelBal()
 		var cash int64
 		for _, b := range balances {
-			if b.Currency == "USD" {
+			if b.Currency == "ARC" {
 				cash = b.Amount
 				break
 			}
