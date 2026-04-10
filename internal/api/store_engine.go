@@ -10,7 +10,7 @@ import (
 	"github.com/h4ribote/Paper-Street/internal/engine"
 )
 
-const defaultGuardPercent = 20
+const defaultGuardPercent = 5
 
 // ProcessSubmit handles order submission and matching logic within a database transaction.
 func (s *MarketStore) ProcessSubmit(ctx context.Context, order *engine.Order) (engine.OrderResult, error) {

@@ -294,9 +294,9 @@ func (s *testStorage) ProcessSubmit(ctx context.Context, order *Order) (OrderRes
 		if order.Type == OrderTypeMarket {
 			if guardPrice == 0 {
 				if order.Side == SideBuy {
-					guardPrice = (maker.Price * 120) / 100
+					guardPrice = (maker.Price * 105) / 100
 				} else {
-					guardPrice = (maker.Price * 80) / 100
+					guardPrice = (maker.Price * 95) / 100
 				}
 			}
 			if order.Side == SideBuy && maker.Price >= guardPrice && maker.Price > makers[0].Price {
