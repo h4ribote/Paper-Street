@@ -27,6 +27,8 @@ type seededUser struct {
 	user      models.User
 	balances  map[string]int64
 	positions map[int64]int64
+	botRole   string
+	apiKey    string
 }
 
 type companyTier struct {
@@ -148,14 +150,14 @@ func (s *MarketStore) applyCompanyAllocationsLocked(companies []*companyState) [
 			localCurrency = defaultCurrency
 		}
 		s.currencies[localCurrency] = struct{}{}
-		
+
 		inventory := state.MaxProductionCapacity * tier.inventoryQuarters
 		state.CurrentInventory = inventory
-		
+
 		state.SharesIssued = tier.sharesIssued
 		state.TreasuryShares = tier.sharesIssued / 2
 		state.SharesOutstanding = tier.sharesIssued - state.TreasuryShares
-		
+
 		seedEntry := seededUser{
 			user:     user,
 			balances: map[string]int64{localCurrency: tier.cash},
@@ -326,7 +328,7 @@ func (s *MarketStore) applyRoleSeedLocked(seed roleSeed) seededUser {
 	for currency := range seed.Balances {
 		s.currencies[currency] = struct{}{}
 	}
-	
+
 	s.roleToUserID[role] = userID
 	if _, ok := s.roleToAPIKey[role]; !ok {
 		key, err := generateAPIKeyHex()
@@ -335,13 +337,14 @@ func (s *MarketStore) applyRoleSeedLocked(seed roleSeed) seededUser {
 		} else {
 			s.roleToAPIKey[role] = key
 			s.apiKeyToUser[key] = userID
-			s.persistAPIKey(role, key, userID)
 		}
 	}
 	return seededUser{
 		user:      user,
 		balances:  cloneCurrencyBalances(seed.Balances),
 		positions: cloneAssetPositions(seed.Positions),
+		botRole:   role,
+		apiKey:    s.roleToAPIKey[role],
 	}
 }
 
@@ -361,6 +364,9 @@ func (s *MarketStore) persistSeededUsers(seeded []seededUser) {
 		}
 		for assetID, qty := range entry.positions {
 			s.persistAssetBalance(user.ID, assetID, qty)
+		}
+		if entry.botRole != "" && entry.apiKey != "" {
+			s.persistAPIKey(entry.botRole, entry.apiKey, user.ID)
 		}
 	}
 }
