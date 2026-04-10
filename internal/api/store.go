@@ -2126,9 +2126,8 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 
 	// Check if we need initial allocation
 	users, _ := s.queries.ListUsers(ctx)
-	if len(users) == 0 {
-		s.needsInitialAlloc = true
-	}
+	assetBalances, _ := s.queries.ListAssetBalances(ctx)
+	s.needsInitialAlloc = s.shouldSeedInitialAllocations(users, len(currencyBalances), len(assetBalances))
 
 	return nil
 }
