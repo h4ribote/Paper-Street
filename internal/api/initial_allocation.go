@@ -298,9 +298,10 @@ func (s *MarketStore) applyRoleSeedsLocked(companies []*companyState) []seededUs
 			continue
 		}
 		seeded = append(seeded, s.applyRoleSeedLocked(roleSeed{
-			Role:     "corporate_ai_" + strings.ToLower(state.Company.Symbol),
-			UserID:   state.UserID,
-			Username: "Corporate AI " + state.Company.Symbol,
+			Role:      "corporate_ai_" + strings.ToLower(state.Company.Symbol),
+			UserID:    state.UserID,
+			Username:  "Corporate AI " + state.Company.Symbol,
+			Positions: map[int64]int64{state.Company.ID: state.TreasuryShares},
 		}))
 	}
 	return seeded
