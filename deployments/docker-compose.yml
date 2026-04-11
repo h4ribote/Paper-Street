@@ -2,11 +2,15 @@ x-bot-env: &bot-env
   API_BASE_URL: http://server:8000
   ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD environment variable is required}
   API_KEY_FILE: ${API_KEY_FILE:-}
+  ENABLE_API_LOGGING: ${ENABLE_API_LOGGING:-false}
+  API_LOG_DIR: /app/logs
 
 x-bot-base: &bot-base
   build:
     context: ..
     dockerfile: deployments/docker/Dockerfile.bot
+  volumes:
+    - ../logs:/app/logs
   depends_on:
     - server
 
@@ -41,6 +45,10 @@ services:
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
       DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
       DISCORD_REDIRECT_URI: ${DISCORD_REDIRECT_URI:-}
+      ENABLE_API_LOGGING: ${ENABLE_API_LOGGING:-false}
+      API_LOG_DIR: /app/logs
+    volumes:
+      - ../logs:/app/logs
     depends_on:
       db:
         condition: service_healthy

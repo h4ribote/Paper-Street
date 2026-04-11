@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -44,10 +45,14 @@ func NewAPIClient(baseURL, apiKey string, timeout time.Duration) *APIClient {
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
+	role := "bot"
+	if r := os.Getenv("BOT_ROLE"); r != "" {
+		role = r
+	}
 	return &APIClient{
 		baseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"),
 		apiKey:  strings.TrimSpace(apiKey),
-		client:  &http.Client{Timeout: timeout},
+		client:  &http.Client{Timeout: timeout, Transport: getLoggingTransport(role)},
 	}
 }
 
