@@ -2125,24 +2125,10 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 	_ = s.loadWorldFromDB(ctx)
 
 	// Check if we need initial allocation
-	users, _ := s.queries.ListUsers(ctx)
-	assetBalances, _ := s.queries.ListAssetBalances(ctx)
-	s.needsInitialAlloc = s.shouldSeedInitialAllocations(users, len(currencyBalances), len(assetBalances))
+	initialAllocDoneFromDB, _ := s.queries.GetServerStateBool(ctx, "is_initial_allocation_done", false)
+	s.needsInitialAlloc = !initialAllocDoneFromDB
 
 	return nil
-}
-
-func (s *MarketStore) shouldSeedInitialAllocations(users []models.User, currencyBalanceCount, assetBalanceCount int) bool {
-	if len(users) == 0 {
-		return true
-	}
-	if len(users) != 1 {
-		return false
-	}
-	if len(s.roleToAPIKey) != 0 || currencyBalanceCount != 0 || assetBalanceCount != 0 {
-		return false
-	}
-	return users[0].ID == 1
 }
 
 func (s *MarketStore) loadNewsFromDB(ctx context.Context) error {
@@ -2184,12 +2170,22 @@ func (s *MarketStore) loadAPIKeysFromDB(ctx context.Context) error {
 		if key == "" || record.UserID == 0 {
 			continue
 		}
-		s.apiKeyToUser[key] = record.UserID
 		role := normalizeRole(record.Role)
 		if role != "" && !isDiscordRole(role) {
+			deterministicKey := generateDeterministicAPIKey(role)
+			if deterministicKey != key {
+				_, err := s.queries.Conn.DB.ExecContext(ctx, "UPDATE api_keys SET api_key = ? WHERE role = ?", deterministicKey, role)
+				if err != nil {
+					log.Printf("failed to sync deterministic api key for %s: %v", role, err)
+				} else {
+					log.Printf("updated deterministic api key for %s in db", role)
+					key = deterministicKey
+				}
+			}
 			s.roleToUserID[role] = record.UserID
 			s.roleToAPIKey[role] = key
 		}
+		s.apiKeyToUser[key] = record.UserID
 	}
 	return nil
 }

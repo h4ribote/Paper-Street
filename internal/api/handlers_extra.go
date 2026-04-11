@@ -24,11 +24,6 @@ type authResponse struct {
 	User   interface{} `json:"user"`
 }
 
-type botAuthRequest struct {
-	Role          string `json:"role"`
-	AdminPassword string `json:"admin_password"`
-}
-
 type discordTokenResponse struct {
 	AccessToken string `json:"access_token"`
 	TokenType   string `json:"token_type"`
@@ -79,43 +74,6 @@ type bondOperationRequest struct {
 	Quantity    int64 `json:"quantity"`
 	PremiumBps  int64 `json:"premium_bps"`
 	DiscountBps int64 `json:"discount_bps"`
-}
-
-func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		respondError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	if s.Store == nil || s.APIKeys == nil {
-		respondError(w, http.StatusInternalServerError, "auth store unavailable")
-		return
-	}
-	var payload botAuthRequest
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
-		respondError(w, http.StatusBadRequest, "invalid json body")
-		return
-	}
-	role := strings.TrimSpace(payload.Role)
-	if role == "" {
-		respondError(w, http.StatusBadRequest, "role required")
-		return
-	}
-	if !s.validAdminPassword(payload.AdminPassword) {
-		respondError(w, http.StatusUnauthorized, "invalid admin password")
-		return
-	}
-	key, user, ok := s.Store.APIKeyForRole(role)
-	if !ok || key == "" {
-		respondError(w, http.StatusNotFound, "role not found")
-		return
-	}
-	if !s.APIKeys.ContainsHex(key) {
-		if err := s.APIKeys.AddHex(key); err != nil {
-			respondError(w, http.StatusInternalServerError, "failed to register api key")
-			return
-		}
-	}
-	respondJSON(w, http.StatusOK, authResponse{APIKey: key, User: user})
 }
 
 func (s *Server) handleDiscordLogin(w http.ResponseWriter, r *http.Request) {

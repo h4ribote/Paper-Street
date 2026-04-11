@@ -37,8 +37,7 @@ func NewRouter(e *engine.Engine, apiKeys *auth.APIKeyCache, store *MarketStore, 
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", srv.handleHealth)
-	mux.HandleFunc("/auth/login", srv.handleAuthLogin)
-	mux.HandleFunc("/auth/bot", srv.handleAuthLogin)
+
 	mux.HandleFunc("/auth/discord/login", srv.handleDiscordLogin)
 	mux.HandleFunc("/auth/callback", srv.handleAuthCallback)
 	mux.HandleFunc("/api/users/me", srv.handleCurrentUser)
