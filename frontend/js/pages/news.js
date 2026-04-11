@@ -3,6 +3,10 @@ import { requireAuth } from '../core/auth.js';
 import { api } from '../core/api.js';
 import { state } from '../core/state.js';
 import { fmtNumber, fmtDate } from '../core/format.js';
+import { RealtimeClient } from '../core/ws.js';
+
+let wsClient;
+let currentNews = [];
 
 async function initNews() {
     if (!await requireAuth()) return;
@@ -15,8 +19,8 @@ async function initNews() {
     async function loadNews() {
         try {
             // simple fetch, no pagination for now
-            const news = await api('/api/news?limit=50');
-            renderNews(news);
+            currentNews = await api('/api/news?limit=50');
+            renderNews(currentNews);
         } catch (e) {
             console.error(e);
         }
@@ -42,12 +46,23 @@ async function initNews() {
     }
 
     refreshBtn.addEventListener('click', loadNews);
-    searchInput.addEventListener('input', async () => {
-        const news = await api('/api/news?limit=50'); // ideally cache this
-        renderNews(news);
+    searchInput.addEventListener('input', () => {
+        renderNews(currentNews);
     });
 
-    loadNews();
+    await loadNews();
+
+    // WebSocket realtime update
+    wsClient = new RealtimeClient({
+        onMessage: (msg) => {
+            if (msg.topic === 'news') {
+                currentNews.unshift(msg.data);
+                renderNews(currentNews);
+            }
+        }
+    });
+    wsClient.connect();
+    wsClient.subscribe(['news']);
 }
 
 document.addEventListener('DOMContentLoaded', initNews);
