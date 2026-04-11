@@ -442,7 +442,9 @@ func (q *Queries) ListAssets(ctx context.Context) ([]AssetSnapshot, error) {
 		if err := rows.Scan(&asset.ID, &asset.Symbol, &asset.Type, &basePrice); err != nil {
 			return nil, err
 		}
-		if asset.Name == "" { asset.Name = asset.Symbol }
+		if asset.Name == "" {
+			asset.Name = asset.Symbol
+		}
 		assets = append(assets, AssetSnapshot{Asset: asset, BasePrice: basePrice})
 	}
 	return assets, rows.Err()
@@ -452,7 +454,9 @@ func (q *Queries) GetAsset(ctx context.Context, assetID int64) (models.Asset, er
 	var asset models.Asset
 	err := q.Conn.DB.QueryRowContext(ctx, "SELECT asset_id, ticker, type FROM assets WHERE asset_id = ?", assetID).Scan(&asset.ID, &asset.Symbol, &asset.Type)
 	if err == nil {
-		if asset.Name == "" { asset.Name = asset.Symbol }
+		if asset.Name == "" {
+			asset.Name = asset.Symbol
+		}
 	}
 	return asset, err
 }
@@ -623,7 +627,7 @@ func (q *Queries) GetStopOrdersToTrigger(ctx context.Context, tx *sql.Tx, assetI
 			  WHERE asset_id = ? AND status = 'OPEN' AND (type = 'STOP' OR type = 'STOP_LIMIT')
 			  AND ((side = 'BUY' AND stop_price <= ?) OR (side = 'SELL' AND stop_price >= ?))
 			  ORDER BY created_at ASC FOR UPDATE`
-	
+
 	rows, err := tx.QueryContext(ctx, query, assetID, lastPrice, lastPrice)
 	if err != nil {
 		return nil, err
@@ -888,7 +892,7 @@ func (q *Queries) AdjustCurrencyBalance(ctx context.Context, tx *sql.Tx, userID 
 	if err != nil {
 		return err
 	}
-	
+
 	upsertQuery := `
 		INSERT INTO currency_balances (user_id, currency_id, amount, updated_at)
 		VALUES (?, ?, ?, ?)
@@ -2027,6 +2031,27 @@ func (q *Queries) ReplaceMacroIndicators(ctx context.Context, records []MacroInd
 	return tx.Commit()
 }
 
+// Server State Management
+func (q *Queries) GetServerStateBool(ctx context.Context, key string, defaultValue bool) (bool, error) {
+	var value bool
+	err := q.Conn.DB.QueryRowContext(ctx, "SELECT state_value FROM server_state WHERE state_key = ?", key).Scan(&value)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return defaultValue, nil
+		}
+		return defaultValue, err
+	}
+	return value, nil
+}
+
+func (q *Queries) SetServerStateBool(ctx context.Context, key string, value bool) error {
+	_, err := q.Conn.DB.ExecContext(ctx, `
+		INSERT INTO server_state (state_key, state_value)
+		VALUES (?, ?)
+		ON DUPLICATE KEY UPDATE state_value = VALUES(state_value)
+	`, key, value)
+	return err
+}
 
 func rollbackTx(tx *sql.Tx) {
 	if tx == nil {

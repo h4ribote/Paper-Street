@@ -196,6 +196,12 @@ CREATE TABLE IF NOT EXISTS users (
     FOREIGN KEY (rank_id) REFERENCES rank_definitions(rank_id)
 );
 
+-- Server State / Key-Value config for one-off flags
+CREATE TABLE IF NOT EXISTS server_state (
+    state_key VARCHAR(50) PRIMARY KEY,
+    state_value BOOLEAN NOT NULL
+);
+
 -- APIキー管理
 CREATE TABLE IF NOT EXISTS api_keys (
     api_key VARCHAR(40) PRIMARY KEY,
