@@ -1,9 +1,12 @@
 package api
 
 import (
+	"bufio"
 	"bytes"
+	"errors"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -30,6 +33,13 @@ func (lrw *loggingResponseWriter) Write(b []byte) (int, error) {
 	}
 	lrw.body.Write(b)
 	return lrw.ResponseWriter.Write(b)
+}
+
+func (lrw *loggingResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if hj, ok := lrw.ResponseWriter.(http.Hijacker); ok {
+		return hj.Hijack()
+	}
+	return nil, nil, errors.New("hijack not supported")
 }
 
 func WithLogging(next http.Handler, name string) http.Handler {
