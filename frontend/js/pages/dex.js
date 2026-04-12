@@ -52,7 +52,7 @@ async function fetchData() {
         
         const amap = {};
         (assetData || []).forEach(a => {
-            amap[a.asset_id] = a.quantity;
+            amap[a.asset.id] = a.quantity;
         });
         balances.assets = amap;
         availableAssets = allAssets || [];

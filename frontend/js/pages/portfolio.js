@@ -36,7 +36,7 @@ function renderPortfolio() {
             balHtml += `
             <tr class="border-t border-dark-border/50 hover:bg-dark-bg/50 transition-colors">
                 <td class="py-4 px-6 flex items-center gap-3 font-sans">
-                    <div class="font-bold">Asset #${a.asset_id}</div>
+                    <div class="font-bold">Asset #${a.asset ? a.asset.id : '?'}</div>
                 </td>
                 <td class="py-4 px-6 text-right">${fmtNumber(a.quantity)}</td>
             </tr>

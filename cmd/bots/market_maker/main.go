@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -26,10 +27,9 @@ type config struct {
 }
 
 type orderState struct {
-	buyID   int64
-	sellID  int64
-	lastBid int64
-	lastAsk int64
+	buyIDs  []int64
+	sellIDs []int64
+	lastMid int64
 }
 
 func main() {
@@ -65,10 +65,18 @@ func runOnce(client *bots.APIClient, cfg config, state *orderState) error {
 		snapshot = orderbook
 	}
 
-	quote := bots.QuoteFromSnapshot(snapshot, cfg.SpreadBps, cfg.FallbackPrice)
-	missingOrders := state.buyID == 0 || state.sellID == 0
-	quoteChanged := state.lastBid != quote.BidPrice || state.lastAsk != quote.AskPrice
-	if !missingOrders && !quoteChanged {
+	midPrice := bots.MidPrice(snapshot, cfg.FallbackPrice)
+	if midPrice <= 0 {
+		return nil
+	}
+
+	priceDiff := midPrice - state.lastMid
+	if priceDiff < 0 {
+		priceDiff = -priceDiff
+	}
+
+	needsUpdate := state.lastMid == 0 || len(state.buyIDs) == 0 || len(state.sellIDs) == 0 || float64(priceDiff)/float64(state.lastMid) > 0.005
+	if !needsUpdate {
 		return nil
 	}
 
@@ -88,23 +96,21 @@ func runOnce(client *bots.APIClient, cfg config, state *orderState) error {
 	cancelAst()
 	var inventory int64
 	for _, a := range assets {
-		if a.AssetID == cfg.AssetID {
+		if a.Asset.ID == cfg.AssetID {
 			inventory = a.Quantity
 			break
 		}
 	}
 
-	buyQty := cfg.Quantity
-	if quote.BidPrice > 0 && cash < quote.BidPrice*buyQty {
-		buyQty = cash / quote.BidPrice
+	// キャンセル
+	for _, id := range state.buyIDs {
+		cancelOrder(client, cfg.RequestTimeout, cfg.AssetID, id)
 	}
-	sellQty := cfg.Quantity
-	if inventory < sellQty {
-		sellQty = inventory
+	for _, id := range state.sellIDs {
+		cancelOrder(client, cfg.RequestTimeout, cfg.AssetID, id)
 	}
-
-	cancelOrder(client, cfg.RequestTimeout, cfg.AssetID, state.buyID)
-	cancelOrder(client, cfg.RequestTimeout, cfg.AssetID, state.sellID)
+	state.buyIDs = nil
+	state.sellIDs = nil
 
 	submitOrder := func(req bots.OrderRequest) (*engine.Order, error) {
 		if req.Quantity <= 0 {
@@ -115,48 +121,72 @@ func runOnce(client *bots.APIClient, cfg config, state *orderState) error {
 		return client.SubmitOrder(ctxSubmit, req)
 	}
 
-	if buyQty > 0 {
-		buyReq := bots.OrderRequest{
-			AssetID:  cfg.AssetID,
-			UserID:   cfg.UserID,
-			Side:     "BUY",
-			Type:     "LIMIT",
-			Quantity: buyQty,
-			Price:    quote.BidPrice,
+	levels := 5
+	// 保有株式を全量売り注文にする（板の厚さに応じて分散）
+	if inventory > 0 {
+		sellQty := inventory / int64(levels)
+		rem := inventory % int64(levels)
+		for i := 1; i <= levels; i++ {
+			qty := sellQty
+			if i == levels {
+				qty += rem
+			}
+			if qty > 0 {
+				spreadMultiplier := float64(i) * float64(cfg.SpreadBps) / 10000.0
+				askPrice := int64(math.Round(float64(midPrice) * (1.0 + spreadMultiplier/2.0)))
+				if askPrice <= midPrice {
+					askPrice = midPrice + int64(i)
+				}
+				sellReq := bots.OrderRequest{
+					AssetID:  cfg.AssetID,
+					UserID:   cfg.UserID,
+					Side:     "SELL",
+					Type:     "LIMIT",
+					Quantity: qty,
+					Price:    askPrice,
+				}
+				if order, err := submitOrder(sellReq); err == nil {
+					state.sellIDs = append(state.sellIDs, order.ID)
+					log.Printf("sell order placed id=%d price=%d qty=%d", order.ID, order.Price, order.Quantity)
+				} else {
+					log.Printf("submit sell order failed: %v", err)
+				}
+			}
 		}
-		if order, err := submitOrder(buyReq); err != nil {
-			log.Printf("submit buy order failed: %v", err)
-			state.buyID = 0
-		} else {
-			state.buyID = order.ID
-			log.Printf("buy order placed id=%d price=%d qty=%d", order.ID, order.Price, order.Quantity)
-		}
-	} else {
-		state.buyID = 0
 	}
 
-	if sellQty > 0 {
-		sellReq := bots.OrderRequest{
-			AssetID:  cfg.AssetID,
-			UserID:   cfg.UserID,
-			Side:     "SELL",
-			Type:     "LIMIT",
-			Quantity: sellQty,
-			Price:    quote.AskPrice,
+	if cash > midPrice*int64(levels) {
+		cashPerLevel := cash / int64(levels)
+		for i := 1; i <= levels; i++ {
+			spreadMultiplier := float64(i) * float64(cfg.SpreadBps) / 10000.0
+			bidPrice := int64(math.Round(float64(midPrice) * (1.0 - spreadMultiplier/2.0)))
+			if bidPrice >= midPrice {
+				bidPrice = midPrice - int64(i)
+			}
+			if bidPrice < 1 {
+				bidPrice = 1
+			}
+			qty := cashPerLevel / bidPrice
+			if qty > 0 {
+				buyReq := bots.OrderRequest{
+					AssetID:  cfg.AssetID,
+					UserID:   cfg.UserID,
+					Side:     "BUY",
+					Type:     "LIMIT",
+					Quantity: qty,
+					Price:    bidPrice,
+				}
+				if order, err := submitOrder(buyReq); err == nil {
+					state.buyIDs = append(state.buyIDs, order.ID)
+					log.Printf("buy order placed id=%d price=%d qty=%d", order.ID, order.Price, order.Quantity)
+				} else {
+					log.Printf("submit buy order failed: %v", err)
+				}
+			}
 		}
-		if order, err := submitOrder(sellReq); err != nil {
-			log.Printf("submit sell order failed: %v", err)
-			state.sellID = 0
-		} else {
-			state.sellID = order.ID
-			log.Printf("sell order placed id=%d price=%d qty=%d", order.ID, order.Price, order.Quantity)
-		}
-	} else {
-		state.sellID = 0
 	}
 
-	state.lastBid = quote.BidPrice
-	state.lastAsk = quote.AskPrice
+	state.lastMid = midPrice
 	return nil
 }
 

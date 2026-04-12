@@ -87,7 +87,7 @@ type Balance struct {
 }
 
 type PortfolioAsset struct {
-	AssetID      int64 `json:"asset_id"`
+	Asset        Asset `json:"asset"`
 	Quantity     int64 `json:"quantity"`
 	AveragePrice int64 `json:"average_price,omitempty"`
 }

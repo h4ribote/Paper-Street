@@ -98,7 +98,7 @@ func runOnce(client *bots.APIClient, cfg config, rng *rand.Rand) {
 			cancelI()
 			var inventory int64
 			for _, a := range assets {
-				if a.AssetID == assetID {
+				if a.Asset.ID == assetID {
 					inventory = a.Quantity
 				}
 			}

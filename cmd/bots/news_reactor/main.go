@@ -77,7 +77,7 @@ func main() {
 		cancelI()
 		var inventory int64
 		for _, a := range assets {
-			if a.AssetID == event.AssetID {
+			if a.Asset.ID == event.AssetID {
 				inventory = a.Quantity
 				break
 			}

@@ -109,7 +109,7 @@ func runOnce(client *bots.APIClient, cfg config, state map[int64]*orderState) {
 		cancelI()
 		var inventory int64
 		for _, a := range assets {
-			if a.AssetID == assetID {
+			if a.Asset.ID == assetID {
 				inventory = a.Quantity
 				break
 			}

@@ -85,7 +85,7 @@ func runOnce(client *bots.APIClient, cfg config, state map[int64]*gridState) {
 		cancelAst()
 		var inventory int64
 		for _, a := range assets {
-			if a.AssetID == assetID {
+			if a.Asset.ID == assetID {
 				inventory = a.Quantity
 				break
 			}
@@ -95,7 +95,7 @@ func runOnce(client *bots.APIClient, cfg config, state map[int64]*gridState) {
 		entry.orderIDs = nil
 		entry.lastMid = mid
 		levels := bots.GridLevels(mid, cfg.StepBps, cfg.Levels)
-		
+
 		usedCash := int64(0)
 		usedInventory := int64(0)
 		placedCount := 0
