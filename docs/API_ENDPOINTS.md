@@ -9,9 +9,8 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
     *   HTTPヘッダー `X-API-Key` に20文字の16進数キーを指定します。
 *   `GET /health`
     *   稼働確認用のヘルスチェックです（認証不要）。
-*   `POST /auth/login` / `POST /auth/bot`
-    *   管理者用パスワードとボットの役割からAPIキーを取得します。
-    *   Body: `{ "role": "market_maker", "admin_password": "..." }`
+*   `GET /auth/discord/login`
+    *   Discord OAuthログインページへのリダイレクトを行います（フロントエンド用）。
 *   `GET /auth/callback`
     *   Discord OAuthの`code`を受け取り、DiscordユーザーIDに紐づくAPIキーを取得または発行します。
     *   Query: `code`
@@ -168,3 +167,9 @@ Paper Street のバックエンドAPIエンドポイント一覧です。
     *   保有しているIndexユニットを返還（償還）し、構成銘柄（現物バスケット）を受け取ります（Redemption）。
     *   **すべてのプレイヤーおよびBotが利用可能です。**
     *   Body: `quantity` (償還するIndexの単位数。デフォルトは1)、`user_id` (任意)。
+
+## 12. Bonds (債券)
+*   `GET /api/bonds`
+    *   債券の一覧を取得します。
+*   `GET /api/bonds/{bond_id}`
+    *   指定した債券の詳細情報、または関連する操作（購入、償還など）を行います。
