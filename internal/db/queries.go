@@ -31,15 +31,17 @@ type AssetSnapshot struct {
 }
 
 type CurrencyBalance struct {
-	UserID   int64
-	Currency string
-	Amount   int64
+	UserID       int64
+	Currency     string
+	Amount       int64
+	LockedAmount int64
 }
 
 type AssetBalance struct {
-	UserID   int64
-	AssetID  int64
-	Quantity int64
+	UserID         int64
+	AssetID        int64
+	Quantity       int64
+	LockedQuantity int64
 }
 
 type APIKeyRecord struct {
@@ -871,6 +873,20 @@ func (q *Queries) GetBalance(ctx context.Context, params models.GetBalanceParams
 	return amount, err
 }
 
+func (q *Queries) GetBalanceRecord(ctx context.Context, params models.GetBalanceParams) (CurrencyBalance, error) {
+	var cb CurrencyBalance
+	err := q.Conn.DB.QueryRowContext(ctx, `
+		SELECT cb.user_id, c.code, cb.amount, cb.locked_amount 
+		FROM currency_balances cb
+		JOIN currencies c ON cb.currency_id = c.currency_id
+		WHERE cb.user_id = ? AND c.code = ?
+	`, params.UserID, params.Currency).Scan(&cb.UserID, &cb.Currency, &cb.Amount, &cb.LockedAmount)
+	if err == sql.ErrNoRows {
+		return CurrencyBalance{UserID: params.UserID, Currency: params.Currency, Amount: 0, LockedAmount: 0}, nil
+	}
+	return cb, err
+}
+
 func (q *Queries) SetCurrencyBalance(ctx context.Context, userID, currencyID, amount int64) error {
 	if userID == 0 || currencyID == 0 {
 		return errors.New("user id and currency id required")
@@ -886,7 +902,7 @@ func (q *Queries) SetCurrencyBalance(ctx context.Context, userID, currencyID, am
 	return nil
 }
 
-func (q *Queries) AdjustCurrencyBalance(ctx context.Context, tx *sql.Tx, userID int64, currency string, delta int64) error {
+func (q *Queries) AdjustCurrencyBalance(ctx context.Context, tx *sql.Tx, userID int64, currency string, delta int64, lockedDelta int64) error {
 	var currencyID int64
 	var err error
 	query := "SELECT currency_id FROM currencies WHERE code = ? LIMIT 1"
@@ -900,38 +916,38 @@ func (q *Queries) AdjustCurrencyBalance(ctx context.Context, tx *sql.Tx, userID 
 	}
 
 	upsertQuery := `
-		INSERT INTO currency_balances (user_id, currency_id, amount, updated_at)
-		VALUES (?, ?, ?, ?)
-		ON DUPLICATE KEY UPDATE amount = amount + ?, updated_at = ?
+		INSERT INTO currency_balances (user_id, currency_id, amount, locked_amount, updated_at)
+		VALUES (?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE amount = amount + ?, locked_amount = locked_amount + ?, updated_at = ?
 	`
 	now := time.Now().UTC().UnixMilli()
 	if tx != nil {
-		_, err = tx.ExecContext(ctx, upsertQuery, userID, currencyID, delta, now, delta, now)
+		_, err = tx.ExecContext(ctx, upsertQuery, userID, currencyID, delta, lockedDelta, now, delta, lockedDelta, now)
 	} else {
-		_, err = q.Conn.DB.ExecContext(ctx, upsertQuery, userID, currencyID, delta, now, delta, now)
+		_, err = q.Conn.DB.ExecContext(ctx, upsertQuery, userID, currencyID, delta, lockedDelta, now, delta, lockedDelta, now)
 	}
 	return err
 }
 
-func (q *Queries) AdjustAssetBalance(ctx context.Context, tx *sql.Tx, userID int64, assetID int64, delta int64) error {
+func (q *Queries) AdjustAssetBalance(ctx context.Context, tx *sql.Tx, userID int64, assetID int64, delta int64, lockedDelta int64) error {
 	upsertQuery := `
-		INSERT INTO asset_balances (user_id, asset_id, quantity, average_price, average_acquired_at, updated_at)
-		VALUES (?, ?, ?, 0, 0, ?)
-		ON DUPLICATE KEY UPDATE quantity = quantity + ?, updated_at = ?
+		INSERT INTO asset_balances (user_id, asset_id, quantity, locked_quantity, average_price, average_acquired_at, updated_at)
+		VALUES (?, ?, ?, ?, 0, 0, ?)
+		ON DUPLICATE KEY UPDATE quantity = quantity + ?, locked_quantity = locked_quantity + ?, updated_at = ?
 	`
 	now := time.Now().UTC().UnixMilli()
 	var err error
 	if tx != nil {
-		_, err = tx.ExecContext(ctx, upsertQuery, userID, assetID, delta, now, delta, now)
+		_, err = tx.ExecContext(ctx, upsertQuery, userID, assetID, delta, lockedDelta, now, delta, lockedDelta, now)
 	} else {
-		_, err = q.Conn.DB.ExecContext(ctx, upsertQuery, userID, assetID, delta, now, delta, now)
+		_, err = q.Conn.DB.ExecContext(ctx, upsertQuery, userID, assetID, delta, lockedDelta, now, delta, lockedDelta, now)
 	}
 	return err
 }
 
 func (q *Queries) ListCurrencyBalances(ctx context.Context) ([]CurrencyBalance, error) {
 	rows, err := q.Conn.DB.QueryContext(ctx, `
-		SELECT cb.user_id, c.code, cb.amount
+		SELECT cb.user_id, c.code, cb.amount, cb.locked_amount
 		FROM currency_balances cb
 		JOIN currencies c ON c.currency_id = cb.currency_id
 	`)
@@ -942,7 +958,7 @@ func (q *Queries) ListCurrencyBalances(ctx context.Context) ([]CurrencyBalance, 
 	var balances []CurrencyBalance
 	for rows.Next() {
 		var balance CurrencyBalance
-		if err := rows.Scan(&balance.UserID, &balance.Currency, &balance.Amount); err != nil {
+		if err := rows.Scan(&balance.UserID, &balance.Currency, &balance.Amount, &balance.LockedAmount); err != nil {
 			return nil, err
 		}
 		balances = append(balances, balance)
@@ -1003,6 +1019,19 @@ func (q *Queries) GetPosition(ctx context.Context, params models.GetPositionPara
 	return qty, err
 }
 
+func (q *Queries) GetPositionRecord(ctx context.Context, params models.GetPositionParams) (AssetBalance, error) {
+	var ab AssetBalance
+	err := q.Conn.DB.QueryRowContext(ctx, `
+		SELECT user_id, asset_id, quantity, locked_quantity 
+		FROM asset_balances 
+		WHERE user_id = ? AND asset_id = ?
+	`, params.UserID, params.AssetID).Scan(&ab.UserID, &ab.AssetID, &ab.Quantity, &ab.LockedQuantity)
+	if err == sql.ErrNoRows {
+		return AssetBalance{UserID: params.UserID, AssetID: params.AssetID, Quantity: 0, LockedQuantity: 0}, nil
+	}
+	return ab, err
+}
+
 func (q *Queries) SetAssetBalance(ctx context.Context, userID, assetID, quantity int64) error {
 	if userID == 0 || assetID == 0 {
 		return errors.New("user id and asset id required")
@@ -1016,7 +1045,7 @@ func (q *Queries) SetAssetBalance(ctx context.Context, userID, assetID, quantity
 }
 
 func (q *Queries) ListAssetBalances(ctx context.Context) ([]AssetBalance, error) {
-	rows, err := q.Conn.DB.QueryContext(ctx, "SELECT user_id, asset_id, quantity FROM asset_balances")
+	rows, err := q.Conn.DB.QueryContext(ctx, "SELECT user_id, asset_id, quantity, locked_quantity FROM asset_balances")
 	if err != nil {
 		return nil, err
 	}
@@ -1024,7 +1053,7 @@ func (q *Queries) ListAssetBalances(ctx context.Context) ([]AssetBalance, error)
 	var balances []AssetBalance
 	for rows.Next() {
 		var balance AssetBalance
-		if err := rows.Scan(&balance.UserID, &balance.AssetID, &balance.Quantity); err != nil {
+		if err := rows.Scan(&balance.UserID, &balance.AssetID, &balance.Quantity, &balance.LockedQuantity); err != nil {
 			return nil, err
 		}
 		balances = append(balances, balance)

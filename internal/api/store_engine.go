@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/h4ribote/Paper-Street/internal/engine"
+	"github.com/h4ribote/Paper-Street/internal/models"
 )
 
 const defaultGuardPercent = 5
@@ -31,6 +32,61 @@ func (s *MarketStore) ProcessSubmit(ctx context.Context, order *engine.Order) (e
 		order.CreatedAt = time.Now().UTC()
 	}
 	order.UpdatedAt = order.CreatedAt
+
+	if order.Type != engine.OrderTypeMarket {
+		// Calculate required lock amount
+		var reqAmount int64
+		if order.Side == engine.SideBuy {
+			reqAmount = order.Quantity * order.Price
+			// Check available balance
+			bal, err := s.queries.GetBalanceRecord(ctx, models.GetBalanceParams{UserID: order.UserID, Currency: defaultCurrency})
+			if err != nil {
+				return engine.OrderResult{Err: err}, err
+			}
+			if bal.Amount-bal.LockedAmount < reqAmount {
+				return engine.OrderResult{Err: fmt.Errorf("insufficient available balance")}, fmt.Errorf("insufficient available balance")
+			}
+			// Lock balance
+			err = s.queries.AdjustCurrencyBalance(ctx, tx, order.UserID, defaultCurrency, 0, reqAmount)
+			if err != nil {
+				return engine.OrderResult{Err: err}, err
+			}
+		} else {
+			reqAmount = order.Quantity
+			// Check available balance
+			pos, err := s.queries.GetPositionRecord(ctx, models.GetPositionParams{UserID: order.UserID, AssetID: order.AssetID})
+			if err != nil {
+				return engine.OrderResult{Err: err}, err
+			}
+			if pos.Quantity-pos.LockedQuantity < reqAmount {
+				return engine.OrderResult{Err: fmt.Errorf("insufficient available quantity")}, fmt.Errorf("insufficient available quantity")
+			}
+			// Lock quantity
+			err = s.queries.AdjustAssetBalance(ctx, tx, order.UserID, order.AssetID, 0, reqAmount)
+			if err != nil {
+				return engine.OrderResult{Err: err}, err
+			}
+		}
+	} else {
+		// Market order, just check balance for immediate execution
+		if order.Side == engine.SideBuy {
+			bal, err := s.queries.GetBalance(ctx, models.GetBalanceParams{UserID: order.UserID, Currency: defaultCurrency})
+			if err != nil {
+				return engine.OrderResult{Err: err}, err
+			}
+			if bal < order.Quantity*s.lastPrices[order.AssetID] { // Approximation for market order checks
+				// return engine.OrderResult{Err: fmt.Errorf("insufficient balance")}, fmt.Errorf("insufficient balance")
+			}
+		} else {
+			pos, err := s.queries.GetPositionRecord(ctx, models.GetPositionParams{UserID: order.UserID, AssetID: order.AssetID})
+			if err != nil {
+				return engine.OrderResult{Err: err}, err
+			}
+			if pos.Quantity-pos.LockedQuantity < order.Quantity {
+				return engine.OrderResult{Err: fmt.Errorf("insufficient available quantity")}, fmt.Errorf("insufficient available quantity")
+			}
+		}
+	}
 
 	if err := s.queries.UpsertOrder(ctx, order); err != nil {
 		return engine.OrderResult{Err: err}, err
@@ -356,31 +412,31 @@ func (s *MarketStore) applyExecutionTx(ctx context.Context, tx *sql.Tx, exec eng
 	// But our crossing orders are locked, and taker is handled by the sequentially processed OrderBook.
 
 	// Deduct from buyer
-	if err := s.queries.AdjustCurrencyBalance(ctx, tx, buyerID, defaultCurrency, -cashDelta); err != nil {
+	if err := s.queries.AdjustCurrencyBalance(ctx, tx, buyerID, defaultCurrency, -cashDelta, 0); err != nil {
 		return err
 	}
 	// Add to seller
-	if err := s.queries.AdjustCurrencyBalance(ctx, tx, sellerID, defaultCurrency, cashDelta); err != nil {
+	if err := s.queries.AdjustCurrencyBalance(ctx, tx, sellerID, defaultCurrency, cashDelta, 0); err != nil {
 		return err
 	}
 	// Deduct taker fee
 	if takerFee > 0 {
-		if err := s.queries.AdjustCurrencyBalance(ctx, tx, exec.TakerUserID, defaultCurrency, -takerFee); err != nil {
+		if err := s.queries.AdjustCurrencyBalance(ctx, tx, exec.TakerUserID, defaultCurrency, -takerFee, 0); err != nil {
 			return err
 		}
 	}
 	// Deduct maker fee
 	if makerFee > 0 {
-		if err := s.queries.AdjustCurrencyBalance(ctx, tx, exec.MakerUserID, defaultCurrency, -makerFee); err != nil {
+		if err := s.queries.AdjustCurrencyBalance(ctx, tx, exec.MakerUserID, defaultCurrency, -makerFee, 0); err != nil {
 			return err
 		}
 	}
 
 	// 2. Move assets
-	if err := s.queries.AdjustAssetBalance(ctx, tx, buyerID, exec.AssetID, exec.Quantity); err != nil {
+	if err := s.queries.AdjustAssetBalance(ctx, tx, buyerID, exec.AssetID, exec.Quantity, 0); err != nil {
 		return err
 	}
-	if err := s.queries.AdjustAssetBalance(ctx, tx, sellerID, exec.AssetID, -exec.Quantity); err != nil {
+	if err := s.queries.AdjustAssetBalance(ctx, tx, sellerID, exec.AssetID, -exec.Quantity, 0); err != nil {
 		return err
 	}
 

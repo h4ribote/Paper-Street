@@ -654,7 +654,7 @@ func (s *MarketStore) updateBalanceLocked(userID int64, currency string, delta i
 	}
 	ctx, cancel := s.dbContext()
 	defer cancel()
-	_ = s.queries.AdjustCurrencyBalance(ctx, nil, userID, currency, delta)
+	_ = s.queries.AdjustCurrencyBalance(ctx, nil, userID, currency, delta, 0)
 }
 
 func (s *MarketStore) GetBalance(userID int64, currency string) int64 {
@@ -684,7 +684,7 @@ func (s *MarketStore) UpdateBalance(userID int64, currency string, delta int64) 
 	}
 	ctx, cancel := s.dbContext()
 	defer cancel()
-	return s.queries.AdjustCurrencyBalance(ctx, nil, userID, currency, delta)
+	return s.queries.AdjustCurrencyBalance(ctx, nil, userID, currency, delta, 0)
 }
 
 func (s *MarketStore) SetBalance(userID int64, currency string, amount int64) error {
@@ -698,7 +698,7 @@ func (s *MarketStore) SetBalance(userID int64, currency string, amount int64) er
 	ctx, cancel := s.dbContext()
 	defer cancel()
 	current := s.GetBalance(userID, currency)
-	return s.queries.AdjustCurrencyBalance(ctx, nil, userID, currency, amount-current)
+	return s.queries.AdjustCurrencyBalance(ctx, nil, userID, currency, amount-current, 0)
 }
 
 func (s *MarketStore) getPositionLocked(userID int64, assetID int64) int64 {
@@ -738,7 +738,7 @@ func (s *MarketStore) UpdatePosition(userID int64, assetID int64, delta int64) e
 	}
 	ctx, cancel := s.dbContext()
 	defer cancel()
-	return s.queries.AdjustAssetBalance(ctx, nil, userID, assetID, delta)
+	return s.queries.AdjustAssetBalance(ctx, nil, userID, assetID, delta, 0)
 }
 func (s *MarketStore) setPositionLocked(userID int64, assetID int64, amount int64) {
 	if s.queries == nil {
@@ -832,7 +832,7 @@ func (s *MarketStore) AddUser(username string) models.User {
 	defer cancel()
 	_ = s.queries.UpsertUser(ctx, user, time.Now().UTC())
 	// Set initial balance
-	_ = s.queries.AdjustCurrencyBalance(ctx, nil, user.ID, defaultCurrency, defaultCashBalance)
+	_ = s.queries.AdjustCurrencyBalance(ctx, nil, user.ID, defaultCurrency, defaultCashBalance, 0)
 	return user
 }
 
@@ -853,7 +853,7 @@ func (s *MarketStore) EnsureUser(userID int64) models.User {
 		ctx, cancel := s.dbContext()
 		defer cancel()
 		_ = s.queries.UpsertUser(ctx, user, time.Now().UTC())
-		_ = s.queries.AdjustCurrencyBalance(ctx, nil, user.ID, defaultCurrency, defaultCashBalance)
+		_ = s.queries.AdjustCurrencyBalance(ctx, nil, user.ID, defaultCurrency, defaultCashBalance, 0)
 	} else {
 		s.testUsers[userID] = user
 		if s.testBalances[userID] == nil {
@@ -892,7 +892,7 @@ func (s *MarketStore) EnsureUserWithName(userID int64, username string) models.U
 		ctx, cancel := s.dbContext()
 		defer cancel()
 		_ = s.queries.UpsertUser(ctx, user, time.Now().UTC())
-		_ = s.queries.AdjustCurrencyBalance(ctx, nil, user.ID, defaultCurrency, defaultCashBalance)
+		_ = s.queries.AdjustCurrencyBalance(ctx, nil, user.ID, defaultCurrency, defaultCashBalance, 0)
 	} else {
 		s.testUsers[userID] = user
 		if s.testBalances[userID] == nil {

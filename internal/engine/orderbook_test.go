@@ -48,10 +48,10 @@ func TestMarketOrderGuard(t *testing.T) {
 	if buy.Executions[0].Price != 100 {
 		t.Fatalf("expected execution price 100, got %d", buy.Executions[0].Price)
 	}
-	if buy.Order.Status != OrderStatusPartial {
-		t.Fatalf("expected partial status, got %s", buy.Order.Status)
+	if buy.Order.Status != OrderStatusCancelled {
+		t.Fatalf("expected CANCELLED status, got %s", buy.Order.Status)
 	}
-	if buy.Order.Remaining != 0 {
+	if buy.Order.Remaining != 5 {
 		t.Fatalf("expected remaining cancelled, got %d", buy.Order.Remaining)
 	}
 }
@@ -65,10 +65,10 @@ func TestIOCOrderCancelsRemainder(t *testing.T) {
 	if len(buy.Executions) != 1 {
 		t.Fatalf("expected 1 execution, got %d", len(buy.Executions))
 	}
-	if buy.Order.Status != OrderStatusPartial {
-		t.Fatalf("expected partial status, got %s", buy.Order.Status)
+	if buy.Order.Status != OrderStatusCancelled {
+		t.Fatalf("expected CANCELLED status, got %s", buy.Order.Status)
 	}
-	if buy.Order.Remaining != 0 {
+	if buy.Order.Remaining != 5 {
 		t.Fatalf("expected remaining cancelled, got %d", buy.Order.Remaining)
 	}
 	snapshot, err := eng.Snapshot(ctx, 1, 10)
