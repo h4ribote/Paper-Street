@@ -388,7 +388,7 @@ func TestHandleOrderBookDepthLimit(t *testing.T) {
 	}
 }
 
-func TestMarketOrderCooldown(t *testing.T) {
+func TestMarketVolatilityCooldown(t *testing.T) {
 	store := NewMarketStore()
 	apiKeys := auth.NewAPIKeyCache()
 	if err := apiKeys.AddHex(testAPIKeyUser1); err != nil {
@@ -412,7 +412,7 @@ func TestMarketOrderCooldown(t *testing.T) {
 		UserID:   2,
 		Side:     "SELL",
 		Type:     "LIMIT",
-		Quantity: 10,
+		Quantity: 1,
 		Price:    100,
 	})
 	submitOrder(t, server.URL, testAPIKeyUser1, orderRequest{
@@ -422,6 +422,24 @@ func TestMarketOrderCooldown(t *testing.T) {
 		Type:     "MARKET",
 		Quantity: 1,
 	})
+
+	submitOrder(t, server.URL, testAPIKeyUser2, orderRequest{
+		AssetID:  101,
+		UserID:   2,
+		Side:     "SELL",
+		Type:     "LIMIT",
+		Quantity: 1,
+		Price:    110,
+	})
+	submitOrder(t, server.URL, testAPIKeyUser1, orderRequest{
+		AssetID:  101,
+		UserID:   1,
+		Side:     "BUY",
+		Type:     "MARKET",
+		Quantity: 1,
+	})
+
+	time.Sleep(100 * time.Millisecond)
 
 	payload, err := json.Marshal(orderRequest{
 		AssetID:  101,
@@ -451,15 +469,8 @@ func TestMarketOrderCooldown(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		t.Fatalf("failed to decode error response: %v", err)
 	}
-	if !strings.Contains(response.Error, "retry in ") {
+	if !strings.Contains(response.Error, "retry in 10 seconds") {
 		t.Fatalf("expected retry message, got %q", response.Error)
-	}
-	var retrySeconds int
-	if _, err := fmt.Sscanf(response.Error, "market order cooldown active, retry in %d seconds", &retrySeconds); err != nil {
-		t.Fatalf("expected retry seconds in message, got %q", response.Error)
-	}
-	if retrySeconds <= 0 {
-		t.Fatalf("expected positive retry seconds, got %d", retrySeconds)
 	}
 }
 

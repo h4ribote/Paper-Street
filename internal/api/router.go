@@ -33,7 +33,7 @@ func NewRouter(e *engine.Engine, apiKeys *auth.APIKeyCache, store *MarketStore, 
 		WSHub:          hub,
 		AdminPassword:  adminPassword,
 		DiscordState:   discordState,
-		marketCooldown: make(map[marketCooldownKey]time.Time),
+		marketCooldown: make(map[int64]time.Time),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", srv.handleHealth)
