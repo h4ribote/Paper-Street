@@ -36,10 +36,11 @@ func (s *MarketStore) ProcessSubmit(ctx context.Context, order *engine.Order) (e
 	if order.Type != engine.OrderTypeMarket {
 		// Calculate required lock amount
 		var reqAmount int64
+		quoteCurrency := s.QuoteCurrency(order.AssetID)
 		if order.Side == engine.SideBuy {
 			reqAmount = order.Quantity * order.Price
 			// Check available balance
-			bal, err := s.queries.GetBalanceRecord(ctx, models.GetBalanceParams{UserID: order.UserID, Currency: defaultCurrency})
+			bal, err := s.queries.GetBalanceRecord(ctx, models.GetBalanceParams{UserID: order.UserID, Currency: quoteCurrency})
 			if err != nil {
 				return engine.OrderResult{Err: err}, err
 			}
@@ -47,7 +48,7 @@ func (s *MarketStore) ProcessSubmit(ctx context.Context, order *engine.Order) (e
 				return engine.OrderResult{Err: fmt.Errorf("insufficient available balance")}, fmt.Errorf("insufficient available balance")
 			}
 			// Lock balance
-			err = s.queries.AdjustCurrencyBalance(ctx, tx, order.UserID, defaultCurrency, 0, reqAmount)
+			err = s.queries.AdjustCurrencyBalance(ctx, tx, order.UserID, quoteCurrency, 0, reqAmount)
 			if err != nil {
 				return engine.OrderResult{Err: err}, err
 			}
@@ -68,9 +69,10 @@ func (s *MarketStore) ProcessSubmit(ctx context.Context, order *engine.Order) (e
 			}
 		}
 	} else {
+		quoteCurrency := s.QuoteCurrency(order.AssetID)
 		// Market order, just check balance for immediate execution
 		if order.Side == engine.SideBuy {
-			bal, err := s.queries.GetBalance(ctx, models.GetBalanceParams{UserID: order.UserID, Currency: defaultCurrency})
+			bal, err := s.queries.GetBalance(ctx, models.GetBalanceParams{UserID: order.UserID, Currency: quoteCurrency})
 			if err != nil {
 				return engine.OrderResult{Err: err}, err
 			}
@@ -407,27 +409,29 @@ func (s *MarketStore) applyExecutionTx(ctx context.Context, tx *sql.Tx, exec eng
 		sellerID = exec.TakerUserID
 	}
 
+	quoteCurrency := s.QuoteCurrency(exec.AssetID)
+
 	// 1. Funds check and Move cash
 	// In a real system, we fetch buyer balance from DB with FOR UPDATE if not already locked
 	// But our crossing orders are locked, and taker is handled by the sequentially processed OrderBook.
 
 	// Deduct from buyer
-	if err := s.queries.AdjustCurrencyBalance(ctx, tx, buyerID, defaultCurrency, -cashDelta, 0); err != nil {
+	if err := s.queries.AdjustCurrencyBalance(ctx, tx, buyerID, quoteCurrency, -cashDelta, 0); err != nil {
 		return err
 	}
 	// Add to seller
-	if err := s.queries.AdjustCurrencyBalance(ctx, tx, sellerID, defaultCurrency, cashDelta, 0); err != nil {
+	if err := s.queries.AdjustCurrencyBalance(ctx, tx, sellerID, quoteCurrency, cashDelta, 0); err != nil {
 		return err
 	}
 	// Deduct taker fee
 	if takerFee > 0 {
-		if err := s.queries.AdjustCurrencyBalance(ctx, tx, exec.TakerUserID, defaultCurrency, -takerFee, 0); err != nil {
+		if err := s.queries.AdjustCurrencyBalance(ctx, tx, exec.TakerUserID, quoteCurrency, -takerFee, 0); err != nil {
 			return err
 		}
 	}
 	// Deduct maker fee
 	if makerFee > 0 {
-		if err := s.queries.AdjustCurrencyBalance(ctx, tx, exec.MakerUserID, defaultCurrency, -makerFee, 0); err != nil {
+		if err := s.queries.AdjustCurrencyBalance(ctx, tx, exec.MakerUserID, quoteCurrency, -makerFee, 0); err != nil {
 			return err
 		}
 	}
@@ -705,10 +709,13 @@ func (s *MarketStore) applyExecutionInMemory(exec engine.Execution, takerSide en
 		buyerID = exec.MakerUserID
 		sellerID = exec.TakerUserID
 	}
-	s.updateBalanceLocked(buyerID, defaultCurrency, -cashDelta)
-	s.updateBalanceLocked(sellerID, defaultCurrency, cashDelta)
-	s.updateBalanceLocked(exec.TakerUserID, defaultCurrency, -takerFee)
-	s.updateBalanceLocked(exec.MakerUserID, defaultCurrency, -makerFee)
+
+	quoteCurrency := s.quoteCurrencyLocked(exec.AssetID)
+
+	s.updateBalanceLocked(buyerID, quoteCurrency, -cashDelta)
+	s.updateBalanceLocked(sellerID, quoteCurrency, cashDelta)
+	s.updateBalanceLocked(exec.TakerUserID, quoteCurrency, -takerFee)
+	s.updateBalanceLocked(exec.MakerUserID, quoteCurrency, -makerFee)
 	s.setPositionLocked(buyerID, exec.AssetID, s.getPositionLocked(buyerID, exec.AssetID)+exec.Quantity)
 	s.setPositionLocked(sellerID, exec.AssetID, s.getPositionLocked(sellerID, exec.AssetID)-exec.Quantity)
 	now := exec.OccurredAtUTC.UnixMilli()

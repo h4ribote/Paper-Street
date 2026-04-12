@@ -361,10 +361,11 @@ type Region struct {
 }
 
 type Company struct {
-	ID     int64  `json:"id"`
-	Name   string `json:"name"`
-	Symbol string `json:"symbol"`
-	Sector string `json:"sector"`
+	ID      int64  `json:"id"`
+	Name    string `json:"name"`
+	Symbol  string `json:"symbol"`
+	Sector  string `json:"sector"`
+	Country string `json:"country,omitempty"`
 }
 
 type WorldEvent struct {
@@ -672,6 +673,28 @@ func (s *MarketStore) GetBalance(userID int64, currency string) int64 {
 		userID, currency,
 	).Scan(&amount)
 	return amount
+}
+
+func (s *MarketStore) QuoteCurrency(assetID int64) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.quoteCurrencyLocked(assetID)
+}
+
+func (s *MarketStore) quoteCurrencyLocked(assetID int64) string {
+	if state, ok := s.companyStates[assetID]; ok {
+		return currencyForCountry(state.Country, defaultCurrency)
+	}
+	if s.queries == nil {
+		if b, ok := s.testPerpetualBonds[assetID]; ok {
+			return currencyForCountry(b.IssuerCountry, defaultCurrency)
+		}
+	} else {
+		if b, ok := s.perpetualBonds[assetID]; ok {
+			return currencyForCountry(b.IssuerCountry, defaultCurrency)
+		}
+	}
+	return defaultCurrency
 }
 
 func (s *MarketStore) UpdateBalance(userID int64, currency string, delta int64) error {
