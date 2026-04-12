@@ -304,10 +304,10 @@ func (s *MarketStore) performMatchingTx(ctx context.Context, tx *sql.Tx, order *
 	if order.Type == engine.OrderTypeMarket || order.TimeInForce == engine.TimeInForceIOC || order.TimeInForce == engine.TimeInForceFOK {
 		if order.Remaining > 0 {
 			order.Status = engine.OrderStatusCancelled
-			if len(executions) > 0 {
-				order.Status = engine.OrderStatusPartial
+			if order.TimeInForce == engine.TimeInForceFOK && len(executions) > 0 {
+				// FOK should have rolled back earlier if not fully matched
+				// but just in case
 			}
-			order.Remaining = 0
 		}
 	}
 	_ = s.queries.UpdateOrderTx(ctx, tx, order)
@@ -611,10 +611,6 @@ func (s *MarketStore) processSubmitInMemory(order *engine.Order) engine.OrderRes
 	if order.Type == engine.OrderTypeMarket || order.TimeInForce == engine.TimeInForceIOC || order.TimeInForce == engine.TimeInForceFOK {
 		if order.Remaining > 0 {
 			order.Status = engine.OrderStatusCancelled
-			if len(executions) > 0 {
-				order.Status = engine.OrderStatusPartial
-			}
-			order.Remaining = 0
 		}
 	}
 

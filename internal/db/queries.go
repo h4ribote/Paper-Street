@@ -537,9 +537,9 @@ func (q *Queries) UpsertOrder(ctx context.Context, order *engine.Order) error {
 	if filled < 0 {
 		filled = 0
 	}
-	_, err := q.Conn.DB.ExecContext(ctx, `
+	res, err := q.Conn.DB.ExecContext(ctx, `
 		INSERT INTO orders (order_id, user_id, asset_id, side, type, quantity, price, stop_price, filled_quantity, status, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (NULLIF(?, 0), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE user_id = VALUES(user_id),
 			asset_id = VALUES(asset_id),
 			side = VALUES(side),
@@ -553,6 +553,12 @@ func (q *Queries) UpsertOrder(ctx context.Context, order *engine.Order) error {
 	`, order.ID, order.UserID, order.AssetID, order.Side, order.Type, order.Quantity, order.Price, order.StopPrice, filled, order.Status, createdAt.UnixMilli(), updatedAt.UnixMilli())
 	if err != nil {
 		return err
+	}
+	if order.ID == 0 {
+		id, err := res.LastInsertId()
+		if err == nil && id > 0 {
+			order.ID = id
+		}
 	}
 	return nil
 }

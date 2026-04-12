@@ -348,12 +348,7 @@ func (s *testStorage) ProcessSubmit(ctx context.Context, order *Order) (OrderRes
 	// Time in Force logic
 	if order.Remaining > 0 {
 		if order.Type == OrderTypeMarket || order.TimeInForce == TimeInForceIOC {
-			status := OrderStatusCancelled
-			if len(executions) > 0 {
-				status = OrderStatusPartial
-			}
-			order.Status = status
-			order.Remaining = 0
+			order.Status = OrderStatusCancelled
 		} else if order.TimeInForce == TimeInForceFOK {
 			// Rollback FOK if not fully filled
 			for _, exec := range executions {
