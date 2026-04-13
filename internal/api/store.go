@@ -1948,6 +1948,21 @@ func (s *MarketStore) Leaderboard(limit int) []LeaderboardEntry {
 }
 
 func (s *MarketStore) seedAssets() {
+	// Seed a resource if DB is available
+	if s.queries != nil {
+		ctx, cancel := s.dbContext()
+		resourceType := db.ResourceRecord{
+			Name:        "Aurora Rare Metals",
+			Type:        "METAL",
+			Description: "Highly sought after for tech industries.",
+		}
+		resID, _ := s.queries.InsertResource(ctx, resourceType)
+		cancel()
+		if resID > 0 {
+			log.Printf("Seeded resource ID: %d", resID)
+		}
+	}
+
 	seeds := []struct {
 		asset     models.Asset
 		basePrice int64
@@ -2442,6 +2457,19 @@ func (s *MarketStore) persistExecution(snapshot executionSnapshot) {
 	if err := s.queries.SetAssetBalance(ctx, snapshot.Seller.UserID, snapshot.Execution.AssetID, snapshot.Seller.Quantity); err != nil {
 		log.Printf("db set asset balance %d: %v", snapshot.Seller.UserID, err)
 	}
+
+	// 1-minute candle update
+	openTime := snapshot.Execution.OccurredAtUTC.UnixMilli() / 60000 * 60000
+	_ = s.queries.UpsertMarketCandle(ctx, db.MarketCandleRecord{
+		AssetID:   snapshot.Execution.AssetID,
+		Timeframe: "1M",
+		OpenTime:  openTime,
+		Open:      snapshot.Execution.Price,
+		High:      snapshot.Execution.Price,
+		Low:       snapshot.Execution.Price,
+		Close:     snapshot.Execution.Price,
+		Volume:    snapshot.Execution.Quantity,
+	})
 }
 
 func normalizeUser(user models.User, fallbackID int64) models.User {

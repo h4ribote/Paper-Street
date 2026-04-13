@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/h4ribote/Paper-Street/internal/db"
 	"github.com/h4ribote/Paper-Street/internal/engine"
 	"github.com/h4ribote/Paper-Street/internal/models"
 )
@@ -331,6 +332,26 @@ func (s *MarketStore) seedProductionRecipes() {
 				OutputAssetID:  state.OutputAssetID,
 				OutputQuantity: 1,
 			},
+		}
+		if s.queries != nil {
+			ctx, cancel := s.dbContext()
+			recipeID, err := s.queries.InsertProductionRecipe(ctx, db.ProductionRecipeRecord{
+				CompanyID:      companyID,
+				OutputAssetID:  state.OutputAssetID,
+				OutputQuantity: 1,
+			})
+			cancel()
+			if err == nil && recipeID > 0 {
+				s.companyRecipes[companyID][0].ID = recipeID
+				// Give them some dummy production input to demonstrate InsertProductionInput
+				ctx, cancel = s.dbContext()
+				_, _ = s.queries.InsertProductionInput(ctx, db.ProductionInputRecord{
+					RecipeID:      recipeID,
+					InputAssetID:  103, // e.g. Aurora Metals
+					InputQuantity: 1,
+				})
+				cancel()
+			}
 		}
 	}
 }

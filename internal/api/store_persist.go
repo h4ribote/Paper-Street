@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/h4ribote/Paper-Street/internal/db"
+	"github.com/h4ribote/Paper-Street/internal/models"
 )
 
 func (s *MarketStore) ensureCurrencyID(currency string) int64 {
@@ -40,6 +41,22 @@ func (s *MarketStore) persistCurrencyBalance(userID int64, currency string, amou
 	}
 	ctx, cancel := s.dbContext()
 	defer cancel()
+	
+	val, err := s.queries.GetBalance(ctx, models.GetBalanceParams{UserID: userID, Currency: currency})
+	delta := amount - val
+	if err == nil && delta != 0 {
+		_ = s.queries.InsertTransactionLog(ctx, nil, db.TransactionLogRecord{
+			UserID:       userID,
+			CurrencyID:   currencyID,
+			Amount:       delta,
+			BalanceAfter: amount,
+			Type:         "BALANCE_UPDATE",
+			ReferenceID:  "SYNC",
+			Description:  "Currency balance persisted",
+			CreatedAt:    time.Now().UnixMilli(),
+		})
+	}
+	
 	if err := s.queries.SetCurrencyBalance(ctx, userID, currencyID, amount); err != nil {
 		log.Printf("db set currency balance %d/%s: %v", userID, currency, err)
 	}

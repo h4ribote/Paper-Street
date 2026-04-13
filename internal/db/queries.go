@@ -2129,11 +2129,10 @@ func (q *Queries) UpsertMarketCandle(ctx context.Context, record MarketCandleRec
 		INSERT INTO market_candles (asset_id, timeframe, open_time, open, high, low, close, volume)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
-			open = VALUES(open),
-			high = VALUES(high),
-			low = VALUES(low),
+			high = GREATEST(high, VALUES(high)),
+			low = LEAST(low, VALUES(low)),
 			close = VALUES(close),
-			volume = VALUES(volume)
+			volume = volume + VALUES(volume)
 	`
 	_, err := q.Conn.DB.ExecContext(ctx, query, record.AssetID, record.Timeframe, record.OpenTime, record.Open, record.High, record.Low, record.Close, record.Volume)
 	return err
