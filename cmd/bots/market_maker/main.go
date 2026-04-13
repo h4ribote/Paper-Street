@@ -38,26 +38,65 @@ func main() {
 		log.Fatalf("config error: %v", err)
 	}
 	client := bots.NewAPIClient(cfg.BaseURL, cfg.APIKey, cfg.RequestTimeout)
-	state := &orderState{}
-	if err := runOnce(client, cfg, state); err != nil {
+
+	states := make(map[int64]*orderState)
+
+	if err := runCycle(client, cfg, states); err != nil {
 		log.Printf("initial cycle error: %v", err)
 	}
 	ticker := time.NewTicker(cfg.RefreshInterval)
 	defer ticker.Stop()
 	for range ticker.C {
-		if err := runOnce(client, cfg, state); err != nil {
+		if err := runCycle(client, cfg, states); err != nil {
 			log.Printf("cycle error: %v", err)
 		}
 	}
 }
 
-func runOnce(client *bots.APIClient, cfg config, state *orderState) error {
+func runCycle(client *bots.APIClient, cfg config, states map[int64]*orderState) error {
+	ctxAssets, cancelAst := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+	assets, err := client.PortfolioAssets(ctxAssets, cfg.UserID)
+	cancelAst()
+	if err != nil {
+		return err
+	}
+
+	ctxBalances, cancelBal := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+	balances, _ := client.Balances(ctxBalances, cfg.UserID)
+	cancelBal()
+	var totalCash int64
+	for _, b := range balances {
+		if b.Currency == "ARC" {
+			totalCash = b.Amount
+			break
+		}
+	}
+
+	if len(assets) == 0 {
+		return nil
+	}
+
+	cashPerAsset := totalCash / int64(len(assets))
+
+	for _, a := range assets {
+		assetID := a.Asset.ID
+		if states[assetID] == nil {
+			states[assetID] = &orderState{}
+		}
+		if err := runOnceForAsset(client, cfg, states[assetID], assetID, a.Quantity, cashPerAsset); err != nil {
+			log.Printf("asset %d cycle error: %v", assetID, err)
+		}
+	}
+	return nil
+}
+
+func runOnceForAsset(client *bots.APIClient, cfg config, state *orderState, assetID int64, inventory int64, cash int64) error {
 	if client == nil || state == nil {
 		return errors.New("missing client or state")
 	}
 	var snapshot engine.OrderBookSnapshot
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.RequestTimeout)
-	orderbook, err := client.OrderBook(ctx, cfg.AssetID, cfg.Depth)
+	orderbook, err := client.OrderBook(ctx, assetID, cfg.Depth)
 	cancel()
 	if err != nil {
 		log.Printf("orderbook fetch failed: %v (using fallback price)", err)
@@ -80,34 +119,12 @@ func runOnce(client *bots.APIClient, cfg config, state *orderState) error {
 		return nil
 	}
 
-	ctxBalances, cancelBal := context.WithTimeout(context.Background(), cfg.RequestTimeout)
-	balances, _ := client.Balances(ctxBalances, cfg.UserID)
-	cancelBal()
-	var cash int64
-	for _, b := range balances {
-		if b.Currency == "ARC" {
-			cash = b.Amount
-			break
-		}
-	}
-
-	ctxAssets, cancelAst := context.WithTimeout(context.Background(), cfg.RequestTimeout)
-	assets, _ := client.PortfolioAssets(ctxAssets, cfg.UserID)
-	cancelAst()
-	var inventory int64
-	for _, a := range assets {
-		if a.Asset.ID == cfg.AssetID {
-			inventory = a.Quantity
-			break
-		}
-	}
-
 	// キャンセル
 	for _, id := range state.buyIDs {
-		cancelOrder(client, cfg.RequestTimeout, cfg.AssetID, id)
+		cancelOrder(client, cfg.RequestTimeout, assetID, id)
 	}
 	for _, id := range state.sellIDs {
-		cancelOrder(client, cfg.RequestTimeout, cfg.AssetID, id)
+		cancelOrder(client, cfg.RequestTimeout, assetID, id)
 	}
 	state.buyIDs = nil
 	state.sellIDs = nil
@@ -138,7 +155,7 @@ func runOnce(client *bots.APIClient, cfg config, state *orderState) error {
 					askPrice = midPrice + int64(i)
 				}
 				sellReq := bots.OrderRequest{
-					AssetID:  cfg.AssetID,
+					AssetID:  assetID,
 					UserID:   cfg.UserID,
 					Side:     "SELL",
 					Type:     "LIMIT",
@@ -169,7 +186,7 @@ func runOnce(client *bots.APIClient, cfg config, state *orderState) error {
 			qty := cashPerLevel / bidPrice
 			if qty > 0 {
 				buyReq := bots.OrderRequest{
-					AssetID:  cfg.AssetID,
+					AssetID:  assetID,
 					UserID:   cfg.UserID,
 					Side:     "BUY",
 					Type:     "LIMIT",

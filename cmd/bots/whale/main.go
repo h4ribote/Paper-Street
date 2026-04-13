@@ -86,10 +86,11 @@ func runOnce(client *bots.APIClient, cfg config, state *executionState) {
 		volume += candle.Volume
 	}
 	mid := bots.MidPrice(snapshot, 0)
-	if mid == 0 {
+	if mid <= 1 {
 		mid = bots.VWAP(candles)
 	}
-	if mid == 0 {
+	if mid <= 1 {
+		log.Printf("whale: skipping order asset=%d due to lack of pricing data", cfg.AssetID)
 		return
 	}
 	impactPrice := bots.ImpactAdjustedPrice(mid, sigma, sliceQty, volume, cfg.Gamma, cfg.Side)
