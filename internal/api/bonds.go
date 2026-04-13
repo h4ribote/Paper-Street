@@ -289,7 +289,7 @@ func (s *MarketStore) registerPerpetualBondLocked(def PerpetualBondDefinition, n
 	if asset.Symbol == "" || strings.HasPrefix(asset.Symbol, "ASSET-") {
 		asset.Symbol = fmt.Sprintf("BOND-%d", def.AssetID)
 	}
-	
+
 	s.updateAssetLocked(asset, defaultAssetPrice)
 
 	currency := currencyForCountry(def.IssuerCountry, defaultCurrency)
@@ -318,7 +318,7 @@ func (s *MarketStore) seedPerpetualBonds(now time.Time) {
 				seed.Asset.Name = asset.Name
 			}
 		}
-		
+
 		if s.queries != nil {
 			ctx, cancel := s.dbContext()
 			_ = s.queries.UpsertAsset(ctx, seed.Asset, defaultAssetPrice)
@@ -348,7 +348,7 @@ func (s *MarketStore) ensureBondIssuerLocked(def PerpetualBondDefinition) int64 
 	ctx, cancel := s.dbContext()
 	defer cancel()
 	_ = s.queries.UpsertUser(ctx, user, time.Now().UTC())
-	
+
 	cash := s.GetBalance(userID, defaultCurrency)
 	if cash < bondDefaultIssuerBuffer {
 		_ = s.UpdateBalance(userID, defaultCurrency, bondDefaultIssuerBuffer-cash)
@@ -380,7 +380,7 @@ func (s *MarketStore) bondOperationNewsLocked(def PerpetualBondDefinition, actio
 	default:
 		return
 	}
-	
+
 	s.publishNewsItemLocked(now, NewsItem{
 		Headline: headline,
 		AssetID:  asset.ID,

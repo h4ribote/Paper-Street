@@ -52,7 +52,7 @@ func (s *MarketStore) APIKeyForRole(role string) (string, models.User, bool) {
 	userID, ok := s.roleToUserID[normalized]
 	key := s.roleToAPIKey[normalized]
 	s.mu.RUnlock()
-	
+
 	if !ok || key == "" || userID == 0 {
 		s.mu.Lock()
 		userID, ok = s.roleToUserID[normalized]

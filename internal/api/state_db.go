@@ -135,8 +135,6 @@ func (s *MarketStore) loadMacroIndicatorsFromDB(ctx context.Context) error {
 	return nil
 }
 
-
-
 func (s *MarketStore) persistLiquidityPool(pool LiquidityPool) {
 	if s.queries == nil || pool.ID == 0 {
 		return

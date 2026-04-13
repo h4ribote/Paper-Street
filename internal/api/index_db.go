@@ -25,13 +25,13 @@ func (s *MarketStore) loadIndexesFromDB(ctx context.Context) error {
 			FeeBps:     indexFeeBps,
 		}
 		s.indexes[indexAssetID] = definition
-		
+
 		asset := s.ensureAssetLocked(indexAssetID)
 		asset.Type = "INDEX"
 		if asset.Sector == "" {
 			asset.Sector = "MIXED"
 		}
-		
+
 		s.updateAssetLocked(asset, s.indexUnitPriceLocked(definition))
 	}
 	return nil

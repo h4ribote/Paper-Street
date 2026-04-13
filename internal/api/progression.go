@@ -51,18 +51,46 @@ var rankDefinitions = []RankDefinition{
 }
 
 var (
-	rankDefinitionsByID     map[int]RankDefinition
-	rankDefinitionsByIDOnce sync.Once
+	rankDefinitionsMu   sync.RWMutex
+	rankDefinitionsByID map[int]RankDefinition
 )
 
+func UpdateRankDefinitions(defs []RankDefinition) {
+	if len(defs) == 0 {
+		return
+	}
+	rankDefinitionsMu.Lock()
+	defer rankDefinitionsMu.Unlock()
+
+	rankDefinitions = defs
+
+	// Rebuild the map immediately under the lock
+	result := make(map[int]RankDefinition, len(rankDefinitions))
+	for _, rank := range rankDefinitions {
+		result[rank.ID] = rank
+	}
+	rankDefinitionsByID = result
+}
+
 func getRankDefinitionsByID() map[int]RankDefinition {
-	rankDefinitionsByIDOnce.Do(func() {
-		result := make(map[int]RankDefinition, len(rankDefinitions))
-		for _, rank := range rankDefinitions {
-			result[rank.ID] = rank
-		}
-		rankDefinitionsByID = result
-	})
+	rankDefinitionsMu.RLock()
+	if rankDefinitionsByID != nil {
+		defer rankDefinitionsMu.RUnlock()
+		return rankDefinitionsByID
+	}
+	rankDefinitionsMu.RUnlock()
+
+	rankDefinitionsMu.Lock()
+	defer rankDefinitionsMu.Unlock()
+	if rankDefinitionsByID != nil {
+		return rankDefinitionsByID
+	}
+
+	result := make(map[int]RankDefinition, len(rankDefinitions))
+	for _, rank := range rankDefinitions {
+		result[rank.ID] = rank
+	}
+	rankDefinitionsByID = result
 	return rankDefinitionsByID
 }
 

@@ -41,7 +41,7 @@ func (s *MarketStore) persistCurrencyBalance(userID int64, currency string, amou
 	}
 	ctx, cancel := s.dbContext()
 	defer cancel()
-	
+
 	val, err := s.queries.GetBalance(ctx, models.GetBalanceParams{UserID: userID, Currency: currency})
 	delta := amount - val
 	if err == nil && delta != 0 {
@@ -56,7 +56,7 @@ func (s *MarketStore) persistCurrencyBalance(userID int64, currency string, amou
 			CreatedAt:    time.Now().UnixMilli(),
 		})
 	}
-	
+
 	if err := s.queries.SetCurrencyBalance(ctx, userID, currencyID, amount); err != nil {
 		log.Printf("db set currency balance %d/%s: %v", userID, currency, err)
 	}

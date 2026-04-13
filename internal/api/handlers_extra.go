@@ -528,6 +528,7 @@ func (s *Server) handlePortfolioHistory(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	limit := parseLimit(r, 100)
+
 	respondJSON(w, http.StatusOK, s.Store.TradeHistory(userID, limit))
 }
 

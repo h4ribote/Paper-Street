@@ -2138,7 +2138,37 @@ func (q *Queries) UpsertMarketCandle(ctx context.Context, record MarketCandleRec
 	return err
 }
 
+type CountryRecord struct {
+	ID       int64
+	RegionID int64
+	Name     string
+}
+
+type CurrencyRecord struct {
+	ID        int64
+	CountryID int64
+	Code      string
+	Name      string
+}
+
+type SectorRecord struct {
+	ID   int64
+	Code string
+	Name string
+}
+
+type RankDefinitionRecord struct {
+	ID                  int
+	Name                string
+	RequiredXP          int64
+	MakerFeeBps10       int64
+	TakerFeeBps10       int64
+	InterestDiscountBps int64
+	FXFeeDiscountBps    int64
+}
+
 type ResourceRecord struct {
+	ID          int64
 	Name        string
 	Type        string
 	Description string
@@ -2151,6 +2181,143 @@ func (q *Queries) InsertResource(ctx context.Context, record ResourceRecord) (in
 		return 0, err
 	}
 	return res.LastInsertId()
+}
+
+func (q *Queries) ListResources(ctx context.Context) ([]ResourceRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `SELECT resource_id, name, type, COALESCE(description,'') FROM resources`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []ResourceRecord
+	for rows.Next() {
+		var record ResourceRecord
+		if err := rows.Scan(&record.ID, &record.Name, &record.Type, &record.Description); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) ListCountries(ctx context.Context) ([]CountryRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `SELECT country_id, region_id, name FROM countries`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []CountryRecord
+	for rows.Next() {
+		var record CountryRecord
+		if err := rows.Scan(&record.ID, &record.RegionID, &record.Name); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) ListCurrencies(ctx context.Context) ([]CurrencyRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `SELECT currency_id, COALESCE(country_id,0), code, name FROM currencies`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []CurrencyRecord
+	for rows.Next() {
+		var record CurrencyRecord
+		if err := rows.Scan(&record.ID, &record.CountryID, &record.Code, &record.Name); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) ListSectors(ctx context.Context) ([]SectorRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `SELECT sector_id, code, name FROM sectors`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []SectorRecord
+	for rows.Next() {
+		var record SectorRecord
+		if err := rows.Scan(&record.ID, &record.Code, &record.Name); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) ListRankDefinitions(ctx context.Context) ([]RankDefinitionRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT rank_id, name, required_xp, maker_fee_bps10, taker_fee_bps10, interest_discount_bps, fx_fee_discount_bps
+		FROM rank_definitions ORDER BY required_xp ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []RankDefinitionRecord
+	for rows.Next() {
+		var record RankDefinitionRecord
+		if err := rows.Scan(
+			&record.ID, &record.Name, &record.RequiredXP, &record.MakerFeeBps10, &record.TakerFeeBps10,
+			&record.InterestDiscountBps, &record.FXFeeDiscountBps,
+		); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) ListMarketCandles(ctx context.Context, assetID int64) ([]MarketCandleRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT asset_id, timeframe, open_time, open, high, low, close, volume
+		FROM market_candles WHERE asset_id = ? ORDER BY open_time ASC
+	`, assetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []MarketCandleRecord
+	for rows.Next() {
+		var record MarketCandleRecord
+		if err := rows.Scan(
+			&record.AssetID, &record.Timeframe, &record.OpenTime, &record.Open,
+			&record.High, &record.Low, &record.Close, &record.Volume,
+		); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (q *Queries) ListTransactionLogs(ctx context.Context, userID int64) ([]TransactionLogRecord, error) {
+	rows, err := q.Conn.DB.QueryContext(ctx, `
+		SELECT user_id, currency_id, amount, balance_after, type, COALESCE(reference_id,''), COALESCE(description,''), created_at
+		FROM transaction_logs WHERE user_id = ? ORDER BY log_id ASC
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []TransactionLogRecord
+	for rows.Next() {
+		var record TransactionLogRecord
+		if err := rows.Scan(
+			&record.UserID, &record.CurrencyID, &record.Amount, &record.BalanceAfter,
+			&record.Type, &record.ReferenceID, &record.Description, &record.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
 }
 
 func (q *Queries) InsertProductionRecipe(ctx context.Context, record ProductionRecipeRecord) (int64, error) {

@@ -1270,7 +1270,7 @@ func (s *MarketStore) TradeHistory(userID int64, limit int) []engine.Execution {
 		}
 	}
 	if limit > 0 && len(res) > limit {
-		res = res[:limit]
+		res = res[len(res)-limit:]
 	}
 	return res
 }
@@ -1346,6 +1346,58 @@ func (s *MarketStore) Candles(assetID int64, timeframe time.Duration, start, end
 	if assetID == 0 || timeframe <= 0 {
 		return []Candle{}
 	}
+
+	if s.queries != nil {
+		ctx, cancel := s.dbContext()
+		defer cancel()
+		if records, err := s.queries.ListMarketCandles(ctx, assetID); err == nil {
+			var candles []Candle
+			for _, rec := range records {
+				// Map "1M", "5M", etc. to time.Duration manually or filter properly
+				// For this step we will map backwards to simplify matching logic:
+				var recTimeframe time.Duration
+				switch rec.Timeframe {
+				case "1M":
+					recTimeframe = time.Minute
+				case "5M":
+					recTimeframe = 5 * time.Minute
+				case "15M":
+					recTimeframe = 15 * time.Minute
+				case "1H":
+					recTimeframe = time.Hour
+				case "4H":
+					recTimeframe = 4 * time.Hour
+				case "1D":
+					recTimeframe = 24 * time.Hour
+				}
+				if recTimeframe != timeframe {
+					continue
+				}
+				ts := time.UnixMilli(rec.OpenTime).UTC()
+				if !start.IsZero() && ts.Before(start) {
+					continue
+				}
+				if !end.IsZero() && !ts.Before(end) {
+					continue
+				}
+				candles = append(candles, Candle{
+					Timestamp: rec.OpenTime,
+					Open:      rec.Open,
+					High:      rec.High,
+					Low:       rec.Low,
+					Close:     rec.Close,
+					Volume:    rec.Volume,
+				})
+			}
+			if len(candles) > 0 {
+				if limit > 0 && len(candles) > limit {
+					candles = candles[len(candles)-limit:]
+				}
+				return candles
+			}
+		}
+	}
+
 	execs := s.Executions(assetID, 0)
 	if len(execs) == 0 {
 		return []Candle{}
@@ -2152,6 +2204,14 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 			s.currencies[b.Currency] = struct{}{}
 		}
 	}
+
+	currenciesRecords, err := s.queries.ListCurrencies(ctx)
+	if err == nil {
+		for _, cur := range currenciesRecords {
+			s.currencies[cur.Code] = struct{}{}
+		}
+	}
+
 	s.currencies[defaultCurrency] = struct{}{}
 
 	// Load meta-data for simulation
@@ -2161,6 +2221,14 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 	_ = s.loadPerpetualBondsFromDB(ctx)
 	_ = s.loadMacroIndicatorsFromDB(ctx)
 	_ = s.loadWorldFromDB(ctx)
+	_ = s.loadRankDefinitionsFromDB(ctx)
+
+	// Other master data that might just be needed to be cached or logged
+	if s.queries != nil {
+		_, _ = s.queries.ListCountries(ctx)
+		_, _ = s.queries.ListSectors(ctx)
+		_, _ = s.queries.ListResources(ctx)
+	}
 
 	// Check if we need initial allocation
 	initialAllocDoneFromDB, _ := s.queries.GetServerStateBool(ctx, "is_initial_allocation_done", false)
@@ -2224,6 +2292,32 @@ func (s *MarketStore) loadAPIKeysFromDB(ctx context.Context) error {
 			s.roleToAPIKey[role] = key
 		}
 		s.apiKeyToUser[key] = record.UserID
+	}
+	return nil
+}
+
+func (s *MarketStore) loadRankDefinitionsFromDB(ctx context.Context) error {
+	if s.queries == nil {
+		return nil
+	}
+	records, err := s.queries.ListRankDefinitions(ctx)
+	if err != nil {
+		return err
+	}
+	if len(records) > 0 {
+		var defs []RankDefinition
+		for _, r := range records {
+			defs = append(defs, RankDefinition{
+				ID:                  r.ID,
+				Name:                r.Name,
+				RequiredXP:          r.RequiredXP,
+				MakerFeeBps10:       r.MakerFeeBps10,
+				TakerFeeBps10:       r.TakerFeeBps10,
+				InterestDiscountBps: r.InterestDiscountBps,
+				FXFeeDiscountBps:    r.FXFeeDiscountBps,
+			})
+		}
+		UpdateRankDefinitions(defs)
 	}
 	return nil
 }
