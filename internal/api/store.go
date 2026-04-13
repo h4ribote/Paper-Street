@@ -361,10 +361,11 @@ type Region struct {
 }
 
 type Company struct {
-	ID     int64  `json:"id"`
-	Name   string `json:"name"`
-	Symbol string `json:"symbol"`
-	Sector string `json:"sector"`
+	ID      int64  `json:"id"`
+	Name    string `json:"name"`
+	Symbol  string `json:"symbol"`
+	Sector  string `json:"sector"`
+	Country string `json:"country,omitempty"`
 }
 
 type WorldEvent struct {
@@ -407,25 +408,27 @@ type PublicOrderEvent struct {
 }
 
 type MarketStore struct {
-	mu                      sync.RWMutex
-	apiKeyToUser            map[string]int64
-	roleToUserID            map[string]int64
-	roleToAPIKey            map[string]string
-	queries                 *db.Queries
-	currencyIDs             map[string]int64
-	WSHub                   *wsHub
+	mu           sync.RWMutex
+	apiKeyToUser map[string]int64
+	roleToUserID map[string]int64
+	roleToAPIKey map[string]string
+	queries      *db.Queries
+	currencyIDs  map[string]int64
+	WSHub        *wsHub
+
+	EngineSubmitOrder func(ctx context.Context, order *engine.Order) (engine.OrderResult, error)
 
 	// Keep these for now as they are for non-trading simulations (macro, etc.)
 	// or they are read-heavy but change slowly.
-	currencies              map[string]struct{}
-	seasons                 []Season
-	regions                 []Region
-	worldEvents             []WorldEvent
-	macroIndicators         []MacroIndicator
-	theoreticalFXRates      []TheoreticalFXRate
-	macroQuarterIndex       int64
-	macroWeekIndex          int64
-	
+	currencies         map[string]struct{}
+	seasons            []Season
+	regions            []Region
+	worldEvents        []WorldEvent
+	macroIndicators    []MacroIndicator
+	theoreticalFXRates []TheoreticalFXRate
+	macroQuarterIndex  int64
+	macroWeekIndex     int64
+
 	companyRecipes          map[int64][]ProductionRecipe
 	financialReports        map[int64][]CompanyFinancialReport
 	companyDividends        map[int64][]CompanyDividendRecord
@@ -441,49 +444,52 @@ type MarketStore struct {
 	nextMarginPosID         int64
 	nextMarginPositionID    int64
 	nextLiquidationID       int64
+	nextOrderID             int64
 
-	pools                   map[int64]LiquidityPool
-	poolPositions           map[int64]PoolPosition
-	marginPools             map[int64]MarginPool
-	marginProviders         map[marginProviderKey]MarginProviderPosition
-	marginPositions         map[int64]MarginPosition
-	marginLiquidations      []MarginLiquidation
-	indexes                 map[int64]IndexDefinition
-	indexHoldings           map[int64]map[int64]int64
-	dailyMissions           map[string][]DailyMission
-	missionProgress         map[int64]map[string]*DailyMissionProgress
-	contracts               map[int64]*Contract
-	contractProgress        map[int64]map[int64]int64
-	companyStates           map[int64]*companyState
+	pools              map[int64]LiquidityPool
+	poolPositions      map[int64]PoolPosition
+	marginPools        map[int64]MarginPool
+	marginProviders    map[marginProviderKey]MarginProviderPosition
+	marginPositions    map[int64]MarginPosition
+	marginLiquidations []MarginLiquidation
+	indexes            map[int64]IndexDefinition
+	indexHoldings      map[int64]map[int64]int64
+	dailyMissions      map[string][]DailyMission
+	missionProgress    map[int64]map[string]*DailyMissionProgress
+	contracts          map[int64]*Contract
+	contractProgress   map[int64]map[int64]int64
+	companyStates      map[int64]*companyState
+	testOrders         map[int64]*engine.Order
 
 	// These are caches for ticker information
-	lastPrices              map[int64]int64
-	prevPrices              map[int64]int64
-	volumes                 map[int64]int64
-	needsInitialAlloc       bool
-	initialAllocDone        bool
+	lastPrices        map[int64]int64
+	prevPrices        map[int64]int64
+	volumes           map[int64]int64
+	needsInitialAlloc bool
+	initialAllocDone  bool
 
-	macroGDPTotals          map[string]float64
-	macroGDPPrevTotals      map[string]float64
-	macroCPIIndexCurrent    map[string]float64
-	macroCPIIndexPrev       map[string]float64
-	macroQuarterTracking    map[int64]bool
-	macroGovSpending      map[string]int64
-	macroGovQuarterIndex  int64
+	macroGDPTotals       map[string]float64
+	macroGDPPrevTotals   map[string]float64
+	macroCPIIndexCurrent map[string]float64
+	macroCPIIndexPrev    map[string]float64
+	macroQuarterTracking map[int64]bool
+	macroGovSpending     map[string]int64
+	macroGovQuarterIndex int64
 
 	// Fallback for tests or short-term cache
-	recentExecutions      []engine.Execution
-	testBalances          map[int64]map[string]int64
-	testPositions         map[int64]map[int64]int64
-	testAssetAcquiredAt   map[int64]map[int64]int64
-	testUsers             map[int64]models.User
-	testAssets            map[int64]models.Asset
-	testNews              []NewsItem
-	testContracts         map[int64]*Contract
-	testPerpetualBonds    map[int64]PerpetualBondDefinition
-	testPools             map[int64]LiquidityPool
-	testMarginPools       map[int64]MarginPool
-	testIndexes           map[int64]IndexDefinition
+	recentExecutions    []engine.Execution
+	testBalances        map[int64]map[string]int64
+	testPositions       map[int64]map[int64]int64
+	testAssetAcquiredAt map[int64]map[int64]int64
+	testUsers           map[int64]models.User
+	testAssets          map[int64]models.Asset
+	assetBasePrices     map[int64]int64
+	testNews            []NewsItem
+	testContracts       map[int64]*Contract
+	testPerpetualBonds  map[int64]PerpetualBondDefinition
+	testPools           map[int64]LiquidityPool
+	testMarginPools     map[int64]MarginPool
+	testIndexes         map[int64]IndexDefinition
 }
 
 func (s *MarketStore) SetWSHub(hub *wsHub) {
@@ -539,8 +545,8 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 		macroCPIIndexCurrent:    make(map[string]float64),
 		macroCPIIndexPrev:       make(map[string]float64),
 		macroQuarterTracking:    make(map[int64]bool),
-		macroGovSpending:      make(map[string]int64),
-		macroGovQuarterIndex:  0,
+		macroGovSpending:        make(map[string]int64),
+		macroGovQuarterIndex:    0,
 		nextUserID:              userIDSeed,
 		nextNewsID:              0,
 		seasons: []Season{
@@ -561,18 +567,20 @@ func newMarketStore(ctx context.Context, queries *db.Queries) (*MarketStore, err
 			{ID: 6, Name: "Arcadia Privacy Act", Description: "New data privacy law threatens ad-tech and analytics revenue.", StartsAt: now.Add(60 * time.Hour).UnixMilli(), EndsAt: now.Add(72 * time.Hour).UnixMilli()},
 			{ID: 7, Name: "El Dorado Succession", Description: "Royal succession tensions raise civil unrest risks and currency volatility.", StartsAt: now.Add(84 * time.Hour).UnixMilli(), EndsAt: now.Add(96 * time.Hour).UnixMilli()},
 		},
-		queries:            queries,
-		currencyIDs:        make(map[string]int64),
-		testBalances:       make(map[int64]map[string]int64),
-		testPositions:      make(map[int64]map[int64]int64),
+		queries:             queries,
+		currencyIDs:         make(map[string]int64),
+		testBalances:        make(map[int64]map[string]int64),
+		testPositions:       make(map[int64]map[int64]int64),
 		testAssetAcquiredAt: make(map[int64]map[int64]int64),
-		testUsers:          make(map[int64]models.User),
-		testAssets:         make(map[int64]models.Asset),
-		testContracts:      make(map[int64]*Contract),
-		testPerpetualBonds: make(map[int64]PerpetualBondDefinition),
-		testPools:          make(map[int64]LiquidityPool),
-		testMarginPools:    make(map[int64]MarginPool),
-		testIndexes:        make(map[int64]IndexDefinition),
+		testUsers:           make(map[int64]models.User),
+		testAssets:          make(map[int64]models.Asset),
+		assetBasePrices:     make(map[int64]int64),
+		testOrders:          make(map[int64]*engine.Order),
+		testContracts:       make(map[int64]*Contract),
+		testPerpetualBonds:  make(map[int64]PerpetualBondDefinition),
+		testPools:           make(map[int64]LiquidityPool),
+		testMarginPools:     make(map[int64]MarginPool),
+		testIndexes:         make(map[int64]IndexDefinition),
 	}
 	if queries == nil {
 		store.seedAssets()
@@ -647,7 +655,7 @@ func (s *MarketStore) updateBalanceLocked(userID int64, currency string, delta i
 	}
 	ctx, cancel := s.dbContext()
 	defer cancel()
-	_ = s.queries.AdjustCurrencyBalance(ctx, nil, userID, currency, delta)
+	_ = s.queries.AdjustCurrencyBalance(ctx, nil, userID, currency, delta, 0)
 }
 
 func (s *MarketStore) GetBalance(userID int64, currency string) int64 {
@@ -667,6 +675,27 @@ func (s *MarketStore) GetBalance(userID int64, currency string) int64 {
 	return amount
 }
 
+func (s *MarketStore) QuoteCurrency(assetID int64) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.quoteCurrencyLocked(assetID)
+}
+
+func (s *MarketStore) quoteCurrencyLocked(assetID int64) string {
+	if state, ok := s.companyStates[assetID]; ok {
+		return currencyForCountry(state.Country, defaultCurrency)
+	}
+	if s.queries == nil {
+		if b, ok := s.testPerpetualBonds[assetID]; ok {
+			return currencyForCountry(b.IssuerCountry, defaultCurrency)
+		}
+	} else {
+		if b, ok := s.perpetualBonds[assetID]; ok {
+			return currencyForCountry(b.IssuerCountry, defaultCurrency)
+		}
+	}
+	return defaultCurrency
+}
 
 func (s *MarketStore) UpdateBalance(userID int64, currency string, delta int64) error {
 	if s.queries == nil {
@@ -678,7 +707,7 @@ func (s *MarketStore) UpdateBalance(userID int64, currency string, delta int64) 
 	}
 	ctx, cancel := s.dbContext()
 	defer cancel()
-	return s.queries.AdjustCurrencyBalance(ctx, nil, userID, currency, delta)
+	return s.queries.AdjustCurrencyBalance(ctx, nil, userID, currency, delta, 0)
 }
 
 func (s *MarketStore) SetBalance(userID int64, currency string, amount int64) error {
@@ -692,7 +721,7 @@ func (s *MarketStore) SetBalance(userID int64, currency string, amount int64) er
 	ctx, cancel := s.dbContext()
 	defer cancel()
 	current := s.GetBalance(userID, currency)
-	return s.queries.AdjustCurrencyBalance(ctx, nil, userID, currency, amount-current)
+	return s.queries.AdjustCurrencyBalance(ctx, nil, userID, currency, amount-current, 0)
 }
 
 func (s *MarketStore) getPositionLocked(userID int64, assetID int64) int64 {
@@ -732,7 +761,7 @@ func (s *MarketStore) UpdatePosition(userID int64, assetID int64, delta int64) e
 	}
 	ctx, cancel := s.dbContext()
 	defer cancel()
-	return s.queries.AdjustAssetBalance(ctx, nil, userID, assetID, delta)
+	return s.queries.AdjustAssetBalance(ctx, nil, userID, assetID, delta, 0)
 }
 func (s *MarketStore) setPositionLocked(userID int64, assetID int64, amount int64) {
 	if s.queries == nil {
@@ -826,7 +855,7 @@ func (s *MarketStore) AddUser(username string) models.User {
 	defer cancel()
 	_ = s.queries.UpsertUser(ctx, user, time.Now().UTC())
 	// Set initial balance
-	_ = s.queries.AdjustCurrencyBalance(ctx, nil, user.ID, defaultCurrency, defaultCashBalance)
+	_ = s.queries.AdjustCurrencyBalance(ctx, nil, user.ID, defaultCurrency, defaultCashBalance, 0)
 	return user
 }
 
@@ -847,7 +876,7 @@ func (s *MarketStore) EnsureUser(userID int64) models.User {
 		ctx, cancel := s.dbContext()
 		defer cancel()
 		_ = s.queries.UpsertUser(ctx, user, time.Now().UTC())
-		_ = s.queries.AdjustCurrencyBalance(ctx, nil, user.ID, defaultCurrency, defaultCashBalance)
+		_ = s.queries.AdjustCurrencyBalance(ctx, nil, user.ID, defaultCurrency, defaultCashBalance, 0)
 	} else {
 		s.testUsers[userID] = user
 		if s.testBalances[userID] == nil {
@@ -886,7 +915,7 @@ func (s *MarketStore) EnsureUserWithName(userID int64, username string) models.U
 		ctx, cancel := s.dbContext()
 		defer cancel()
 		_ = s.queries.UpsertUser(ctx, user, time.Now().UTC())
-		_ = s.queries.AdjustCurrencyBalance(ctx, nil, user.ID, defaultCurrency, defaultCashBalance)
+		_ = s.queries.AdjustCurrencyBalance(ctx, nil, user.ID, defaultCurrency, defaultCashBalance, 0)
 	} else {
 		s.testUsers[userID] = user
 		if s.testBalances[userID] == nil {
@@ -982,6 +1011,33 @@ func (s *MarketStore) Asset(assetID int64) (models.Asset, bool) {
 }
 
 func (s *MarketStore) Orders(filter OrderFilter) []engine.Order {
+	if s.queries == nil {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		res := make([]engine.Order, 0, len(s.testOrders))
+		for _, o := range s.testOrders {
+			if o == nil {
+				continue
+			}
+			if filter.UserID != 0 && o.UserID != filter.UserID {
+				continue
+			}
+			if filter.AssetID != 0 && o.AssetID != filter.AssetID {
+				continue
+			}
+			if filter.Status != "" && o.Status != filter.Status {
+				continue
+			}
+			res = append(res, *o)
+		}
+		sort.Slice(res, func(i, j int) bool {
+			if !res[i].UpdatedAt.Equal(res[j].UpdatedAt) {
+				return res[i].UpdatedAt.After(res[j].UpdatedAt)
+			}
+			return res[i].ID > res[j].ID
+		})
+		return res
+	}
 	ctx, cancel := s.dbContext()
 	defer cancel()
 	// NOTE: Ideally we'd have a filtered ListOrders in db.Queries.
@@ -1003,11 +1059,25 @@ func (s *MarketStore) Orders(filter OrderFilter) []engine.Order {
 		}
 		res = append(res, *o)
 	}
-	sort.Slice(res, func(i, j int) bool { return res[i].UpdatedAt.After(res[j].UpdatedAt) })
+	sort.Slice(res, func(i, j int) bool {
+		if !res[i].UpdatedAt.Equal(res[j].UpdatedAt) {
+			return res[i].UpdatedAt.After(res[j].UpdatedAt)
+		}
+		return res[i].ID > res[j].ID
+	})
 	return res
 }
 
 func (s *MarketStore) Order(orderID int64) (*engine.Order, bool) {
+	if s.queries == nil {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		o, ok := s.testOrders[orderID]
+		if !ok || o == nil {
+			return nil, false
+		}
+		return cloneOrder(o), true
+	}
 	ctx, cancel := s.dbContext()
 	defer cancel()
 	o, err := s.FindOrder(ctx, orderID)
@@ -1018,6 +1088,15 @@ func (s *MarketStore) Order(orderID int64) (*engine.Order, bool) {
 }
 
 func (s *MarketStore) OrderForAsset(orderID int64, assetID int64) (*engine.Order, bool) {
+	if s.queries == nil {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		o, ok := s.testOrders[orderID]
+		if !ok || o == nil || o.AssetID != assetID {
+			return nil, false
+		}
+		return cloneOrder(o), true
+	}
 	ctx, cancel := s.dbContext()
 	defer cancel()
 	o, err := s.FindOrder(ctx, orderID)
@@ -1097,7 +1176,9 @@ func (s *MarketStore) Balances(userID int64) []models.Balance {
 	ctx, cancel := s.dbContext()
 	defer cancel()
 	balances, err := s.queries.ListCurrencyBalances(ctx)
-	if err != nil { return nil }
+	if err != nil {
+		return nil
+	}
 	var res []models.Balance
 	for _, b := range balances {
 		if b.UserID == userID {
@@ -1125,7 +1206,9 @@ func (s *MarketStore) Positions(userID int64) []models.Position {
 	ctx, cancel := s.dbContext()
 	defer cancel()
 	positions, err := s.queries.ListAssetBalances(ctx)
-	if err != nil { return nil }
+	if err != nil {
+		return nil
+	}
 	var res []models.Position
 	for _, p := range positions {
 		if p.UserID == userID && p.Quantity != 0 {
@@ -1139,6 +1222,21 @@ func (s *MarketStore) Positions(userID int64) []models.Position {
 func (s *MarketStore) PortfolioAssets(userID int64) []PortfolioAsset {
 	if userID == 0 {
 		return []PortfolioAsset{}
+	}
+	if s.queries == nil {
+		positions := s.Positions(userID)
+		assets := make([]PortfolioAsset, 0, len(positions))
+		for _, p := range positions {
+			if p.Quantity <= 0 {
+				continue
+			}
+			asset, ok := s.Asset(p.AssetID)
+			if ok {
+				assets = append(assets, PortfolioAsset{Asset: asset, Quantity: p.Quantity})
+			}
+		}
+		sort.Slice(assets, func(i, j int) bool { return assets[i].Asset.ID < assets[j].Asset.ID })
+		return assets
 	}
 	ctx, cancel := s.dbContext()
 	defer cancel()
@@ -1690,6 +1788,47 @@ func (s *MarketStore) macroPriceIndexLocked() macroPriceIndex {
 	energy := macroIndexAccumulator{}
 	goods := macroIndexAccumulator{}
 	services := macroIndexAccumulator{}
+	if s.queries == nil {
+		for _, state := range s.companyStates {
+			if state == nil || state.OutputAssetID == 0 {
+				continue
+			}
+			assetID := state.OutputAssetID
+			asset, ok := s.testAssets[assetID]
+			if !ok {
+				continue
+			}
+			base := defaultAssetPrice
+			if base <= 0 {
+				continue
+			}
+			price := s.lastPrices[assetID]
+			if price <= 0 {
+				price = base
+			}
+			overall.add(price, base)
+			switch strings.ToUpper(strings.TrimSpace(asset.Sector)) {
+			case "FOOD", "AGRI":
+				food.add(price, base)
+			case "ENERGY":
+				energy.add(price, base)
+			case "METAL", "CONS", "DEF", "BASIC", "INDUSTRIAL":
+				goods.add(price, base)
+			case "TECH", "FIN", "LOG", "BIO", "SERVICES":
+				services.add(price, base)
+			default:
+				goods.add(price, base)
+			}
+		}
+		overallIndex := overall.ratioOrDefault(1.0)
+		return macroPriceIndex{
+			Food:     food.ratioOrDefault(overallIndex),
+			Energy:   energy.ratioOrDefault(overallIndex),
+			Goods:    goods.ratioOrDefault(overallIndex),
+			Services: services.ratioOrDefault(overallIndex),
+			Overall:  overallIndex,
+		}
+	}
 	assets := s.AssetsWithPrice(AssetFilter{})
 	for _, a := range assets {
 		base := a.BasePrice
@@ -1891,8 +2030,6 @@ func (s *MarketStore) ensureAssetLocked(assetID int64) models.Asset {
 	return asset
 }
 
-
-
 func (s *MarketStore) AddExecution(exec engine.Execution) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1916,6 +2053,9 @@ func (s *MarketStore) updateUserLocked(user models.User) {
 func (s *MarketStore) updateAssetLocked(asset models.Asset, basePrice int64) {
 	if s.queries == nil {
 		s.testAssets[asset.ID] = asset
+		if basePrice > 0 {
+			s.assetBasePrices[asset.ID] = basePrice
+		}
 		return
 	}
 	ctx, cancel := s.dbContext()
@@ -2008,25 +2148,10 @@ func (s *MarketStore) loadFromDB(ctx context.Context) error {
 	_ = s.loadWorldFromDB(ctx)
 
 	// Check if we need initial allocation
-	users, _ := s.queries.ListUsers(ctx)
-	if len(users) == 0 {
-		s.needsInitialAlloc = true
-	}
+	initialAllocDoneFromDB, _ := s.queries.GetServerStateBool(ctx, "is_initial_allocation_done", false)
+	s.needsInitialAlloc = !initialAllocDoneFromDB
 
 	return nil
-}
-
-func (s *MarketStore) shouldSeedInitialAllocations(users []models.User, currencyBalanceCount, assetBalanceCount int) bool {
-	if len(users) == 0 {
-		return true
-	}
-	if len(users) != 1 {
-		return false
-	}
-	if len(s.roleToAPIKey) != 0 || currencyBalanceCount != 0 || assetBalanceCount != 0 {
-		return false
-	}
-	return users[0].ID == 1
 }
 
 func (s *MarketStore) loadNewsFromDB(ctx context.Context) error {
@@ -2068,12 +2193,22 @@ func (s *MarketStore) loadAPIKeysFromDB(ctx context.Context) error {
 		if key == "" || record.UserID == 0 {
 			continue
 		}
-		s.apiKeyToUser[key] = record.UserID
 		role := normalizeRole(record.Role)
 		if role != "" && !isDiscordRole(role) {
+			deterministicKey := generateDeterministicAPIKey(role)
+			if deterministicKey != key {
+				_, err := s.queries.Conn.DB.ExecContext(ctx, "UPDATE api_keys SET api_key = ? WHERE role = ?", deterministicKey, role)
+				if err != nil {
+					log.Printf("failed to sync deterministic api key for %s: %v", role, err)
+				} else {
+					log.Printf("updated deterministic api key for %s in db", role)
+					key = deterministicKey
+				}
+			}
 			s.roleToUserID[role] = record.UserID
 			s.roleToAPIKey[role] = key
 		}
+		s.apiKeyToUser[key] = record.UserID
 	}
 	return nil
 }
@@ -2156,8 +2291,6 @@ func (s *MarketStore) executionParties(taker *engine.Order, maker *engine.Order)
 	}
 	return maker.UserID, taker.UserID
 }
-
-
 
 func (s *MarketStore) persistUser(user models.User, cashBalance int64) {
 	if s.queries == nil || user.ID == 0 {

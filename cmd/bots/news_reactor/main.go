@@ -60,6 +60,52 @@ func main() {
 		if !ok {
 			continue
 		}
+
+		ctxB, cancelB := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+		balances, _ := client.Balances(ctxB, cfg.UserID)
+		cancelB()
+		var cash int64
+		for _, b := range balances {
+			if b.Currency == "ARC" {
+				cash = b.Amount
+				break
+			}
+		}
+
+		ctxI, cancelI := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+		assets, _ := client.PortfolioAssets(ctxI, cfg.UserID)
+		cancelI()
+		var inventory int64
+		for _, a := range assets {
+			if a.Asset.ID == event.AssetID {
+				inventory = a.Quantity
+				break
+			}
+		}
+
+		qty := reaction.Quantity
+
+		if reaction.Side == "BUY" {
+			// Try to get price from orderbook to estimate affordability
+			ctxO, cancelO := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+			ob, errO := client.OrderBook(ctxO, event.AssetID, 1)
+			cancelO()
+			if errO == nil && len(ob.Asks) > 0 {
+				bestAsk := ob.Asks[0].Price
+				if bestAsk > 0 && cash < bestAsk*qty {
+					qty = cash / bestAsk
+				}
+			}
+		} else {
+			if inventory < qty {
+				qty = inventory
+			}
+		}
+
+		if qty <= 0 {
+			continue
+		}
+
 		if cfg.Jitter > 0 {
 			jitterNs := cfg.Jitter.Nanoseconds()
 			if jitterNs > 0 {
@@ -71,7 +117,7 @@ func main() {
 			UserID:   cfg.UserID,
 			Side:     reaction.Side,
 			Type:     "MARKET",
-			Quantity: reaction.Quantity,
+			Quantity: qty,
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), cfg.RequestTimeout)
 		order, err := client.SubmitOrder(ctx, req)

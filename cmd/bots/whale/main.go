@@ -47,6 +47,14 @@ func main() {
 }
 
 func runOnce(client *bots.APIClient, cfg config, state *executionState) {
+	// Asset check
+	ctxA, cancelA := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+	_, errA := client.Asset(ctxA, cfg.AssetID)
+	cancelA()
+	if errA != nil {
+		return // skip non-existent
+	}
+
 	if state.remaining <= 0 {
 		state.remaining = cfg.TotalQuantity
 	}
@@ -78,10 +86,11 @@ func runOnce(client *bots.APIClient, cfg config, state *executionState) {
 		volume += candle.Volume
 	}
 	mid := bots.MidPrice(snapshot, 0)
-	if mid == 0 {
+	if mid <= 1 {
 		mid = bots.VWAP(candles)
 	}
-	if mid == 0 {
+	if mid <= 1 {
+		log.Printf("whale: skipping order asset=%d due to lack of pricing data", cfg.AssetID)
 		return
 	}
 	impactPrice := bots.ImpactAdjustedPrice(mid, sigma, sliceQty, volume, cfg.Gamma, cfg.Side)
@@ -90,6 +99,43 @@ func runOnce(client *bots.APIClient, cfg config, state *executionState) {
 	if vwap > 0 {
 		price = int64(math.Round((float64(price) + float64(vwap)) / 2))
 	}
+
+	ctxB, cancelB := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+	balances, _ := client.Balances(ctxB, cfg.UserID)
+	cancelB()
+	var cash int64
+	for _, b := range balances {
+		if b.Currency == "ARC" {
+			cash = b.Amount
+			break
+		}
+	}
+
+	ctxI, cancelI := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+	assets, _ := client.PortfolioAssets(ctxI, cfg.UserID)
+	cancelI()
+	var inventory int64
+	for _, a := range assets {
+		if a.Asset.ID == cfg.AssetID {
+			inventory = a.Quantity
+			break
+		}
+	}
+
+	if cfg.Side == "BUY" {
+		if cash < price*sliceQty {
+			sliceQty = cash / price
+		}
+	} else {
+		if inventory < sliceQty {
+			sliceQty = inventory
+		}
+	}
+
+	if sliceQty <= 0 {
+		return
+	}
+
 	req := bots.OrderRequest{
 		AssetID:  cfg.AssetID,
 		UserID:   cfg.UserID,

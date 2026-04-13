@@ -90,16 +90,22 @@ func (s *MarketStore) generateNewsTick(now time.Time, eng *engine.Engine, rng *r
 	return item, true
 }
 
-func (s *MarketStore) publishNewsItem(now time.Time, item NewsItem) NewsItem {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *MarketStore) publishNewsItemLocked(now time.Time, item NewsItem) NewsItem {
 	if item.PublishedAt == 0 {
 		item.PublishedAt = now.UnixMilli()
 	}
 	// We don't have a news slice anymore, it's in the DB.
 	// But we might want a News() method to retrieve it.
-	s.persistNewsItem(item)
+	// run asynchronously so it doesn't try to use the DB connection on the same thread
+	// if we are called inside a transaction or tight lock.
+	go s.persistNewsItem(item)
 	return item
+}
+
+func (s *MarketStore) publishNewsItem(now time.Time, item NewsItem) NewsItem {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.publishNewsItemLocked(now, item)
 }
 
 func (s *MarketStore) applyNewsImpact(item NewsItem, eng *engine.Engine, rng *rand.Rand, cfg NewsEngineConfig) {
@@ -188,9 +194,7 @@ func (s *MarketStore) ensureNewsBotsLocked() {
 			if strings.TrimSpace(name) != "" {
 				user.Username = name
 			}
-			ctx, cancel := s.dbContext()
-			defer cancel()
-			_ = s.queries.UpsertUser(ctx, user, time.Now().UTC())
+			s.updateUserLocked(user)
 		}
 	}
 	ensureBot(newsReactorUserID, "news-reactor")

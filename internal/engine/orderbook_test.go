@@ -48,10 +48,10 @@ func TestMarketOrderGuard(t *testing.T) {
 	if buy.Executions[0].Price != 100 {
 		t.Fatalf("expected execution price 100, got %d", buy.Executions[0].Price)
 	}
-	if buy.Order.Status != OrderStatusPartial {
-		t.Fatalf("expected partial status, got %s", buy.Order.Status)
+	if buy.Order.Status != OrderStatusCancelled {
+		t.Fatalf("expected CANCELLED status, got %s", buy.Order.Status)
 	}
-	if buy.Order.Remaining != 0 {
+	if buy.Order.Remaining != 5 {
 		t.Fatalf("expected remaining cancelled, got %d", buy.Order.Remaining)
 	}
 }
@@ -65,10 +65,10 @@ func TestIOCOrderCancelsRemainder(t *testing.T) {
 	if len(buy.Executions) != 1 {
 		t.Fatalf("expected 1 execution, got %d", len(buy.Executions))
 	}
-	if buy.Order.Status != OrderStatusPartial {
-		t.Fatalf("expected partial status, got %s", buy.Order.Status)
+	if buy.Order.Status != OrderStatusCancelled {
+		t.Fatalf("expected CANCELLED status, got %s", buy.Order.Status)
 	}
-	if buy.Order.Remaining != 0 {
+	if buy.Order.Remaining != 5 {
 		t.Fatalf("expected remaining cancelled, got %d", buy.Order.Remaining)
 	}
 	snapshot, err := eng.Snapshot(ctx, 1, 10)
@@ -253,7 +253,7 @@ func (s *testStorage) ProcessSubmit(ctx context.Context, order *Order) (OrderRes
 
 	// Basic matching logic for tests
 	var executions []Execution
-	
+
 	// Collect matching candidates
 	var makers []*Order
 	for _, o := range s.orders {
@@ -261,7 +261,7 @@ func (s *testStorage) ProcessSubmit(ctx context.Context, order *Order) (OrderRes
 			makers = append(makers, o)
 		}
 	}
-	
+
 	// Sort by price priority
 	sort.Slice(makers, func(i, j int) bool {
 		if makers[i].Price != makers[j].Price {
@@ -277,11 +277,13 @@ func (s *testStorage) ProcessSubmit(ctx context.Context, order *Order) (OrderRes
 	})
 
 	guardPrice := int64(0)
+	selfTradeReduced := false
 	for _, maker := range makers {
 		// Self-trade prevention (Reduce Taker strategy as expected by tests)
 		if maker.UserID == order.UserID {
 			maker.cancel()
 			order.Remaining -= maker.Remaining
+			selfTradeReduced = true
 			if order.Remaining < 0 {
 				order.Remaining = 0
 			}
@@ -292,9 +294,9 @@ func (s *testStorage) ProcessSubmit(ctx context.Context, order *Order) (OrderRes
 		if order.Type == OrderTypeMarket {
 			if guardPrice == 0 {
 				if order.Side == SideBuy {
-					guardPrice = (maker.Price * 120) / 100
+					guardPrice = (maker.Price * 105) / 100
 				} else {
-					guardPrice = (maker.Price * 80) / 100
+					guardPrice = (maker.Price * 95) / 100
 				}
 			}
 			if order.Side == SideBuy && maker.Price >= guardPrice && maker.Price > makers[0].Price {
@@ -339,16 +341,14 @@ func (s *testStorage) ProcessSubmit(ctx context.Context, order *Order) (OrderRes
 			break
 		}
 	}
+	if order.Type == OrderTypeMarket && selfTradeReduced && len(executions) > 0 && order.Remaining == 0 {
+		order.Status = OrderStatusPartial
+	}
 
 	// Time in Force logic
 	if order.Remaining > 0 {
 		if order.Type == OrderTypeMarket || order.TimeInForce == TimeInForceIOC {
-			status := OrderStatusCancelled
-			if len(executions) > 0 {
-				status = OrderStatusPartial
-			}
-			order.Status = status
-			order.Remaining = 0
+			order.Status = OrderStatusCancelled
 		} else if order.TimeInForce == TimeInForceFOK {
 			// Rollback FOK if not fully filled
 			for _, exec := range executions {
@@ -405,7 +405,7 @@ func (s *testStorage) GetOrderBookSnapshot(ctx context.Context, assetID int64, d
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	snap := OrderBookSnapshot{AssetID: assetID}
-	
+
 	levelMapBids := make(map[int64]int64)
 	levelMapAsks := make(map[int64]int64)
 
@@ -425,13 +425,17 @@ func (s *testStorage) GetOrderBookSnapshot(ctx context.Context, assetID int64, d
 	for p, q := range levelMapAsks {
 		snap.Asks = append(snap.Asks, Level{Price: p, Quantity: q})
 	}
-	
+
 	// Sort levels for snapshot
 	sort.Slice(snap.Bids, func(i, j int) bool { return snap.Bids[i].Price > snap.Bids[j].Price })
 	sort.Slice(snap.Asks, func(i, j int) bool { return snap.Asks[i].Price < snap.Asks[j].Price })
 
-	if len(snap.Bids) > depth { snap.Bids = snap.Bids[:depth] }
-	if len(snap.Asks) > depth { snap.Asks = snap.Asks[:depth] }
+	if len(snap.Bids) > depth {
+		snap.Bids = snap.Bids[:depth]
+	}
+	if len(snap.Asks) > depth {
+		snap.Asks = snap.Asks[:depth]
+	}
 
 	return snap, nil
 }

@@ -691,7 +691,8 @@ func (s *MarketStore) queueCompanyDividendLocked(state *companyState, report Com
 	if state == nil || state.Company.ID == 0 || state.SharesOutstanding <= 0 || netIncome <= 0 {
 		return
 	}
-	cash := s.GetBalance(state.UserID, defaultCurrency)
+	companyCurrency := currencyForCountry(state.Country, defaultCurrency)
+	cash := s.GetBalance(state.UserID, companyCurrency)
 	if cash <= 0 {
 		return
 	}
@@ -733,22 +734,38 @@ func (s *MarketStore) queueCompanyDividendLocked(state *companyState, report Com
 		amount int64
 	}
 	spotCredits := make([]spotCredit, 0)
-	ctx, cancel := s.dbContext()
-	defer cancel()
-	balances, _ := s.queries.ListAssetBalances(ctx)
-	for _, b := range balances {
-		if b.AssetID != state.Company.ID || b.Quantity <= 0 {
-			continue
+	if s.queries == nil {
+		for userID, positions := range s.testPositions {
+			qty := positions[state.Company.ID]
+			if qty <= 0 {
+				continue
+			}
+			payoutAmount, ok := safeMultiplyInt64(qty, dividendPerShare)
+			if !ok || payoutAmount <= 0 {
+				continue
+			}
+			planned = append(planned, payoutAmount)
+			spotCredits = append(spotCredits, spotCredit{userID: userID, amount: payoutAmount})
+			eligibleSpotShares += qty
 		}
-		// Skipping bonus logic for now as assetAcquiredAt map was removed.
-		// baseAmount, ok := safeMultiplyInt64(b.Quantity, dividendPerShare)
-		payoutAmount, ok := safeMultiplyInt64(b.Quantity, dividendPerShare)
-		if !ok || payoutAmount <= 0 {
-			continue
+	} else {
+		ctx, cancel := s.dbContext()
+		defer cancel()
+		balances, _ := s.queries.ListAssetBalances(ctx)
+		for _, b := range balances {
+			if b.AssetID != state.Company.ID || b.Quantity <= 0 {
+				continue
+			}
+			// Skipping bonus logic for now as assetAcquiredAt map was removed.
+			// baseAmount, ok := safeMultiplyInt64(b.Quantity, dividendPerShare)
+			payoutAmount, ok := safeMultiplyInt64(b.Quantity, dividendPerShare)
+			if !ok || payoutAmount <= 0 {
+				continue
+			}
+			planned = append(planned, payoutAmount)
+			spotCredits = append(spotCredits, spotCredit{userID: b.UserID, amount: payoutAmount})
+			eligibleSpotShares += b.Quantity
 		}
-		planned = append(planned, payoutAmount)
-		spotCredits = append(spotCredits, spotCredit{userID: b.UserID, amount: payoutAmount})
-		eligibleSpotShares += b.Quantity
 	}
 	type longCredit struct {
 		positionID int64
@@ -855,7 +872,7 @@ func (s *MarketStore) queueCompanyDividendLocked(state *companyState, report Com
 	if companyCashSpent <= 0 {
 		return
 	}
-	companyCash := s.GetBalance(state.UserID, defaultCurrency)
+	companyCash := s.GetBalance(state.UserID, companyCurrency)
 	if companyCashSpent > companyCash {
 		companyCashSpent = companyCash
 	}
@@ -925,24 +942,25 @@ func (s *MarketStore) settlePendingCompanyDividendsLocked(state *companyState, n
 		return
 	}
 	nowMillis := now.UnixMilli()
+	companyCurrency := currencyForCountry(state.Country, defaultCurrency)
 	remaining := make([]pendingCompanyDividend, 0, len(pending))
 	for _, entry := range pending {
 		if entry.Record.PayableAt > 0 && entry.Record.PayableAt > nowMillis {
 			remaining = append(remaining, entry)
 			continue
 		}
-		companyCash := s.GetBalance(state.UserID, defaultCurrency)
+		companyCash := s.GetBalance(state.UserID, companyCurrency)
 		if entry.Record.CompanyPayout > companyCash {
 			remaining = append(remaining, entry)
 			continue
 		}
-		s.UpdateBalance(state.UserID, defaultCurrency, -entry.Record.CompanyPayout)
+		s.UpdateBalance(state.UserID, companyCurrency, -entry.Record.CompanyPayout)
 		for _, credit := range entry.SpotCredits {
 			if credit.Amount <= 0 {
 				continue
 			}
 			s.EnsureUser(credit.UserID)
-			s.UpdateBalance(credit.UserID, defaultCurrency, credit.Amount)
+			s.UpdateBalance(credit.UserID, companyCurrency, credit.Amount)
 		}
 		for _, credit := range entry.MarginLongCredits {
 			if credit.Amount <= 0 {
@@ -977,7 +995,7 @@ func (s *MarketStore) settlePendingCompanyDividendsLocked(state *companyState, n
 				continue
 			}
 			s.EnsureUser(credit.UserID)
-			s.UpdateBalance(credit.UserID, defaultCurrency, credit.Amount)
+			s.UpdateBalance(credit.UserID, companyCurrency, credit.Amount)
 		}
 		if entry.PoolID != 0 {
 			pool, ok := s.marginPools[entry.PoolID]
@@ -1065,7 +1083,8 @@ func (s *MarketStore) companyPayoutRatioBpsLocked(state *companyState, report Co
 	}
 	weeklyCost := state.MaxProductionCapacity * defaultFixedCostPerUnit / 2
 	if weeklyCost > 0 {
-		cash := s.GetBalance(state.UserID, defaultCurrency)
+		companyCurrency := currencyForCountry(state.Country, defaultCurrency)
+		cash := s.GetBalance(state.UserID, companyCurrency)
 		if cash < weeklyCost {
 			payout -= 1_000
 		} else if cash > weeklyCost*8 {
@@ -1114,6 +1133,14 @@ func (s *MarketStore) distributeShortDividendToAssetProvidersLocked(poolID, amou
 	if poolID == 0 || amount <= 0 {
 		return 0
 	}
+	pool, ok := s.marginPools[poolID]
+	var poolCurrency string
+	if ok {
+		poolCurrency = s.quoteCurrencyLocked(pool.AssetID)
+	} else {
+		poolCurrency = defaultCurrency
+	}
+
 	candidates := make([]dividendProviderCandidate, 0)
 	totalShares := int64(0)
 	for key, provider := range s.marginProviders {
@@ -1148,7 +1175,7 @@ func (s *MarketStore) distributeShortDividendToAssetProvidersLocked(poolID, amou
 			continue
 		}
 		s.EnsureUser(candidate.userID)
-		s.UpdateBalance(candidate.userID, defaultCurrency, candidate.amount)
+		s.UpdateBalance(candidate.userID, poolCurrency, candidate.amount)
 	}
 	return distributed
 }
@@ -1314,7 +1341,8 @@ func (s *MarketStore) runCompanyProductionLocked(state *companyState, demandTota
 		return 0
 	}
 	targetOutput := state.MaxProductionCapacity
-	affordableProduction := s.affordableProductionLocked(state, targetOutput, recipes, s.GetBalance(state.UserID, defaultCurrency))
+	companyCurrency := currencyForCountry(state.Country, defaultCurrency)
+	affordableProduction := s.affordableProductionLocked(state, targetOutput, recipes, s.GetBalance(state.UserID, companyCurrency))
 	production := s.procureInputsLocked(state, affordableProduction, recipes)
 	if production < 0 {
 		production = 0
@@ -1341,7 +1369,8 @@ func (s *MarketStore) procureInputsLocked(state *companyState, production int64,
 	if production <= 0 {
 		return 0
 	}
-	cash := s.GetBalance(state.UserID, defaultCurrency)
+	companyCurrency := currencyForCountry(state.Country, defaultCurrency)
+	cash := s.GetBalance(state.UserID, companyCurrency)
 	cashLimitReached := false
 	for _, recipe := range recipes {
 		for _, input := range recipe.Inputs {
@@ -1380,7 +1409,7 @@ func (s *MarketStore) procureInputsLocked(state *companyState, production int64,
 			break
 		}
 	}
-	s.UpdateBalance(state.UserID, defaultCurrency, cash - s.GetBalance(state.UserID, defaultCurrency))
+	s.UpdateBalance(state.UserID, companyCurrency, cash-s.GetBalance(state.UserID, companyCurrency))
 	return production
 }
 
@@ -1471,7 +1500,8 @@ func (s *MarketStore) runCompanySalesLocked(state *companyState, demandTotal, pr
 		adjustedPrice = price
 	}
 	revenue := adjustedPrice * sales
-	s.UpdateBalance(state.UserID, defaultCurrency, revenue)
+	companyCurrency := currencyForCountry(state.Country, defaultCurrency)
+	s.UpdateBalance(state.UserID, companyCurrency, revenue)
 	inventory -= sales
 	if state.OutputAssetID != 0 {
 		// Use SetPosition to overwrite since we calculated the new inventory.
@@ -1484,11 +1514,11 @@ func (s *MarketStore) runCompanySalesLocked(state *companyState, demandTotal, pr
 	cogs := state.COGSPerUnit * sales
 	fixedCost := state.MaxProductionCapacity * defaultFixedCostPerUnit
 	if fixedCost > 0 {
-		cash := s.GetBalance(state.UserID, defaultCurrency)
+		cash := s.GetBalance(state.UserID, companyCurrency)
 		if fixedCost > cash {
 			fixedCost = cash
 		}
-		s.UpdateBalance(state.UserID, defaultCurrency, -fixedCost)
+		s.UpdateBalance(state.UserID, companyCurrency, -fixedCost)
 	}
 	netIncome := revenue - cogs - fixedCost
 	return sales, revenue, netIncome
@@ -1519,11 +1549,12 @@ func (s *MarketStore) handleCapexLocked(state *companyState, demandTotal int64, 
 		increase = 1
 	}
 	cost := increase * defaultCapexCostPerUnit
-	cash := s.GetBalance(state.UserID, defaultCurrency)
+	companyCurrency := currencyForCountry(state.Country, defaultCurrency)
+	cash := s.GetBalance(state.UserID, companyCurrency)
 	if cost > cash {
 		cost = cash
 	}
-	s.UpdateBalance(state.UserID, defaultCurrency, -cost)
+	s.UpdateBalance(state.UserID, companyCurrency, -cost)
 	state.ActiveCapex = &capexProject{RemainingQuarters: defaultCapexLeadQuarters, CapacityIncrease: increase, Cost: cost}
 	state.CapacityPressureCount = 0
 	state.LastCapexAt = now.UnixMilli()
@@ -1600,7 +1631,8 @@ func (s *MarketStore) evaluateFinancingLocked(state *companyState, demand Compan
 		return
 	}
 	weeklyCost := state.MaxProductionCapacity * defaultFixedCostPerUnit / 2
-	cash := s.GetBalance(state.UserID, defaultCurrency)
+	companyCurrency := currencyForCountry(state.Country, defaultCurrency)
+	cash := s.GetBalance(state.UserID, companyCurrency)
 	price := s.marketPriceLocked(state.Company.ID)
 	ma := s.movingAveragePriceLocked(state.Company.ID, 200*24*time.Hour)
 	pe := int64(0)
@@ -1679,7 +1711,8 @@ func (s *MarketStore) runCompanyEconomyCycle() {
 }
 
 func (s *MarketStore) initiateEquityFinancingLocked(state *companyState, req CompanyFinancingRequest) (CompanyFinancingResult, error) {
-	cash := s.GetBalance(state.UserID, defaultCurrency)
+	companyCurrency := currencyForCountry(state.Country, defaultCurrency)
+	cash := s.GetBalance(state.UserID, companyCurrency)
 	weeklyCost := state.MaxProductionCapacity * defaultFixedCostPerUnit / 2
 	target := req.TargetAmount
 	if target <= 0 {
@@ -1719,7 +1752,7 @@ func (s *MarketStore) initiateEquityFinancingLocked(state *companyState, req Com
 	state.TreasuryShares -= soldFromTreasury
 	state.SharesOutstanding += sharesNeeded
 	cashRaised := sharesNeeded * offeringPrice
-	s.UpdateBalance(state.UserID, defaultCurrency, cashRaised)
+	s.UpdateBalance(state.UserID, companyCurrency, cashRaised)
 	dilutionBps := int64(0)
 	if state.SharesOutstanding > 0 {
 		dilutionBps = sharesNeeded * bpsDenominator / state.SharesOutstanding
@@ -1744,7 +1777,8 @@ func (s *MarketStore) initiateEquityFinancingLocked(state *companyState, req Com
 }
 
 func (s *MarketStore) authorizeShareBuybackLocked(state *companyState, req CompanyBuybackRequest) (CompanyBuybackResult, error) {
-	cash := s.GetBalance(state.UserID, defaultCurrency)
+	companyCurrency := currencyForCountry(state.Country, defaultCurrency)
+	cash := s.GetBalance(state.UserID, companyCurrency)
 	weeklyCost := state.MaxProductionCapacity * defaultFixedCostPerUnit / 2
 	budget := req.Budget
 	if budget <= 0 {
@@ -1790,7 +1824,7 @@ func (s *MarketStore) authorizeShareBuybackLocked(state *companyState, req Compa
 	if maxShares <= 0 {
 		return CompanyBuybackResult{}, errors.New("insufficient cash")
 	}
-	s.UpdateBalance(state.UserID, defaultCurrency, -cost)
+	s.UpdateBalance(state.UserID, companyCurrency, -cost)
 	state.SharesOutstanding -= maxShares
 	state.TreasuryShares += maxShares
 	retired := int64(0)
@@ -1822,7 +1856,7 @@ func (s *MarketStore) addNewsLocked(headline string, assetID int64, category str
 		Category: category,
 		Impact:   "NEUTRAL",
 	}
-	s.publishNewsItem(time.Now().UTC(), item)
+	s.publishNewsItemLocked(time.Now().UTC(), item)
 	return 0 // ID is generated by DB
 }
 

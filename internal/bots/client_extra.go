@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
+
+	"github.com/h4ribote/Paper-Street/internal/engine"
 )
 
 func (c *APIClient) Assets(ctx context.Context, assetType, sector string) ([]Asset, error) {
@@ -29,6 +32,21 @@ func (c *APIClient) Assets(ctx context.Context, assetType, sector string) ([]Ass
 		return nil, err
 	}
 	return assets, nil
+}
+
+func (c *APIClient) Asset(ctx context.Context, assetID int64) (*Asset, error) {
+	if c == nil {
+		return nil, fmt.Errorf("api client is nil")
+	}
+	if assetID <= 0 {
+		return nil, fmt.Errorf("asset_id must be positive")
+	}
+	endpoint := fmt.Sprintf("%s/api/assets/%d", c.baseURL, assetID)
+	var asset Asset
+	if err := c.getJSON(ctx, endpoint, &asset); err != nil {
+		return nil, err
+	}
+	return &asset, nil
 }
 
 func (c *APIClient) Candles(ctx context.Context, assetID int64, timeframe string, limit int) ([]Candle, error) {
@@ -157,6 +175,67 @@ func (c *APIClient) Balances(ctx context.Context, userID int64) ([]Balance, erro
 		return nil, err
 	}
 	return balances, nil
+}
+
+func (c *APIClient) PortfolioAssets(ctx context.Context, userID int64) ([]PortfolioAsset, error) {
+	if c == nil {
+		return nil, fmt.Errorf("api client is nil")
+	}
+	endpoint := fmt.Sprintf("%s/api/portfolio/assets", c.baseURL)
+	if userID != 0 {
+		endpoint = fmt.Sprintf("%s?user_id=%d", endpoint, userID)
+	}
+	var assets []PortfolioAsset
+	if err := c.getJSON(ctx, endpoint, &assets); err != nil {
+		return nil, err
+	}
+	return assets, nil
+}
+
+func (c *APIClient) MarginPositions(ctx context.Context, userID int64) ([]MarginPosition, error) {
+	if c == nil {
+		return nil, fmt.Errorf("api client is nil")
+	}
+	endpoint := fmt.Sprintf("%s/api/margin/positions", c.baseURL)
+	if userID != 0 {
+		endpoint = fmt.Sprintf("%s?user_id=%d", endpoint, userID)
+	}
+	var positions []MarginPosition
+	if err := c.getJSON(ctx, endpoint, &positions); err != nil {
+		return nil, err
+	}
+	return positions, nil
+}
+
+func (c *APIClient) Orders(ctx context.Context, status string, assetID, userID int64, limit, offset int) ([]engine.Order, error) {
+	if c == nil {
+		return nil, fmt.Errorf("api client is nil")
+	}
+	endpoint := fmt.Sprintf("%s/api/orders", c.baseURL)
+	query := url.Values{}
+	if status != "" {
+		query.Set("status", status)
+	}
+	if assetID != 0 {
+		query.Set("asset_id", strconv.FormatInt(assetID, 10))
+	}
+	if userID != 0 {
+		query.Set("user_id", strconv.FormatInt(userID, 10))
+	}
+	if limit > 0 {
+		query.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		query.Set("offset", strconv.Itoa(offset))
+	}
+	if len(query) > 0 {
+		endpoint = fmt.Sprintf("%s?%s", endpoint, query.Encode())
+	}
+	var orders []engine.Order
+	if err := c.getJSON(ctx, endpoint, &orders); err != nil {
+		return nil, err
+	}
+	return orders, nil
 }
 
 func (c *APIClient) getJSON(ctx context.Context, endpoint string, target interface{}) error {

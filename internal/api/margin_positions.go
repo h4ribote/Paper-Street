@@ -439,24 +439,33 @@ func (s *MarketStore) checkMarginLiquidationsLocked(assetID int64) {
 		return
 	}
 	now := time.Now().UTC().UnixMilli()
+	var toLiquidate []MarginPosition
 	for id, position := range s.marginPositions {
 		if assetID != 0 && position.AssetID != assetID {
 			continue
 		}
 		position = s.refreshMarginPositionLocked(position, now)
 		if position.LossRatioBps >= marginLossCutBps {
-			s.liquidateMarginPositionLocked(position, now)
-			delete(s.marginPositions, id)
-			go s.deleteMarginPosition(id)
+			toLiquidate = append(toLiquidate, position)
 			continue
 		}
 		s.marginPositions[id] = position
 		positionSnapshot := position
 		go s.persistMarginPosition(positionSnapshot)
 	}
+
+	if len(toLiquidate) > 0 {
+		// We execute the orders asynchronously outside the lock
+		go func(positions []MarginPosition, timestamp int64) {
+			for _, pos := range positions {
+				s.executeMarginLiquidation(pos, timestamp)
+			}
+		}(toLiquidate, now)
+	}
 }
 
-func (s *MarketStore) liquidateMarginPositionLocked(position MarginPosition, now int64) {
+func (s *MarketStore) executeMarginLiquidation(position MarginPosition, now int64) {
+	s.mu.Lock()
 	totalLoss := position.UnrealizedLoss + position.AccumulatedFees
 	remaining := position.MarginUsed - totalLoss
 	if remaining < 0 {
@@ -467,7 +476,7 @@ func (s *MarketStore) liquidateMarginPositionLocked(position MarginPosition, now
 	if remaining > 0 {
 		product, ok := safeMultiplyInt64(remaining, liquidationFeeBps)
 		if ok {
-			fee = product / bpsDenominator
+			fee = (product + bpsDenominator - 1) / bpsDenominator
 		}
 		if fee > remaining {
 			fee = remaining
@@ -475,7 +484,10 @@ func (s *MarketStore) liquidateMarginPositionLocked(position MarginPosition, now
 		payout = remaining - fee
 	}
 	if payout > 0 {
-		s.UpdateBalance(position.UserID, defaultCurrency, payout)
+		s.updateBalanceLocked(position.UserID, defaultCurrency, payout)
+	}
+	if fee > 0 {
+		s.updateBalanceLocked(1, defaultCurrency, fee) // Send fee to Insurance Fund (UserID 1)
 	}
 	s.repayMarginBorrowLocked(position)
 	s.nextLiquidationID++
@@ -492,4 +504,28 @@ func (s *MarketStore) liquidateMarginPositionLocked(position MarginPosition, now
 		OccurredAt:      now,
 	}
 	s.marginLiquidations = append(s.marginLiquidations, event)
+	delete(s.marginPositions, position.ID)
+	id := position.ID
+	s.mu.Unlock()
+
+	go s.deleteMarginPosition(id)
+
+	if s.EngineSubmitOrder != nil {
+		closingSide := engine.SideSell
+		if position.Side == engine.SideSell {
+			closingSide = engine.SideBuy
+		}
+		order := &engine.Order{
+			AssetID:     position.AssetID,
+			UserID:      position.UserID,
+			Side:        closingSide,
+			Type:        engine.OrderTypeMarket,
+			TimeInForce: engine.TimeInForceIOC,
+			Quantity:    position.Quantity,
+			Price:       0,
+			Leverage:    1, // normal exit trade
+		}
+		ctx := context.Background()
+		s.EngineSubmitOrder(ctx, order)
+	}
 }

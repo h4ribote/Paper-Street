@@ -457,7 +457,6 @@ function connectWS() {
     wsClient.subscribe([
         `market.orderbook.${id}`,
         `market.trade.${id}`,
-        `market.order.${id}`,
         `market.candles.${id}.1m`,
         'user.orders',
         'user.portfolio'

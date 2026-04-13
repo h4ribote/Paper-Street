@@ -196,6 +196,12 @@ CREATE TABLE IF NOT EXISTS users (
     FOREIGN KEY (rank_id) REFERENCES rank_definitions(rank_id)
 );
 
+-- Server State / Key-Value config for one-off flags
+CREATE TABLE IF NOT EXISTS server_state (
+    state_key VARCHAR(50) PRIMARY KEY,
+    state_value BOOLEAN NOT NULL
+);
+
 -- APIキー管理
 CREATE TABLE IF NOT EXISTS api_keys (
     api_key VARCHAR(40) PRIMARY KEY,
@@ -212,6 +218,7 @@ CREATE TABLE IF NOT EXISTS currency_balances (
     user_id BIGINT NOT NULL,
     currency_id INT NOT NULL,
     amount BIGINT DEFAULT 0,
+    locked_amount BIGINT DEFAULT 0,
     updated_at BIGINT DEFAULT 0,
     FOREIGN KEY (user_id) REFERENCES users(user_id),
     FOREIGN KEY (currency_id) REFERENCES currencies(currency_id),
@@ -244,6 +251,7 @@ CREATE TABLE IF NOT EXISTS asset_balances (
     user_id BIGINT NOT NULL,
     asset_id INT NOT NULL,
     quantity BIGINT DEFAULT 0,
+    locked_quantity BIGINT DEFAULT 0,
     average_price BIGINT DEFAULT 0,
     average_acquired_at BIGINT DEFAULT 0 COMMENT 'Weighted average timestamp for dividend boost',
     updated_at BIGINT DEFAULT 0,

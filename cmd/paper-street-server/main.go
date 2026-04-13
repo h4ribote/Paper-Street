@@ -42,7 +42,9 @@ func main() {
 			log.Printf("invalid API key %q: %v", key, err)
 		}
 	}
-	handler := api.NewRouter(engine, apiKeys, store, adminPassword)
+	var handler http.Handler = api.NewRouter(engine, apiKeys, store, adminPassword)
+	handler = api.WithLogging(handler, "server")
+
 	newsCtx, newsCancel := context.WithCancel(context.Background())
 	newsConfig := api.DefaultNewsEngineConfig()
 	newsConfig.Interval = envDuration("NEWS_INTERVAL", newsConfig.Interval)

@@ -1,7 +1,9 @@
 package bots
 
 import (
-	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,6 +35,16 @@ func DefaultAPIKeyFile(role string) string {
 	return filepath.Join(dir, fmt.Sprintf("%s.key", role))
 }
 
+func generateDeterministicAPIKey(role, adminSecret string) string {
+	if adminSecret == "" {
+		adminSecret = "fallback"
+	}
+	h := hmac.New(sha256.New, []byte(adminSecret))
+	h.Write([]byte(role))
+	hashHex := hex.EncodeToString(h.Sum(nil))
+	return hashHex[:20]
+}
+
 func ResolveAuth(baseURL, apiKey, role, adminPassword, apiKeyFile string, timeout time.Duration) (AuthResult, error) {
 	apiKey = strings.TrimSpace(apiKey)
 	if apiKey != "" {
@@ -56,10 +68,13 @@ func ResolveAuth(baseURL, apiKey, role, adminPassword, apiKeyFile string, timeou
 	if adminPassword == "" {
 		return AuthResult{}, errors.New("ADMIN_PASSWORD is required when API_KEY is not set")
 	}
-	key, userID, err := requestAPIKey(baseURL, role, adminPassword, timeout)
+
+	key := generateDeterministicAPIKey(role, adminPassword)
+	userID, err := fetchUserID(baseURL, key, timeout)
 	if err != nil {
-		return AuthResult{}, err
+		fmt.Printf("warning: could not fetch user id from server: %v\n", err)
 	}
+
 	if apiKeyFile != "" {
 		if err := writeAPIKeyFile(apiKeyFile, key); err != nil {
 			return AuthResult{}, err
@@ -68,40 +83,33 @@ func ResolveAuth(baseURL, apiKey, role, adminPassword, apiKeyFile string, timeou
 	return AuthResult{APIKey: key, UserID: userID}, nil
 }
 
-func requestAPIKey(baseURL, role, adminPassword string, timeout time.Duration) (string, int64, error) {
+func fetchUserID(baseURL, apiKey string, timeout time.Duration) (int64, error) {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if baseURL == "" {
-		return "", 0, errors.New("API_BASE_URL is required")
-	}
-	payload, err := json.Marshal(map[string]string{
-		"role":           role,
-		"admin_password": adminPassword,
-	})
-	if err != nil {
-		return "", 0, err
+		return 0, errors.New("API_BASE_URL is required")
 	}
 	client := &http.Client{Timeout: timeout}
-	req, err := http.NewRequest(http.MethodPost, baseURL+"/auth/bot", bytes.NewReader(payload))
+	req, err := http.NewRequest(http.MethodGet, baseURL+"/api/users/me", nil)
 	if err != nil {
-		return "", 0, err
+		return 0, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Key", apiKey)
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", 0, err
+		return 0, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", 0, fmt.Errorf("auth request failed: status %d", resp.StatusCode)
+		return 0, fmt.Errorf("user fetch failed: status %d", resp.StatusCode)
 	}
-	var decoded authResponse
+	var decoded struct {
+		ID int64 `json:"id"`
+	}
 	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
-		return "", 0, err
+		return 0, err
 	}
-	if strings.TrimSpace(decoded.APIKey) == "" {
-		return "", 0, errors.New("auth response missing api_key")
-	}
-	return strings.TrimSpace(decoded.APIKey), decoded.User.ID, nil
+	return decoded.ID, nil
 }
 
 func readAPIKeyFile(path string) (string, error) {

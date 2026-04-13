@@ -1,0 +1,149 @@
+market_maker_share_percent: 20
+liquidity_share_percent: 30
+initial_currency_seed_value: 20000000
+roles:
+  market_maker:
+    username: Market Maker
+    balances:
+      ARC: 5000000
+  liquidity_provider:
+    username: Liquidity Provider
+    balances: {}
+  whale_northern:
+    username: Whale Northern
+    balances:
+      ARC: 5000000
+      BRB: 5000000
+      DRL: 5000000
+  whale_oceanic:
+    username: Whale Oceanic
+    balances:
+      VND: 7500000
+      VDP: 7500000
+  whale_energy:
+    username: Whale Energy
+    balances:
+      ZMR: 7500000
+      RVD: 7500000
+  national_ai_arcadia:
+    username: National AI Arcadia
+    balances:
+      ARC: 30000000
+  national_ai_boros:
+    username: National AI Boros
+    balances:
+      BRB: 20000000
+      ARC: 10000000
+  national_ai_el_dorado:
+    username: National AI El Dorado
+    balances:
+      DRL: 20000000
+      ARC: 10000000
+  national_ai_neo_venice:
+    username: National AI Neo Venice
+    balances:
+      VND: 20000000
+      ARC: 10000000
+  national_ai_san_verde:
+    username: National AI San Verde
+    balances:
+      VDP: 20000000
+      ARC: 10000000
+  national_ai_novaya_zemlya:
+    username: National AI Novaya
+    balances:
+      ZMR: 20000000
+      ARC: 10000000
+  national_ai_pearl_river:
+    username: National AI Pearl River
+    balances:
+      RVD: 20000000
+      ARC: 10000000
+  momentum_chaser_a:
+    username: bot momentum_chaser_a
+    balances:
+      ARC: 200000
+      BRB: 200000
+      DRL: 200000
+  momentum_chaser_b:
+    username: bot momentum_chaser_b
+    balances:
+      VND: 300000
+      VDP: 300000
+  momentum_chaser_c:
+    username: bot momentum_chaser_c
+    balances:
+      ZMR: 300000
+      RVD: 300000
+  dip_buyer_a:
+    username: bot dip_buyer_a
+    balances:
+      ARC: 200000
+      BRB: 200000
+      DRL: 200000
+  dip_buyer_b:
+    username: bot dip_buyer_b
+    balances:
+      VND: 300000
+      VDP: 300000
+  dip_buyer_c:
+    username: bot dip_buyer_c
+    balances:
+      ZMR: 300000
+      RVD: 300000
+  reversal_sniper_a:
+    username: bot reversal_sniper_a
+    balances:
+      ARC: 200000
+      BRB: 200000
+      DRL: 200000
+  reversal_sniper_b:
+    username: bot reversal_sniper_b
+    balances:
+      VND: 300000
+      VDP: 300000
+  reversal_sniper_c:
+    username: bot reversal_sniper_c
+    balances:
+      ZMR: 300000
+      RVD: 300000
+  grid_trader_a:
+    username: bot grid_trader_a
+    balances:
+      ARC: 200000
+      BRB: 200000
+      DRL: 200000
+  grid_trader_b:
+    username: bot grid_trader_b
+    balances:
+      VND: 300000
+      VDP: 300000
+  grid_trader_c:
+    username: bot grid_trader_c
+    balances:
+      ZMR: 300000
+      RVD: 300000
+  news_reactor:
+    username: bot news_reactor
+    balances:
+      ARC: 200000
+      BRB: 200000
+      DRL: 200000
+  arbitrageur:
+    username: bot arbitrageur
+    balances:
+      ARC: 200000
+      BRB: 200000
+      DRL: 200000
+  yield_hunter:
+    username: bot yield_hunter
+    balances:
+      ARC: 200000
+      BRB: 200000
+      DRL: 200000
+  public_consumer:
+    username: bot public_consumer
+    balances:
+      ARC: 200000
+      BRB: 200000
+      DRL: 200000

@@ -27,7 +27,7 @@ type Server struct {
 	AdminPassword    string
 	DiscordState     string
 	marketCooldownMu sync.Mutex
-	marketCooldown   map[marketCooldownKey]time.Time
+	marketCooldown   map[int64]time.Time
 }
 
 type orderRequest struct {
@@ -47,9 +47,10 @@ type errorResponse struct {
 }
 
 const (
-	defaultOrderBookDepth = 20
-	maxOrderBookDepth     = 100
-	marketOrderCooldown   = 5 * time.Second
+	defaultOrderBookDepth    = 20
+	maxOrderBookDepth        = 100
+	marketVolatilityCooldown = 10 * time.Second
+	marketVolatilityWindow   = 10 * time.Second
 )
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +190,7 @@ func (s *Server) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	previousTimestamp, hadPreviousEntry, err := s.checkAndSetMarketCooldown(order)
+	err = s.checkMarketVolatilityCooldown(order)
 	if err != nil {
 		respondError(w, http.StatusTooManyRequests, err.Error())
 		return
@@ -198,7 +199,6 @@ func (s *Server) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	result, err := s.Engine.SubmitOrder(ctx, order)
 	if err != nil {
-		s.restoreMarketCooldown(order, previousTimestamp, hadPreviousEntry)
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -315,45 +315,62 @@ func (o orderRequest) toOrder(defaultUserID int64) (*engine.Order, error) {
 	}, nil
 }
 
-type marketCooldownKey struct {
-	userID  int64
-	side    engine.Side
-	assetID int64
-}
-
-func (s *Server) checkAndSetMarketCooldown(order *engine.Order) (time.Time, bool, error) {
+func (s *Server) checkMarketVolatilityCooldown(order *engine.Order) error {
 	if s == nil || order == nil || order.Type != engine.OrderTypeMarket {
-		return time.Time{}, false, nil
+		return nil
 	}
+
 	now := time.Now()
-	key := marketCooldownKey{userID: order.UserID, side: order.Side, assetID: order.AssetID}
 	s.marketCooldownMu.Lock()
 	defer s.marketCooldownMu.Unlock()
-	if s.marketCooldown == nil {
-		s.marketCooldown = make(map[marketCooldownKey]time.Time)
-	}
-	last, ok := s.marketCooldown[key]
-	if ok && last.Add(marketOrderCooldown).After(now) {
-		remaining := last.Add(marketOrderCooldown).Sub(now)
-		remainingSeconds := int(math.Ceil(remaining.Seconds()))
-		return time.Time{}, false, fmt.Errorf("market order cooldown active, retry in %d seconds", remainingSeconds)
-	}
-	s.marketCooldown[key] = now
-	return last, ok, nil
-}
 
-func (s *Server) restoreMarketCooldown(order *engine.Order, previous time.Time, hadPrevious bool) {
-	if s == nil || order == nil || order.Type != engine.OrderTypeMarket {
-		return
+	if s.marketCooldown == nil {
+		s.marketCooldown = make(map[int64]time.Time)
 	}
-	key := marketCooldownKey{userID: order.UserID, side: order.Side, assetID: order.AssetID}
-	s.marketCooldownMu.Lock()
-	defer s.marketCooldownMu.Unlock()
-	if !hadPrevious {
-		delete(s.marketCooldown, key)
-		return
+
+	// 1. Check active cooldown timer
+	last, ok := s.marketCooldown[order.AssetID]
+	if ok && last.Add(marketVolatilityCooldown).After(now) {
+		remainingSeconds := int(math.Ceil(last.Add(marketVolatilityCooldown).Sub(now).Seconds()))
+		return fmt.Errorf("market order cooldown active due to high volatility, retry in %d seconds", remainingSeconds)
 	}
-	s.marketCooldown[key] = previous
+
+	// 2. Check recent price history
+	if s.Store != nil {
+		cutoff := now.Add(-marketVolatilityWindow).UTC()
+		var maxPrice, minPrice int64
+		hasData := false
+
+		// We assume Executions returns descending by time
+		execs := s.Store.Executions(order.AssetID, 0)
+		for _, e := range execs {
+			if e.OccurredAtUTC.Before(cutoff) {
+				break
+			}
+			if !hasData {
+				maxPrice = e.Price
+				minPrice = e.Price
+				hasData = true
+			} else {
+				if e.Price > maxPrice {
+					maxPrice = e.Price
+				}
+				if e.Price < minPrice {
+					minPrice = e.Price
+				}
+			}
+		}
+
+		if hasData && minPrice > 0 {
+			diff := maxPrice - minPrice
+			if diff*100 >= minPrice*5 { // >= 5% fluctuation
+				s.marketCooldown[order.AssetID] = now
+				return fmt.Errorf("market order cooldown activated due to high volatility, retry in 10 seconds")
+			}
+		}
+	}
+
+	return nil
 }
 
 func respondJSON(w http.ResponseWriter, status int, payload interface{}) {

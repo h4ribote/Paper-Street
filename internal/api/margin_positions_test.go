@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -59,6 +60,10 @@ func TestMarginLiquidationTriggered(t *testing.T) {
 	store.EnsureUser(3)
 	eng := engine.NewEngine(nil, store)
 
+	store.EngineSubmitOrder = func(ctx context.Context, order *engine.Order) (engine.OrderResult, error) {
+		return eng.SubmitOrder(ctx, order)
+	}
+
 	submitEngineOrder(t, eng, &engine.Order{
 		AssetID:  101,
 		UserID:   1,
@@ -89,7 +94,7 @@ func TestMarginLiquidationTriggered(t *testing.T) {
 		Side:     engine.SideBuy,
 		Type:     engine.OrderTypeLimit,
 		Quantity: 1,
-		Price:    60,
+		Price:    85,
 	})
 	submitEngineOrder(t, eng, &engine.Order{
 		AssetID:  101,
@@ -97,8 +102,16 @@ func TestMarginLiquidationTriggered(t *testing.T) {
 		Side:     engine.SideSell,
 		Type:     engine.OrderTypeLimit,
 		Quantity: 1,
-		Price:    60,
+		Price:    85,
 	})
+
+	// Wait for async liquidation to process
+	for i := 0; i < 50; i++ {
+		if len(store.MarginPositions(1)) == 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	positions = store.MarginPositions(1)
 	if len(positions) != 0 {
@@ -107,6 +120,18 @@ func TestMarginLiquidationTriggered(t *testing.T) {
 	events := store.MarginLiquidations(1)
 	if len(events) != 1 {
 		t.Fatalf("expected 1 liquidation event, got %d", len(events))
+	}
+
+	remainingMargin := int64(50)              // 200 - 150 (loss)
+	expectedFee := remainingMargin * 10 / 100 // 10% fee
+	expectedPayout := remainingMargin - expectedFee
+
+	event := events[0]
+	if event.LiquidationFee != expectedFee {
+		t.Fatalf("expected liquidation fee %d, got %d", expectedFee, event.LiquidationFee)
+	}
+	if event.RemainingMargin != expectedPayout {
+		t.Fatalf("expected remaining margin %d, got %d", expectedPayout, event.RemainingMargin)
 	}
 	if events[0].PositionID != positionID {
 		t.Fatalf("unexpected liquidation position id: %d", events[0].PositionID)
@@ -201,6 +226,10 @@ func TestMarginMaintenanceLiquidatesOnFees(t *testing.T) {
 	store.EnsureUser(2)
 	eng := engine.NewEngine(nil, store)
 
+	store.EngineSubmitOrder = func(ctx context.Context, order *engine.Order) (engine.OrderResult, error) {
+		return eng.SubmitOrder(ctx, order)
+	}
+
 	submitEngineOrder(t, eng, &engine.Order{
 		AssetID:  101,
 		UserID:   1,
@@ -228,6 +257,16 @@ func TestMarginMaintenanceLiquidatesOnFees(t *testing.T) {
 	setMarginPositionAccumulatedFees(store, position.ID, threshold+1)
 
 	store.runMarginMaintenance()
+
+	for i := 0; i < 50; i++ {
+		store.mu.RLock()
+		_, exists := store.marginPositions[position.ID]
+		store.mu.RUnlock()
+		if !exists {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	store.mu.RLock()
 	_, exists := store.marginPositions[position.ID]

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/h4ribote/Paper-Street/internal/auth"
 	"github.com/h4ribote/Paper-Street/internal/engine"
@@ -23,18 +24,20 @@ func NewRouter(e *engine.Engine, apiKeys *auth.APIKeyCache, store *MarketStore, 
 	}
 	discordState := hex.EncodeToString(discordStateBytes)
 
+	store.EngineSubmitOrder = e.SubmitOrder
+
 	srv := &Server{
-		Engine:        e,
-		APIKeys:       apiKeys,
-		Store:         store,
-		WSHub:         hub,
-		AdminPassword: adminPassword,
-		DiscordState:  discordState,
+		Engine:         e,
+		APIKeys:        apiKeys,
+		Store:          store,
+		WSHub:          hub,
+		AdminPassword:  adminPassword,
+		DiscordState:   discordState,
+		marketCooldown: make(map[int64]time.Time),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", srv.handleHealth)
-	mux.HandleFunc("/auth/login", srv.handleAuthLogin)
-	mux.HandleFunc("/auth/bot", srv.handleAuthLogin)
+
 	mux.HandleFunc("/auth/discord/login", srv.handleDiscordLogin)
 	mux.HandleFunc("/auth/callback", srv.handleAuthCallback)
 	mux.HandleFunc("/api/users/me", srv.handleCurrentUser)

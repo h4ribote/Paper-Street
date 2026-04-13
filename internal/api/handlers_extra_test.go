@@ -189,7 +189,6 @@ func TestPoolPositionLifecycle(t *testing.T) {
 	store.RegisterAPIKey(testAPIKeyUser1, 1)
 	store.EnsureUser(1)
 	store.SetBalance(1, "VDP", 1_000)
-	store.mu.Unlock()
 	eng := engine.NewEngine(nil, store)
 	server := httptest.NewServer(NewRouter(eng, apiKeys, store, ""))
 	defer server.Close()

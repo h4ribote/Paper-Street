@@ -1,7 +1,11 @@
 package api
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"log"
+	"os"
 	"sort"
 	"strings"
 
@@ -9,10 +13,7 @@ import (
 )
 
 const (
-	initialRoleUserIDStart   = int64(1000)
-	marketMakerSharePercent  = int64(20)
-	liquiditySharePercent    = int64(30)
-	initialCurrencySeedValue = int64(20_000_000)
+	initialRoleUserIDStart = int64(1000)
 )
 
 type roleSeed struct {
@@ -27,6 +28,8 @@ type seededUser struct {
 	user      models.User
 	balances  map[string]int64
 	positions map[int64]int64
+	botRole   string
+	apiKey    string
 }
 
 type companyTier struct {
@@ -70,15 +73,30 @@ func (s *MarketStore) seedInitialAllocations() {
 		s.mu.Unlock()
 		return
 	}
+
+	config, err := LoadEconomyConfig()
+	if err != nil {
+		log.Printf("failed to load economy config, using default: %v", err)
+		config = defaultEconomyConfig()
+	}
+
 	s.registerInitialCurrenciesLocked()
 	companies := s.sortedCompanyStatesLocked()
 	seeded := make([]seededUser, 0)
 	seeded = append(seeded, s.applyCompanyAllocationsLocked(companies)...)
-	seeded = append(seeded, s.applyRoleSeedsLocked(companies)...)
+	seeded = append(seeded, s.applyRoleSeedsLocked(companies, config)...)
 	s.initialAllocDone = true
 	s.mu.Unlock()
 	s.persistSeededUsers(seeded)
 	s.persistSeededCompanies(companies)
+
+	if s.queries != nil {
+		ctx, cancel := s.dbContext()
+		defer cancel()
+		if err := s.queries.SetServerStateBool(ctx, "is_initial_allocation_done", true); err != nil {
+			log.Printf("failed to mark initial allocation as done in db: %v", err)
+		}
+	}
 }
 
 func (s *MarketStore) registerInitialCurrenciesLocked() {
@@ -148,14 +166,14 @@ func (s *MarketStore) applyCompanyAllocationsLocked(companies []*companyState) [
 			localCurrency = defaultCurrency
 		}
 		s.currencies[localCurrency] = struct{}{}
-		
+
 		inventory := state.MaxProductionCapacity * tier.inventoryQuarters
 		state.CurrentInventory = inventory
-		
+
 		state.SharesIssued = tier.sharesIssued
 		state.TreasuryShares = tier.sharesIssued / 2
 		state.SharesOutstanding = tier.sharesIssued - state.TreasuryShares
-		
+
 		seedEntry := seededUser{
 			user:     user,
 			balances: map[string]int64{localCurrency: tier.cash},
@@ -168,7 +186,7 @@ func (s *MarketStore) applyCompanyAllocationsLocked(companies []*companyState) [
 	return seeded
 }
 
-func (s *MarketStore) applyRoleSeedsLocked(companies []*companyState) []seededUser {
+func (s *MarketStore) applyRoleSeedsLocked(companies []*companyState, config *EconomyConfig) []seededUser {
 	var stockAssets []int64
 	sharesIssued := make(map[int64]int64)
 	for _, state := range companies {
@@ -193,115 +211,63 @@ func (s *MarketStore) applyRoleSeedsLocked(companies []*companyState) []seededUs
 		if issued <= 0 {
 			continue
 		}
-		marketMakerPositions[assetID] = issued * marketMakerSharePercent / 100
-		liquidityPositions[assetID] = issued * liquiditySharePercent / 100
+		marketMakerPositions[assetID] = issued * config.MarketMakerSharePercent / 100
+		liquidityPositions[assetID] = issued * config.LiquiditySharePercent / 100
 	}
-	seeded = append(seeded, s.applyRoleSeedLocked(roleSeed{
-		Role:      "market_maker",
-		UserID:    nextID(),
-		Username:  "Market Maker",
-		Balances:  map[string]int64{"ARC": 5_000_000},
-		Positions: marketMakerPositions,
-	}))
-	liquidityBalances := map[string]int64{"ARC": 20_000_000}
-	for _, currency := range []string{"BRB", "DRL", "VND", "VDP", "ZMR", "RVD"} {
-		liquidityBalances[currency] += initialCurrencySeedValue
-		liquidityBalances["ARC"] += 10_000_000
-	}
-	seeded = append(seeded, s.applyRoleSeedLocked(roleSeed{
-		Role:      "liquidity_provider",
-		UserID:    nextID(),
-		Username:  "Liquidity Provider",
-		Balances:  liquidityBalances,
-		Positions: liquidityPositions,
-	}))
-	seeded = append(seeded, s.applyRoleSeedLocked(roleSeed{
-		Role:     "whale_northern",
-		UserID:   nextID(),
-		Username: "Whale Northern",
-		Balances: map[string]int64{"ARC": 5_000_000, "BRB": 5_000_000, "DRL": 5_000_000},
-	}))
-	seeded = append(seeded, s.applyRoleSeedLocked(roleSeed{
-		Role:     "whale_oceanic",
-		UserID:   nextID(),
-		Username: "Whale Oceanic",
-		Balances: map[string]int64{"VND": 7_500_000, "VDP": 7_500_000},
-	}))
-	seeded = append(seeded, s.applyRoleSeedLocked(roleSeed{
-		Role:     "whale_energy",
-		UserID:   nextID(),
-		Username: "Whale Energy",
-		Balances: map[string]int64{"ZMR": 7_500_000, "RVD": 7_500_000},
-	}))
-	seeded = append(seeded, s.applyRoleSeedLocked(roleSeed{
-		Role:     "national_ai_arcadia",
-		UserID:   nextID(),
-		Username: "National AI Arcadia",
-		Balances: map[string]int64{"ARC": 30_000_000},
-	}))
-	nationalSeeds := []struct {
-		role     string
-		username string
-		currency string
-	}{
-		{role: "national_ai_boros", username: "National AI Boros", currency: "BRB"},
-		{role: "national_ai_el_dorado", username: "National AI El Dorado", currency: "DRL"},
-		{role: "national_ai_neo_venice", username: "National AI Neo Venice", currency: "VND"},
-		{role: "national_ai_san_verde", username: "National AI San Verde", currency: "VDP"},
-		{role: "national_ai_novaya_zemlya", username: "National AI Novaya", currency: "ZMR"},
-		{role: "national_ai_pearl_river", username: "National AI Pearl River", currency: "RVD"},
-	}
-	for _, seed := range nationalSeeds {
+
+	// Prepare dynamic configurations based on EconomyConfig
+	for role, conf := range config.Roles {
+		positions := make(map[int64]int64)
+		if role == "market_maker" {
+			for k, v := range marketMakerPositions {
+				positions[k] = v
+			}
+		} else if role == "liquidity_provider" {
+			for k, v := range liquidityPositions {
+				positions[k] = v
+			}
+			// ensure dynamic basic balances
+			if conf.Balances == nil {
+				conf.Balances = map[string]int64{"ARC": 20_000_000}
+			}
+			for _, currency := range []string{"BRB", "DRL", "VND", "VDP", "ZMR", "RVD"} {
+				conf.Balances[currency] += config.InitialCurrencySeedValue
+				conf.Balances["ARC"] += 10_000_000
+			}
+		}
+
 		seeded = append(seeded, s.applyRoleSeedLocked(roleSeed{
-			Role:     seed.role,
-			UserID:   nextID(),
-			Username: seed.username,
-			Balances: map[string]int64{seed.currency: 20_000_000, "ARC": 10_000_000},
+			Role:      role,
+			UserID:    nextID(),
+			Username:  conf.Username,
+			Balances:  conf.Balances,
+			Positions: positions,
 		}))
 	}
-	groupA := map[string]int64{"ARC": 200_000, "BRB": 200_000, "DRL": 200_000}
-	groupB := map[string]int64{"VND": 300_000, "VDP": 300_000}
-	groupC := map[string]int64{"ZMR": 300_000, "RVD": 300_000}
-	for _, entry := range []struct {
-		role string
-		set  map[string]int64
-	}{
-		{"momentum_chaser_a", groupA},
-		{"momentum_chaser_b", groupB},
-		{"momentum_chaser_c", groupC},
-		{"dip_buyer_a", groupA},
-		{"dip_buyer_b", groupB},
-		{"dip_buyer_c", groupC},
-		{"reversal_sniper_a", groupA},
-		{"reversal_sniper_b", groupB},
-		{"reversal_sniper_c", groupC},
-		{"grid_trader_a", groupA},
-		{"grid_trader_b", groupB},
-		{"grid_trader_c", groupC},
-		{"news_reactor", groupA},
-		{"arbitrageur", groupA},
-		{"yield_hunter", groupA},
-		{"public_consumer", groupA},
-	} {
-		username := strings.ReplaceAll(entry.role, "_", " ")
-		seeded = append(seeded, s.applyRoleSeedLocked(roleSeed{
-			Role:     entry.role,
-			UserID:   nextID(),
-			Username: username,
-			Balances: entry.set,
-		}))
-	}
+
 	for _, state := range companies {
 		if state == nil {
 			continue
 		}
 		seeded = append(seeded, s.applyRoleSeedLocked(roleSeed{
-			Role:     "corporate_ai_" + strings.ToLower(state.Company.Symbol),
-			UserID:   state.UserID,
-			Username: "Corporate AI " + state.Company.Symbol,
+			Role:      "corporate_ai_" + strings.ToLower(state.Company.Symbol),
+			UserID:    state.UserID,
+			Username:  "Corporate AI " + state.Company.Symbol,
+			Positions: map[int64]int64{state.Company.ID: state.TreasuryShares},
 		}))
 	}
 	return seeded
+}
+
+func generateDeterministicAPIKey(role string) string {
+	adminSecret := strings.TrimSpace(os.Getenv("ADMIN_PASSWORD"))
+	if adminSecret == "" {
+		adminSecret = "fallback"
+	}
+	h := hmac.New(sha256.New, []byte(adminSecret))
+	h.Write([]byte(role))
+	hashHex := hex.EncodeToString(h.Sum(nil))
+	return hashHex[:20]
 }
 
 func (s *MarketStore) applyRoleSeedLocked(seed roleSeed) seededUser {
@@ -326,22 +292,19 @@ func (s *MarketStore) applyRoleSeedLocked(seed roleSeed) seededUser {
 	for currency := range seed.Balances {
 		s.currencies[currency] = struct{}{}
 	}
-	
+
 	s.roleToUserID[role] = userID
 	if _, ok := s.roleToAPIKey[role]; !ok {
-		key, err := generateAPIKeyHex()
-		if err != nil {
-			log.Printf("failed to generate api key for role %s: %v", role, err)
-		} else {
-			s.roleToAPIKey[role] = key
-			s.apiKeyToUser[key] = userID
-			s.persistAPIKey(role, key, userID)
-		}
+		key := generateDeterministicAPIKey(role)
+		s.roleToAPIKey[role] = key
+		s.apiKeyToUser[key] = userID
 	}
 	return seededUser{
 		user:      user,
 		balances:  cloneCurrencyBalances(seed.Balances),
 		positions: cloneAssetPositions(seed.Positions),
+		botRole:   role,
+		apiKey:    s.roleToAPIKey[role],
 	}
 }
 
@@ -361,6 +324,9 @@ func (s *MarketStore) persistSeededUsers(seeded []seededUser) {
 		}
 		for assetID, qty := range entry.positions {
 			s.persistAssetBalance(user.ID, assetID, qty)
+		}
+		if entry.botRole != "" && entry.apiKey != "" {
+			s.persistAPIKey(entry.botRole, entry.apiKey, user.ID)
 		}
 	}
 }

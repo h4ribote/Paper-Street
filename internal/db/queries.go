@@ -31,15 +31,17 @@ type AssetSnapshot struct {
 }
 
 type CurrencyBalance struct {
-	UserID   int64
-	Currency string
-	Amount   int64
+	UserID       int64
+	Currency     string
+	Amount       int64
+	LockedAmount int64
 }
 
 type AssetBalance struct {
-	UserID   int64
-	AssetID  int64
-	Quantity int64
+	UserID         int64
+	AssetID        int64
+	Quantity       int64
+	LockedQuantity int64
 }
 
 type APIKeyRecord struct {
@@ -442,7 +444,9 @@ func (q *Queries) ListAssets(ctx context.Context) ([]AssetSnapshot, error) {
 		if err := rows.Scan(&asset.ID, &asset.Symbol, &asset.Type, &basePrice); err != nil {
 			return nil, err
 		}
-		if asset.Name == "" { asset.Name = asset.Symbol }
+		if asset.Name == "" {
+			asset.Name = asset.Symbol
+		}
 		assets = append(assets, AssetSnapshot{Asset: asset, BasePrice: basePrice})
 	}
 	return assets, rows.Err()
@@ -452,7 +456,9 @@ func (q *Queries) GetAsset(ctx context.Context, assetID int64) (models.Asset, er
 	var asset models.Asset
 	err := q.Conn.DB.QueryRowContext(ctx, "SELECT asset_id, ticker, type FROM assets WHERE asset_id = ?", assetID).Scan(&asset.ID, &asset.Symbol, &asset.Type)
 	if err == nil {
-		if asset.Name == "" { asset.Name = asset.Symbol }
+		if asset.Name == "" {
+			asset.Name = asset.Symbol
+		}
 	}
 	return asset, err
 }
@@ -533,9 +539,9 @@ func (q *Queries) UpsertOrder(ctx context.Context, order *engine.Order) error {
 	if filled < 0 {
 		filled = 0
 	}
-	_, err := q.Conn.DB.ExecContext(ctx, `
+	res, err := q.Conn.DB.ExecContext(ctx, `
 		INSERT INTO orders (order_id, user_id, asset_id, side, type, quantity, price, stop_price, filled_quantity, status, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (NULLIF(?, 0), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE user_id = VALUES(user_id),
 			asset_id = VALUES(asset_id),
 			side = VALUES(side),
@@ -549,6 +555,12 @@ func (q *Queries) UpsertOrder(ctx context.Context, order *engine.Order) error {
 	`, order.ID, order.UserID, order.AssetID, order.Side, order.Type, order.Quantity, order.Price, order.StopPrice, filled, order.Status, createdAt.UnixMilli(), updatedAt.UnixMilli())
 	if err != nil {
 		return err
+	}
+	if order.ID == 0 {
+		id, err := res.LastInsertId()
+		if err == nil && id > 0 {
+			order.ID = id
+		}
 	}
 	return nil
 }
@@ -623,7 +635,7 @@ func (q *Queries) GetStopOrdersToTrigger(ctx context.Context, tx *sql.Tx, assetI
 			  WHERE asset_id = ? AND status = 'OPEN' AND (type = 'STOP' OR type = 'STOP_LIMIT')
 			  AND ((side = 'BUY' AND stop_price <= ?) OR (side = 'SELL' AND stop_price >= ?))
 			  ORDER BY created_at ASC FOR UPDATE`
-	
+
 	rows, err := tx.QueryContext(ctx, query, assetID, lastPrice, lastPrice)
 	if err != nil {
 		return nil, err
@@ -861,6 +873,20 @@ func (q *Queries) GetBalance(ctx context.Context, params models.GetBalanceParams
 	return amount, err
 }
 
+func (q *Queries) GetBalanceRecord(ctx context.Context, params models.GetBalanceParams) (CurrencyBalance, error) {
+	var cb CurrencyBalance
+	err := q.Conn.DB.QueryRowContext(ctx, `
+		SELECT cb.user_id, c.code, cb.amount, cb.locked_amount 
+		FROM currency_balances cb
+		JOIN currencies c ON cb.currency_id = c.currency_id
+		WHERE cb.user_id = ? AND c.code = ?
+	`, params.UserID, params.Currency).Scan(&cb.UserID, &cb.Currency, &cb.Amount, &cb.LockedAmount)
+	if err == sql.ErrNoRows {
+		return CurrencyBalance{UserID: params.UserID, Currency: params.Currency, Amount: 0, LockedAmount: 0}, nil
+	}
+	return cb, err
+}
+
 func (q *Queries) SetCurrencyBalance(ctx context.Context, userID, currencyID, amount int64) error {
 	if userID == 0 || currencyID == 0 {
 		return errors.New("user id and currency id required")
@@ -876,7 +902,7 @@ func (q *Queries) SetCurrencyBalance(ctx context.Context, userID, currencyID, am
 	return nil
 }
 
-func (q *Queries) AdjustCurrencyBalance(ctx context.Context, tx *sql.Tx, userID int64, currency string, delta int64) error {
+func (q *Queries) AdjustCurrencyBalance(ctx context.Context, tx *sql.Tx, userID int64, currency string, delta int64, lockedDelta int64) error {
 	var currencyID int64
 	var err error
 	query := "SELECT currency_id FROM currencies WHERE code = ? LIMIT 1"
@@ -888,40 +914,40 @@ func (q *Queries) AdjustCurrencyBalance(ctx context.Context, tx *sql.Tx, userID 
 	if err != nil {
 		return err
 	}
-	
+
 	upsertQuery := `
-		INSERT INTO currency_balances (user_id, currency_id, amount, updated_at)
-		VALUES (?, ?, ?, ?)
-		ON DUPLICATE KEY UPDATE amount = amount + ?, updated_at = ?
+		INSERT INTO currency_balances (user_id, currency_id, amount, locked_amount, updated_at)
+		VALUES (?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE amount = amount + ?, locked_amount = locked_amount + ?, updated_at = ?
 	`
 	now := time.Now().UTC().UnixMilli()
 	if tx != nil {
-		_, err = tx.ExecContext(ctx, upsertQuery, userID, currencyID, delta, now, delta, now)
+		_, err = tx.ExecContext(ctx, upsertQuery, userID, currencyID, delta, lockedDelta, now, delta, lockedDelta, now)
 	} else {
-		_, err = q.Conn.DB.ExecContext(ctx, upsertQuery, userID, currencyID, delta, now, delta, now)
+		_, err = q.Conn.DB.ExecContext(ctx, upsertQuery, userID, currencyID, delta, lockedDelta, now, delta, lockedDelta, now)
 	}
 	return err
 }
 
-func (q *Queries) AdjustAssetBalance(ctx context.Context, tx *sql.Tx, userID int64, assetID int64, delta int64) error {
+func (q *Queries) AdjustAssetBalance(ctx context.Context, tx *sql.Tx, userID int64, assetID int64, delta int64, lockedDelta int64) error {
 	upsertQuery := `
-		INSERT INTO asset_balances (user_id, asset_id, quantity, average_price, average_acquired_at, updated_at)
-		VALUES (?, ?, ?, 0, 0, ?)
-		ON DUPLICATE KEY UPDATE quantity = quantity + ?, updated_at = ?
+		INSERT INTO asset_balances (user_id, asset_id, quantity, locked_quantity, average_price, average_acquired_at, updated_at)
+		VALUES (?, ?, ?, ?, 0, 0, ?)
+		ON DUPLICATE KEY UPDATE quantity = quantity + ?, locked_quantity = locked_quantity + ?, updated_at = ?
 	`
 	now := time.Now().UTC().UnixMilli()
 	var err error
 	if tx != nil {
-		_, err = tx.ExecContext(ctx, upsertQuery, userID, assetID, delta, now, delta, now)
+		_, err = tx.ExecContext(ctx, upsertQuery, userID, assetID, delta, lockedDelta, now, delta, lockedDelta, now)
 	} else {
-		_, err = q.Conn.DB.ExecContext(ctx, upsertQuery, userID, assetID, delta, now, delta, now)
+		_, err = q.Conn.DB.ExecContext(ctx, upsertQuery, userID, assetID, delta, lockedDelta, now, delta, lockedDelta, now)
 	}
 	return err
 }
 
 func (q *Queries) ListCurrencyBalances(ctx context.Context) ([]CurrencyBalance, error) {
 	rows, err := q.Conn.DB.QueryContext(ctx, `
-		SELECT cb.user_id, c.code, cb.amount
+		SELECT cb.user_id, c.code, cb.amount, cb.locked_amount
 		FROM currency_balances cb
 		JOIN currencies c ON c.currency_id = cb.currency_id
 	`)
@@ -932,7 +958,7 @@ func (q *Queries) ListCurrencyBalances(ctx context.Context) ([]CurrencyBalance, 
 	var balances []CurrencyBalance
 	for rows.Next() {
 		var balance CurrencyBalance
-		if err := rows.Scan(&balance.UserID, &balance.Currency, &balance.Amount); err != nil {
+		if err := rows.Scan(&balance.UserID, &balance.Currency, &balance.Amount, &balance.LockedAmount); err != nil {
 			return nil, err
 		}
 		balances = append(balances, balance)
@@ -993,6 +1019,19 @@ func (q *Queries) GetPosition(ctx context.Context, params models.GetPositionPara
 	return qty, err
 }
 
+func (q *Queries) GetPositionRecord(ctx context.Context, params models.GetPositionParams) (AssetBalance, error) {
+	var ab AssetBalance
+	err := q.Conn.DB.QueryRowContext(ctx, `
+		SELECT user_id, asset_id, quantity, locked_quantity 
+		FROM asset_balances 
+		WHERE user_id = ? AND asset_id = ?
+	`, params.UserID, params.AssetID).Scan(&ab.UserID, &ab.AssetID, &ab.Quantity, &ab.LockedQuantity)
+	if err == sql.ErrNoRows {
+		return AssetBalance{UserID: params.UserID, AssetID: params.AssetID, Quantity: 0, LockedQuantity: 0}, nil
+	}
+	return ab, err
+}
+
 func (q *Queries) SetAssetBalance(ctx context.Context, userID, assetID, quantity int64) error {
 	if userID == 0 || assetID == 0 {
 		return errors.New("user id and asset id required")
@@ -1006,7 +1045,7 @@ func (q *Queries) SetAssetBalance(ctx context.Context, userID, assetID, quantity
 }
 
 func (q *Queries) ListAssetBalances(ctx context.Context) ([]AssetBalance, error) {
-	rows, err := q.Conn.DB.QueryContext(ctx, "SELECT user_id, asset_id, quantity FROM asset_balances")
+	rows, err := q.Conn.DB.QueryContext(ctx, "SELECT user_id, asset_id, quantity, locked_quantity FROM asset_balances")
 	if err != nil {
 		return nil, err
 	}
@@ -1014,7 +1053,7 @@ func (q *Queries) ListAssetBalances(ctx context.Context) ([]AssetBalance, error)
 	var balances []AssetBalance
 	for rows.Next() {
 		var balance AssetBalance
-		if err := rows.Scan(&balance.UserID, &balance.AssetID, &balance.Quantity); err != nil {
+		if err := rows.Scan(&balance.UserID, &balance.AssetID, &balance.Quantity, &balance.LockedQuantity); err != nil {
 			return nil, err
 		}
 		balances = append(balances, balance)
@@ -2027,6 +2066,111 @@ func (q *Queries) ReplaceMacroIndicators(ctx context.Context, records []MacroInd
 	return tx.Commit()
 }
 
+// Server State Management
+func (q *Queries) GetServerStateBool(ctx context.Context, key string, defaultValue bool) (bool, error) {
+	var value bool
+	err := q.Conn.DB.QueryRowContext(ctx, "SELECT state_value FROM server_state WHERE state_key = ?", key).Scan(&value)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return defaultValue, nil
+		}
+		return defaultValue, err
+	}
+	return value, nil
+}
+
+func (q *Queries) SetServerStateBool(ctx context.Context, key string, value bool) error {
+	_, err := q.Conn.DB.ExecContext(ctx, `
+		INSERT INTO server_state (state_key, state_value)
+		VALUES (?, ?)
+		ON DUPLICATE KEY UPDATE state_value = VALUES(state_value)
+	`, key, value)
+	return err
+}
+
+type TransactionLogRecord struct {
+	UserID       int64
+	CurrencyID   int64
+	Amount       int64
+	BalanceAfter int64
+	Type         string
+	ReferenceID  string
+	Description  string
+	CreatedAt    int64
+}
+
+func (q *Queries) InsertTransactionLog(ctx context.Context, tx *sql.Tx, record TransactionLogRecord) error {
+	query := `
+		INSERT INTO transaction_logs (user_id, currency_id, amount, balance_after, type, reference_id, description, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	var err error
+	if tx != nil {
+		_, err = tx.ExecContext(ctx, query, record.UserID, record.CurrencyID, record.Amount, record.BalanceAfter, record.Type, record.ReferenceID, record.Description, record.CreatedAt)
+	} else {
+		_, err = q.Conn.DB.ExecContext(ctx, query, record.UserID, record.CurrencyID, record.Amount, record.BalanceAfter, record.Type, record.ReferenceID, record.Description, record.CreatedAt)
+	}
+	return err
+}
+
+type MarketCandleRecord struct {
+	AssetID   int64
+	Timeframe string
+	OpenTime  int64
+	Open      int64
+	High      int64
+	Low       int64
+	Close     int64
+	Volume    int64
+}
+
+func (q *Queries) UpsertMarketCandle(ctx context.Context, record MarketCandleRecord) error {
+	query := `
+		INSERT INTO market_candles (asset_id, timeframe, open_time, open, high, low, close, volume)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+			open = VALUES(open),
+			high = VALUES(high),
+			low = VALUES(low),
+			close = VALUES(close),
+			volume = VALUES(volume)
+	`
+	_, err := q.Conn.DB.ExecContext(ctx, query, record.AssetID, record.Timeframe, record.OpenTime, record.Open, record.High, record.Low, record.Close, record.Volume)
+	return err
+}
+
+type ResourceRecord struct {
+	Name        string
+	Type        string
+	Description string
+}
+
+func (q *Queries) InsertResource(ctx context.Context, record ResourceRecord) (int64, error) {
+	query := "INSERT INTO resources (name, type, description) VALUES (?, ?, ?)"
+	res, err := q.Conn.DB.ExecContext(ctx, query, record.Name, record.Type, record.Description)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (q *Queries) InsertProductionRecipe(ctx context.Context, record ProductionRecipeRecord) (int64, error) {
+	query := "INSERT INTO production_recipes (company_id, output_asset_id, output_quantity) VALUES (?, ?, ?)"
+	res, err := q.Conn.DB.ExecContext(ctx, query, record.CompanyID, record.OutputAssetID, record.OutputQuantity)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (q *Queries) InsertProductionInput(ctx context.Context, record ProductionInputRecord) (int64, error) {
+	query := "INSERT INTO production_inputs (recipe_id, input_asset_id, input_quantity) VALUES (?, ?, ?)"
+	res, err := q.Conn.DB.ExecContext(ctx, query, record.RecipeID, record.InputAssetID, record.InputQuantity)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
 
 func rollbackTx(tx *sql.Tx) {
 	if tx == nil {

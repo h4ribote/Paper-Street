@@ -44,6 +44,14 @@ func main() {
 
 func runOnce(client *bots.APIClient, cfg config, rng *rand.Rand) {
 	for _, assetID := range cfg.AssetIDs {
+		// Asset check
+		ctxA, cancelA := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+		_, errA := client.Asset(ctxA, assetID)
+		cancelA()
+		if errA != nil {
+			continue // skip non-existent
+		}
+
 		ctx, cancel := context.WithTimeout(context.Background(), cfg.RequestTimeout)
 		candles, err := client.Candles(ctx, assetID, cfg.Timeframe, cfg.CandleLimit)
 		cancel()
@@ -55,6 +63,45 @@ func runOnce(client *bots.APIClient, cfg config, rng *rand.Rand) {
 		if !ok {
 			continue
 		}
+
+		ctxB, cancelB := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+		balances, _ := client.Balances(ctxB, cfg.UserID)
+		cancelB()
+		var cash int64
+		for _, b := range balances {
+			if b.Currency == "ARC" {
+				cash = b.Amount
+				break
+			}
+		}
+
+		ctxI, cancelI := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+		assets, _ := client.PortfolioAssets(ctxI, cfg.UserID)
+		cancelI()
+		var inventory int64
+		for _, a := range assets {
+			if a.Asset.ID == assetID {
+				inventory = a.Quantity
+				break
+			}
+		}
+
+		qty := cfg.Quantity
+		lastPrice := candles[0].Close
+		if signal.Side == "BUY" {
+			if cash < lastPrice*qty {
+				qty = cash / lastPrice
+			}
+		} else {
+			if inventory < qty {
+				qty = inventory
+			}
+		}
+
+		if qty <= 0 {
+			continue
+		}
+
 		if cfg.Jitter > 0 {
 			jitterNs := cfg.Jitter.Nanoseconds()
 			if jitterNs > 0 {
@@ -66,7 +113,7 @@ func runOnce(client *bots.APIClient, cfg config, rng *rand.Rand) {
 			UserID:   cfg.UserID,
 			Side:     signal.Side,
 			Type:     "MARKET",
-			Quantity: cfg.Quantity,
+			Quantity: qty,
 		}
 		ctx, cancel = context.WithTimeout(context.Background(), cfg.RequestTimeout)
 		order, err := client.SubmitOrder(ctx, req)

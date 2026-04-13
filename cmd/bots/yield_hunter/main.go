@@ -79,12 +79,32 @@ func runOnce(client *bots.APIClient, cfg config) {
 		assetID = cfg.BondAssetID
 		price = bondPrice
 	}
+
+	ctxB, cancelB := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+	balances, _ := client.Balances(ctxB, cfg.UserID)
+	cancelB()
+	var cash int64
+	for _, b := range balances {
+		if b.Currency == "ARC" {
+			cash = b.Amount
+			break
+		}
+	}
+
+	qty := cfg.Quantity
+	if cash < price*qty {
+		qty = cash / price
+	}
+	if qty <= 0 {
+		return
+	}
+
 	req := bots.OrderRequest{
 		AssetID:  assetID,
 		UserID:   cfg.UserID,
 		Side:     "BUY",
 		Type:     "LIMIT",
-		Quantity: cfg.Quantity,
+		Quantity: qty,
 		Price:    price,
 	}
 	ctx, cancel = context.WithTimeout(context.Background(), cfg.RequestTimeout)

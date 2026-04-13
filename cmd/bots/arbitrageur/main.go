@@ -100,8 +100,9 @@ func runIndexArb(client *bots.APIClient, cfg config, nav int64) {
 			AssetID:  cfg.IndexAssetID,
 			UserID:   cfg.UserID,
 			Side:     "SELL",
-			Type:     "MARKET",
+			Type:     "LIMIT",
 			Quantity: cfg.OrderQuantity,
+			Price:    nav * 105 / 100, // 5% worse than NAV max
 		}
 		ctx, cancel = context.WithTimeout(context.Background(), cfg.RequestTimeout)
 		order, err := client.SubmitOrder(ctx, sellReq)
@@ -112,12 +113,29 @@ func runIndexArb(client *bots.APIClient, cfg config, nav int64) {
 		}
 		log.Printf("arbitrageur: premium arb sell id=%d qty=%d spread_bps=%d", order.ID, order.Quantity, spread)
 	case spread < -cfg.ThresholdBps:
+		ctxBal, cancelBal := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+		balances, _ := client.Balances(ctxBal, cfg.UserID)
+		cancelBal()
+		var cash int64
+		for _, b := range balances {
+			if b.Currency == "ARC" {
+				cash = b.Amount
+				break
+			}
+		}
+		cost := indexPrice * cfg.OrderQuantity
+		if cash < cost {
+			log.Printf("arbitrageur: insufficient ARC balance for discount arb (need %d, have %d)", cost, cash)
+			return
+		}
+
 		buyReq := bots.OrderRequest{
 			AssetID:  cfg.IndexAssetID,
 			UserID:   cfg.UserID,
 			Side:     "BUY",
-			Type:     "MARKET",
+			Type:     "LIMIT",
 			Quantity: cfg.OrderQuantity,
+			Price:    nav * 105 / 100, // 5% worse than NAV max
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), cfg.RequestTimeout)
 		order, err := client.SubmitOrder(ctx, buyReq)
@@ -153,6 +171,19 @@ func runFXArb(client *bots.APIClient, cfg config) {
 		log.Printf("arbitrageur: pools fetch failed: %v", err)
 		return
 	}
+	ctx, cancel = context.WithTimeout(context.Background(), cfg.RequestTimeout)
+	balances, err := client.Balances(ctx, cfg.UserID)
+	cancel()
+	if err != nil {
+		log.Printf("arbitrageur: balances fetch failed: %v", err)
+		return
+	}
+
+	balanceMap := make(map[string]int64)
+	for _, b := range balances {
+		balanceMap[b.Currency] = b.Amount
+	}
+
 	for _, rate := range rates {
 		marketRate, ok := fxMarketRate(pools, rate.BaseCurrency, rate.QuoteCurrency)
 		if !ok {
@@ -168,19 +199,28 @@ func runFXArb(client *bots.APIClient, cfg config) {
 			from = rate.BaseCurrency
 			to = rate.QuoteCurrency
 		}
+		swapAmount := cfg.FXSwapAmount
+		if balanceMap[from] < swapAmount {
+			swapAmount = balanceMap[from]
+		}
+		if swapAmount < 100 {
+			continue
+		}
 		req := bots.PoolSwapRequest{
 			UserID:       cfg.UserID,
 			FromCurrency: from,
 			ToCurrency:   to,
-			Amount:       cfg.FXSwapAmount,
+			Amount:       swapAmount,
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), cfg.RequestTimeout)
-		result, err := client.SwapPool(ctx, 0, req)
-		cancel()
+		ctxSwap, cancelSwap := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+		result, err := client.SwapPool(ctxSwap, 0, req)
+		cancelSwap()
 		if err != nil {
 			log.Printf("arbitrageur: fx swap failed %s->%s: %v", from, to, err)
 			continue
 		}
+		balanceMap[from] -= result.AmountIn
+		balanceMap[to] += result.AmountOut
 		log.Printf("arbitrageur: fx arb %s->%s in=%d out=%d", result.FromCurrency, result.ToCurrency, result.AmountIn, result.AmountOut)
 	}
 }

@@ -774,6 +774,17 @@ func (s *MarketStore) seedIndexes() {
 
 func (s *MarketStore) ensureIndexLocked(assetID int64) IndexDefinition {
 	if def, ok := s.indexes[assetID]; ok {
+		asset, exists := s.testAssets[assetID]
+		if !exists || !stringsEqualFold(asset.Type, "INDEX") {
+			asset = s.ensureAssetLocked(assetID)
+			asset.Type = "INDEX"
+			asset.Sector = stringOrDefault(asset.Sector, "MIXED")
+			if asset.Symbol == "" || strings.HasPrefix(asset.Symbol, "ASSET-") {
+				asset.Symbol = fmt.Sprintf("INDEX-%d", assetID)
+			}
+			price := s.indexUnitPriceLocked(def)
+			s.updateAssetLocked(asset, price)
+		}
 		return def
 	}
 	assets := s.Assets(AssetFilter{})

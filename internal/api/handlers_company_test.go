@@ -132,9 +132,8 @@ func TestCompanyProcurementRespectsCashBalance(t *testing.T) {
 	}
 	inputPrice := int64(10)
 	inputQuantity := int64(2)
-	ctx, cancel := store.dbContext()
-	_ = store.queries.UpsertAsset(ctx, inputAsset, inputPrice)
-	cancel()
+	store.updateAssetLocked(inputAsset, inputPrice)
+	store.lastPrices[inputAsset.ID] = inputPrice
 	state.MaxProductionCapacity = 10
 	store.companyRecipes[state.Company.ID] = []ProductionRecipe{
 		{
@@ -255,9 +254,10 @@ func TestCompanyDividendDistributionCoversSpotPoolAndMargin(t *testing.T) {
 		PublishedAt:   now.UnixMilli(),
 	}
 	store.storeFinancialReportLocked(101, report)
-	companyStartCash := store.GetBalance(state.UserID, defaultCurrency)
-	spotStartCash := store.GetBalance(spotUser, defaultCurrency)
-	poolProviderStartCash := store.GetBalance(poolUser, defaultCurrency)
+	companyCurrency := currencyForCountry(state.Country, defaultCurrency)
+	companyStartCash := store.GetBalance(state.UserID, companyCurrency)
+	spotStartCash := store.GetBalance(spotUser, companyCurrency)
+	poolProviderStartCash := store.GetBalance(poolUser, companyCurrency)
 	longStartMargin := store.marginPositions[5001].MarginUsed
 	shortStartFees := store.marginPositions[5002].AccumulatedFees
 	poolStartCash := store.marginPools[poolID].TotalCash
@@ -275,15 +275,15 @@ func TestCompanyDividendDistributionCoversSpotPoolAndMargin(t *testing.T) {
 		store.mu.RUnlock()
 		t.Fatalf("expected positive company payout, got %d", record.CompanyPayout)
 	}
-	if got := store.GetBalance(101, defaultCurrency); got >= companyStartCash {
+	if got := store.GetBalance(101, companyCurrency); got >= companyStartCash {
 		store.mu.RUnlock()
 		t.Fatalf("expected company cash to decrease after dividends, start=%d got=%d", companyStartCash, got)
 	}
-	if got := store.GetBalance(spotUser, defaultCurrency); got <= spotStartCash {
+	if got := store.GetBalance(spotUser, companyCurrency); got <= spotStartCash {
 		store.mu.RUnlock()
 		t.Fatalf("expected spot holder to receive dividend, start=%d got=%d", spotStartCash, got)
 	}
-	if got := store.GetBalance(poolUser, defaultCurrency); got <= poolProviderStartCash {
+	if got := store.GetBalance(poolUser, companyCurrency); got <= poolProviderStartCash {
 		store.mu.RUnlock()
 		t.Fatalf("expected pool asset provider to receive short-side dividend, start=%d got=%d", poolProviderStartCash, got)
 	}
@@ -410,7 +410,8 @@ func TestCompanyDividendSettlesAfterDelay(t *testing.T) {
 	store.EnsureUser(holder)
 	store.SetPosition(holder, 101, 100)
 	store.SetAssetAcquiredAt(holder, 101, now.Add(-10*24*time.Hour).UnixMilli())
-	store.SetBalance(state.UserID, defaultCurrency, 10_000_000)
+	companyCurrency := currencyForCountry(state.Country, defaultCurrency)
+	store.SetBalance(state.UserID, companyCurrency, 10_000_000)
 	report := CompanyFinancialReport{
 		CompanyID:     101,
 		FiscalYear:    2026,
@@ -419,8 +420,8 @@ func TestCompanyDividendSettlesAfterDelay(t *testing.T) {
 		EPS:           10,
 		PublishedAt:   now.UnixMilli(),
 	}
-	beforeCompany := store.GetBalance(state.UserID, defaultCurrency)
-	beforeHolder := store.GetBalance(holder, defaultCurrency)
+	beforeCompany := store.GetBalance(state.UserID, companyCurrency)
+	beforeHolder := store.GetBalance(holder, companyCurrency)
 	store.queueCompanyDividendLocked(state, report, report.NetIncome, now)
 	if got := len(store.companyDividends[101]); got != 0 {
 		store.mu.Unlock()
@@ -431,8 +432,8 @@ func TestCompanyDividendSettlesAfterDelay(t *testing.T) {
 		t.Fatalf("expected pending dividend entry")
 	}
 	store.settlePendingCompanyDividendsLocked(state, now.Add(companyDividendSettlementWait+time.Minute))
-	afterCompany := store.GetBalance(state.UserID, defaultCurrency)
-	afterHolder := store.GetBalance(holder, defaultCurrency)
+	afterCompany := store.GetBalance(state.UserID, companyCurrency)
+	afterHolder := store.GetBalance(holder, companyCurrency)
 	store.mu.Unlock()
 
 	if afterCompany >= beforeCompany {
