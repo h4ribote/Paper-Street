@@ -2088,6 +2088,90 @@ func (q *Queries) SetServerStateBool(ctx context.Context, key string, value bool
 	return err
 }
 
+type TransactionLogRecord struct {
+	UserID       int64
+	CurrencyID   int64
+	Amount       int64
+	BalanceAfter int64
+	Type         string
+	ReferenceID  string
+	Description  string
+	CreatedAt    int64
+}
+
+func (q *Queries) InsertTransactionLog(ctx context.Context, tx *sql.Tx, record TransactionLogRecord) error {
+	query := `
+		INSERT INTO transaction_logs (user_id, currency_id, amount, balance_after, type, reference_id, description, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	var err error
+	if tx != nil {
+		_, err = tx.ExecContext(ctx, query, record.UserID, record.CurrencyID, record.Amount, record.BalanceAfter, record.Type, record.ReferenceID, record.Description, record.CreatedAt)
+	} else {
+		_, err = q.Conn.DB.ExecContext(ctx, query, record.UserID, record.CurrencyID, record.Amount, record.BalanceAfter, record.Type, record.ReferenceID, record.Description, record.CreatedAt)
+	}
+	return err
+}
+
+type MarketCandleRecord struct {
+	AssetID   int64
+	Timeframe string
+	OpenTime  int64
+	Open      int64
+	High      int64
+	Low       int64
+	Close     int64
+	Volume    int64
+}
+
+func (q *Queries) UpsertMarketCandle(ctx context.Context, record MarketCandleRecord) error {
+	query := `
+		INSERT INTO market_candles (asset_id, timeframe, open_time, open, high, low, close, volume)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+			open = VALUES(open),
+			high = VALUES(high),
+			low = VALUES(low),
+			close = VALUES(close),
+			volume = VALUES(volume)
+	`
+	_, err := q.Conn.DB.ExecContext(ctx, query, record.AssetID, record.Timeframe, record.OpenTime, record.Open, record.High, record.Low, record.Close, record.Volume)
+	return err
+}
+
+type ResourceRecord struct {
+	Name        string
+	Type        string
+	Description string
+}
+
+func (q *Queries) InsertResource(ctx context.Context, record ResourceRecord) (int64, error) {
+	query := "INSERT INTO resources (name, type, description) VALUES (?, ?, ?)"
+	res, err := q.Conn.DB.ExecContext(ctx, query, record.Name, record.Type, record.Description)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (q *Queries) InsertProductionRecipe(ctx context.Context, record ProductionRecipeRecord) (int64, error) {
+	query := "INSERT INTO production_recipes (company_id, output_asset_id, output_quantity) VALUES (?, ?, ?)"
+	res, err := q.Conn.DB.ExecContext(ctx, query, record.CompanyID, record.OutputAssetID, record.OutputQuantity)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (q *Queries) InsertProductionInput(ctx context.Context, record ProductionInputRecord) (int64, error) {
+	query := "INSERT INTO production_inputs (recipe_id, input_asset_id, input_quantity) VALUES (?, ?, ?)"
+	res, err := q.Conn.DB.ExecContext(ctx, query, record.RecipeID, record.InputAssetID, record.InputQuantity)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
 func rollbackTx(tx *sql.Tx) {
 	if tx == nil {
 		return
