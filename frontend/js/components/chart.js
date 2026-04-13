@@ -39,21 +39,25 @@ export class PriceChart {
     this.chart.timeScale().fitContent();
   }
 
-  setCandles(candles = []) {
+  setCandles(candles = [], fitContent = false) {
     const normalized = candles.filter((c) => c && Number.isFinite(c.timestamp)).map((c) => ({
       time: Math.floor(Number(c.timestamp) / 1000),
       open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close),
     })).sort((a, b) => a.time - b.time);
 
+    const isFirstLoad = this.data.length === 0 && normalized.length > 0;
     this.data = normalized;
+
     if (this.series) {
       this.series.setData(normalized);
-      this.chart?.timeScale()?.fitContent();
+      if (fitContent || isFirstLoad) {
+        this.chart?.timeScale()?.fitContent();
+      }
     }
     this.renderFallback();
   }
 
-  updateFromTrade(trade) {
+  updateFromTrade(trade, timeframe = '1m') {
     if (!trade || !Number.isFinite(Number(trade.price))) return;
     const price = Number(trade.price);
     const epochSec = Math.floor(new Date(trade.occurred_at || Date.now()).getTime() / 1000);
@@ -63,8 +67,17 @@ export class PriceChart {
       return;
     }
 
+    // Convert timeframe to seconds
+    let bucketSize = 60; // 1m default
+    if (timeframe === '1m') bucketSize = 60;
+    else if (timeframe === '5m') bucketSize = 300;
+    else if (timeframe === '15m') bucketSize = 900;
+    else if (timeframe === '1h') bucketSize = 3600;
+    else if (timeframe === '4h') bucketSize = 14400;
+    else if (timeframe === '1d') bucketSize = 86400;
+
     const last = this.data[this.data.length - 1];
-    const bucket = epochSec - (epochSec % 60);
+    const bucket = epochSec - (epochSec % bucketSize);
     if (last.time === bucket) {
       last.close = price;
       last.high = Math.max(last.high, price);

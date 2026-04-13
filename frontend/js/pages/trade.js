@@ -35,6 +35,39 @@ async function initTrade() {
     chart = new PriceChart(document.getElementById('tvchart'));
     chart.init();
 
+    state.timeframe = '1m';
+
+    // Event Listeners for Timeframes
+    document.querySelectorAll('#chart-timeframes button').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const newTf = e.target.dataset.tf;
+            if (newTf === state.timeframe) return;
+
+            document.querySelectorAll('#chart-timeframes button').forEach(b => {
+                b.className = 'hover:text-white';
+            });
+            e.target.className = 'text-brand-500';
+
+            const oldTf = state.timeframe;
+            state.timeframe = newTf;
+            const id = state.selectedAssetId;
+
+            // Fetch new candles
+            const candles = await api(`/api/market/candles/${id}?timeframe=${newTf}&limit=100`);
+            if (candles && chart) {
+                chart.setCandles(candles, true);
+            } else {
+                chart.setCandles([], true);
+            }
+
+            // Update WS subscription
+            if (wsClient) {
+                wsClient.unsubscribe([`market.candles.${id}.${oldTf}`]);
+                wsClient.subscribe([`market.candles.${id}.${newTf}`]);
+            }
+        });
+    });
+
     // Event Listeners for Order Form
     setupOrderForm();
 
@@ -134,7 +167,7 @@ async function loadAssetData() {
     const [ob, trades, candles] = await Promise.all([
         api(`/api/market/orderbook/${id}?depth=20`),
         api(`/api/market/trades/${id}?limit=50`),
-        api(`/api/market/candles/${id}?timeframe=1m&limit=100`)
+        api(`/api/market/candles/${id}?timeframe=${state.timeframe || '1m'}&limit=100`)
     ]);
 
     if (ob) {
@@ -437,7 +470,7 @@ function connectWS() {
             } else if (topic.startsWith('market.trade.')) {
                 state.trades = data;
                 updateTradesUI();
-                if (chart && data.length > 0) chart.updateFromTrade(data[0]);
+                if (chart && data.length > 0) chart.updateFromTrade(data[0], state.timeframe || '1m');
             } else if (topic.startsWith('market.candles.')) {
                 if (chart) chart.setCandles(data);
             } else if (topic === 'user.orders') {
@@ -457,7 +490,7 @@ function connectWS() {
     wsClient.subscribe([
         `market.orderbook.${id}`,
         `market.trade.${id}`,
-        `market.candles.${id}.1m`,
+        `market.candles.${id}.${state.timeframe || '1m'}`,
         'user.orders',
         'user.portfolio'
     ]);
