@@ -73,5 +73,13 @@ fi
 echo "Using DATABASE_DSN=${DATABASE_DSN}"
 echo "------------------------------------------"
 
+# --- 4. Calculate API Key ---
+echo "Calculating Market Maker API Key..."
+MM_API_KEY=$(echo -n "market_maker" | openssl dgst -sha256 -hmac "$ADMIN_PASSWORD" | sed 's/^.* //')
+# Take first 20 characters
+MM_API_KEY=${MM_API_KEY:0:20}
+echo "Market Maker API Key: ${MM_API_KEY}"
+echo "------------------------------------------"
+
 # Start the server
 ./server_bin
