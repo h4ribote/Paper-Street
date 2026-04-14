@@ -76,14 +76,14 @@ CREATE TABLE IF NOT EXISTS companies (
     user_id BIGINT UNIQUE COMMENT 'Bot Account ID',
 
     -- Economic Simulation State
-    max_production_capacity BIGINT DEFAULT 10000 COMMENT 'Max units per quarter',
-    current_inventory BIGINT DEFAULT 0 COMMENT 'Current units in stock',
+    max_production_capacity BIGINT DEFAULT 10000 COMMENT 'Max units per quarter' CHECK (max_production_capacity >= 0),
+    current_inventory BIGINT DEFAULT 0 COMMENT 'Current units in stock' CHECK (current_inventory >= 0),
     last_capex_at BIGINT DEFAULT 0 COMMENT 'Timestamp of last expansion',
 
     -- Equity Financing State
-    shares_issued BIGINT DEFAULT 1000000 COMMENT 'Total shares issued',
-    shares_outstanding BIGINT DEFAULT 500000 COMMENT 'Shares outstanding',
-    treasury_stock BIGINT DEFAULT 500000 COMMENT 'Treasury shares',
+    shares_issued BIGINT DEFAULT 1000000 COMMENT 'Total shares issued' CHECK (shares_issued >= 0),
+    shares_outstanding BIGINT DEFAULT 500000 COMMENT 'Shares outstanding' CHECK (shares_outstanding >= 0),
+    treasury_stock BIGINT DEFAULT 500000 COMMENT 'Treasury shares' CHECK (treasury_stock >= 0),
 
     FOREIGN KEY (country_id) REFERENCES countries(country_id),
     FOREIGN KEY (sector_id) REFERENCES sectors(sector_id),
@@ -106,14 +106,14 @@ CREATE TABLE IF NOT EXISTS financial_reports (
     fiscal_year INT NOT NULL,
     fiscal_quarter INT NOT NULL COMMENT '1, 2, 3, 4',
     
-    revenue BIGINT DEFAULT 0 COMMENT 'Scaled currency (1.000000 = 1000000)',
+    revenue BIGINT DEFAULT 0 COMMENT 'Scaled currency (1.000000 = 1000000)' CHECK (revenue >= 0),
     net_income BIGINT DEFAULT 0 COMMENT 'Scaled currency (1.000000 = 1000000)',
     eps BIGINT DEFAULT 0 COMMENT 'Earnings Per Share (1.000000 = 1000000)',
     
     -- Economic Metrics
-    capex BIGINT DEFAULT 0 COMMENT 'Capital Expenditure this quarter (1.000000 = 1000000)',
-    utilization_rate BIGINT DEFAULT 0 COMMENT 'Scaled: 10000 = 100.00%',
-    inventory_level BIGINT DEFAULT 0 COMMENT 'Inventory at quarter end',
+    capex BIGINT DEFAULT 0 COMMENT 'Capital Expenditure this quarter (1.000000 = 1000000)' CHECK (capex >= 0),
+    utilization_rate BIGINT DEFAULT 0 COMMENT 'Scaled: 10000 = 100.00%' CHECK (utilization_rate >= 0),
+    inventory_level BIGINT DEFAULT 0 COMMENT 'Inventory at quarter end' CHECK (inventory_level >= 0),
 
     guidance TEXT COMMENT 'Management guidance/outlook',
     published_at BIGINT NOT NULL,
@@ -130,16 +130,16 @@ CREATE TABLE IF NOT EXISTS company_dividends (
     fiscal_year INT NOT NULL,
     fiscal_quarter INT NOT NULL COMMENT '1, 2, 3, 4',
     net_income BIGINT DEFAULT 0,
-    payout_ratio_bps BIGINT DEFAULT 0,
-    dividend_per_share BIGINT DEFAULT 0,
-    company_payout BIGINT DEFAULT 0,
-    pool_payout BIGINT DEFAULT 0,
-    spot_payout BIGINT DEFAULT 0,
-    margin_long_payout BIGINT DEFAULT 0,
-    margin_short_charge BIGINT DEFAULT 0,
-    eligible_spot_shares BIGINT DEFAULT 0,
-    eligible_long_shares BIGINT DEFAULT 0,
-    pool_shares BIGINT DEFAULT 0,
+    payout_ratio_bps BIGINT DEFAULT 0 CHECK (payout_ratio_bps >= 0),
+    dividend_per_share BIGINT DEFAULT 0 CHECK (dividend_per_share >= 0),
+    company_payout BIGINT DEFAULT 0 CHECK (company_payout >= 0),
+    pool_payout BIGINT DEFAULT 0 CHECK (pool_payout >= 0),
+    spot_payout BIGINT DEFAULT 0 CHECK (spot_payout >= 0),
+    margin_long_payout BIGINT DEFAULT 0 CHECK (margin_long_payout >= 0),
+    margin_short_charge BIGINT DEFAULT 0 CHECK (margin_short_charge >= 0),
+    eligible_spot_shares BIGINT DEFAULT 0 CHECK (eligible_spot_shares >= 0),
+    eligible_long_shares BIGINT DEFAULT 0 CHECK (eligible_long_shares >= 0),
+    pool_shares BIGINT DEFAULT 0 CHECK (pool_shares >= 0),
     created_at BIGINT NOT NULL,
 
     FOREIGN KEY (company_id) REFERENCES companies(company_id),
@@ -153,8 +153,8 @@ CREATE TABLE IF NOT EXISTS assets (
     company_id INT NULL,
     resource_id INT NULL,
     type ENUM('STOCK', 'BOND', 'INDEX', 'COMMODITY') NOT NULL,
-    base_price BIGINT NOT NULL COMMENT 'Integer scaled price (1.000000 = 1000000)',
-    lot_size INT DEFAULT 1,
+    base_price BIGINT NOT NULL COMMENT 'Integer scaled price (1.000000 = 1000000)' CHECK (base_price >= 0),
+    lot_size INT DEFAULT 1 CHECK (lot_size >= 0),
     is_tradable BOOLEAN DEFAULT TRUE,
     created_at BIGINT DEFAULT 0,
     FOREIGN KEY (company_id) REFERENCES companies(company_id),
@@ -165,7 +165,7 @@ CREATE TABLE IF NOT EXISTS assets (
 CREATE TABLE IF NOT EXISTS perpetual_bonds (
     asset_id INT PRIMARY KEY,
     issuer_country_id INT NOT NULL COMMENT '発行国',
-    base_coupon BIGINT NOT NULL COMMENT '1単位あたりの固定利息額 (1.000000 = 1000000)',
+    base_coupon BIGINT NOT NULL COMMENT '1単位あたりの固定利息額 (1.000000 = 1000000)' CHECK (base_coupon >= 0),
     payment_frequency ENUM('DAILY', 'WEEKLY') DEFAULT 'WEEKLY' COMMENT '利払い頻度',
     
     FOREIGN KEY (asset_id) REFERENCES assets(asset_id),
@@ -181,11 +181,11 @@ CREATE TABLE IF NOT EXISTS perpetual_bonds (
 CREATE TABLE IF NOT EXISTS rank_definitions (
     rank_id INT PRIMARY KEY,
     name VARCHAR(20) UNIQUE NOT NULL,
-    required_xp BIGINT NOT NULL,
-    maker_fee_bps10 BIGINT NOT NULL,
-    taker_fee_bps10 BIGINT NOT NULL,
-    interest_discount_bps BIGINT NOT NULL,
-    fx_fee_discount_bps BIGINT NOT NULL
+    required_xp BIGINT NOT NULL CHECK (required_xp >= 0),
+    maker_fee_bps10 BIGINT NOT NULL CHECK (maker_fee_bps10 >= 0),
+    taker_fee_bps10 BIGINT NOT NULL CHECK (taker_fee_bps10 >= 0),
+    interest_discount_bps BIGINT NOT NULL CHECK (interest_discount_bps >= 0),
+    fx_fee_discount_bps BIGINT NOT NULL CHECK (fx_fee_discount_bps >= 0)
 );
 
 CREATE TABLE IF NOT EXISTS users (
@@ -217,8 +217,8 @@ CREATE TABLE IF NOT EXISTS currency_balances (
     balance_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT NOT NULL,
     currency_id INT NOT NULL,
-    amount BIGINT DEFAULT 0,
-    locked_amount BIGINT DEFAULT 0,
+    amount BIGINT DEFAULT 0 CHECK (amount >= 0),
+    locked_amount BIGINT DEFAULT 0 CHECK (locked_amount >= 0),
     updated_at BIGINT DEFAULT 0,
     FOREIGN KEY (user_id) REFERENCES users(user_id),
     FOREIGN KEY (currency_id) REFERENCES currencies(currency_id),
@@ -232,7 +232,7 @@ CREATE TABLE IF NOT EXISTS transaction_logs (
     user_id BIGINT NOT NULL,
     currency_id INT NOT NULL,
     amount BIGINT NOT NULL COMMENT 'Signed integer: +Deposit, -Withdrawal',
-    balance_after BIGINT NOT NULL COMMENT 'Snapshot of balance after tx',
+    balance_after BIGINT NOT NULL COMMENT 'Snapshot of balance after tx' CHECK (balance_after >= 0),
     
     type ENUM('DEPOSIT', 'WITHDRAW', 'TRADE_BUY', 'TRADE_SELL', 'FEE', 'DIVIDEND', 'INTEREST', 'TRANSFER', 'INSURANCE_PAYOUT') NOT NULL,
     reference_id VARCHAR(50) COMMENT 'Order ID or External Tx ID',
@@ -250,9 +250,9 @@ CREATE TABLE IF NOT EXISTS asset_balances (
     balance_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT NOT NULL,
     asset_id INT NOT NULL,
-    quantity BIGINT DEFAULT 0,
-    locked_quantity BIGINT DEFAULT 0,
-    average_price BIGINT DEFAULT 0,
+    quantity BIGINT DEFAULT 0 CHECK (quantity >= 0),
+    locked_quantity BIGINT DEFAULT 0 CHECK (locked_quantity >= 0),
+    average_price BIGINT DEFAULT 0 CHECK (average_price >= 0),
     average_acquired_at BIGINT DEFAULT 0 COMMENT 'Weighted average timestamp for dividend boost',
     updated_at BIGINT DEFAULT 0,
     FOREIGN KEY (user_id) REFERENCES users(user_id),
@@ -267,11 +267,11 @@ CREATE TABLE IF NOT EXISTS positions (
     season_id INT NOT NULL,
     asset_id INT NOT NULL,
     side ENUM('LONG', 'SHORT') NOT NULL,
-    quantity BIGINT NOT NULL,
-    entry_price BIGINT NOT NULL,
-    current_price BIGINT NOT NULL COMMENT 'Last marked price',
-    leverage BIGINT DEFAULT 100 COMMENT '100 = 1.00x',
-    margin_used BIGINT DEFAULT 0,
+    quantity BIGINT NOT NULL CHECK (quantity >= 0),
+    entry_price BIGINT NOT NULL CHECK (entry_price >= 0),
+    current_price BIGINT NOT NULL COMMENT 'Last marked price' CHECK (current_price >= 0),
+    leverage BIGINT DEFAULT 100 COMMENT '100 = 1.00x' CHECK (leverage >= 0),
+    margin_used BIGINT DEFAULT 0 CHECK (margin_used >= 0),
     unrealized_pl BIGINT DEFAULT 0,
     created_at BIGINT DEFAULT 0,
     updated_at BIGINT DEFAULT 0,
@@ -293,12 +293,12 @@ CREATE TABLE IF NOT EXISTS orders (
     type ENUM('MARKET', 'LIMIT', 'STOP', 'STOP_LIMIT') NOT NULL,
     time_in_force ENUM('GTC', 'IOC', 'FOK') DEFAULT 'GTC',
     
-    quantity BIGINT NOT NULL,
-    price BIGINT, -- Limit price (scaled)
-    stop_price BIGINT, -- Stop trigger price (scaled)
+    quantity BIGINT NOT NULL CHECK (quantity >= 0),
+    price BIGINT CHECK (price >= 0), -- Limit price (scaled)
+    stop_price BIGINT CHECK (stop_price >= 0), -- Stop trigger price (scaled)
     
-    filled_quantity BIGINT DEFAULT 0,
-    average_fill_price BIGINT DEFAULT 0,
+    filled_quantity BIGINT DEFAULT 0 CHECK (filled_quantity >= 0),
+    average_fill_price BIGINT DEFAULT 0 CHECK (average_fill_price >= 0),
     
     status ENUM('OPEN', 'PARTIAL', 'FILLED', 'CANCELLED', 'REJECTED') DEFAULT 'OPEN',
     
@@ -316,8 +316,8 @@ CREATE TABLE IF NOT EXISTS executions (
     buy_order_id BIGINT NOT NULL,
     sell_order_id BIGINT NOT NULL,
     asset_id INT NOT NULL,
-    price BIGINT NOT NULL,
-    quantity BIGINT NOT NULL,
+    price BIGINT NOT NULL CHECK (price >= 0),
+    quantity BIGINT NOT NULL CHECK (quantity >= 0),
     executed_at BIGINT DEFAULT 0,
     is_taker_buyer BOOLEAN,
     
@@ -331,11 +331,11 @@ CREATE TABLE IF NOT EXISTS market_candles (
     asset_id INT NOT NULL,
     timeframe ENUM('1M', '5M', '15M', '1H', '4H', '1D') NOT NULL,
     open_time BIGINT NOT NULL,
-    open BIGINT NOT NULL,
-    high BIGINT NOT NULL,
-    low BIGINT NOT NULL,
-    close BIGINT NOT NULL,
-    volume BIGINT DEFAULT 0,
+    open BIGINT NOT NULL CHECK (open >= 0),
+    high BIGINT NOT NULL CHECK (high >= 0),
+    low BIGINT NOT NULL CHECK (low >= 0),
+    close BIGINT NOT NULL CHECK (close >= 0),
+    volume BIGINT DEFAULT 0 CHECK (volume >= 0),
     
     UNIQUE(asset_id, timeframe, open_time),
     FOREIGN KEY (asset_id) REFERENCES assets(asset_id)
@@ -380,14 +380,14 @@ CREATE TABLE IF NOT EXISTS world_events (
 CREATE TABLE IF NOT EXISTS liquidity_pools (
     pool_id INT AUTO_INCREMENT PRIMARY KEY,
     currency_id INT NOT NULL COMMENT 'The other currency paired with ARC',
-    fee_tier_bp INT NOT NULL DEFAULT 20 COMMENT 'Fee Tier in basis points (e.g., 20 = 0.20%, 4 = 0.04%)',
+    fee_tier_bp INT NOT NULL DEFAULT 20 COMMENT 'Fee Tier in basis points (e.g., 20 = 0.20%, 4 = 0.04%)' CHECK (fee_tier_bp >= 0),
     current_tick INT NOT NULL DEFAULT 0,
-    tick_spacing INT NOT NULL DEFAULT 1,
-    liquidity BIGINT DEFAULT 0,
+    tick_spacing INT NOT NULL DEFAULT 1 CHECK (tick_spacing >= 0),
+    liquidity BIGINT DEFAULT 0 CHECK (liquidity >= 0),
 
     -- Fee tracking (Global)
-    fee_growth_global_0 BIGINT DEFAULT 0,
-    fee_growth_global_1 BIGINT DEFAULT 0,
+    fee_growth_global_0 BIGINT DEFAULT 0 CHECK (fee_growth_global_0 >= 0),
+    fee_growth_global_1 BIGINT DEFAULT 0 CHECK (fee_growth_global_1 >= 0),
 
     created_at BIGINT DEFAULT 0,
 
@@ -404,13 +404,13 @@ CREATE TABLE IF NOT EXISTS liquidity_positions (
     tick_lower INT NOT NULL,
     tick_upper INT NOT NULL,
 
-    liquidity BIGINT DEFAULT 0,
+    liquidity BIGINT DEFAULT 0 CHECK (liquidity >= 0),
 
     -- Fee tracking (Inside)
-    fee_growth_inside_0_last BIGINT DEFAULT 0,
-    fee_growth_inside_1_last BIGINT DEFAULT 0,
-    tokens_owed_0 BIGINT DEFAULT 0,
-    tokens_owed_1 BIGINT DEFAULT 0,
+    fee_growth_inside_0_last BIGINT DEFAULT 0 CHECK (fee_growth_inside_0_last >= 0),
+    fee_growth_inside_1_last BIGINT DEFAULT 0 CHECK (fee_growth_inside_1_last >= 0),
+    tokens_owed_0 BIGINT DEFAULT 0 CHECK (tokens_owed_0 >= 0),
+    tokens_owed_1 BIGINT DEFAULT 0 CHECK (tokens_owed_1 >= 0),
 
     -- Limit Order Specifics
     is_limit_order BOOLEAN DEFAULT FALSE,
@@ -435,20 +435,20 @@ CREATE TABLE IF NOT EXISTS margin_pools (
     currency_id INT NOT NULL COMMENT 'The quote currency (e.g. ARC)',
     
     -- Cash Vault (Currency Inventory)
-    total_cash BIGINT DEFAULT 0 COMMENT 'Total cash liquidity available',
-    borrowed_cash BIGINT DEFAULT 0 COMMENT 'Cash borrowed by long positions',
+    total_cash BIGINT DEFAULT 0 COMMENT 'Total cash liquidity available' CHECK (total_cash >= 0),
+    borrowed_cash BIGINT DEFAULT 0 COMMENT 'Cash borrowed by long positions' CHECK (borrowed_cash >= 0),
     
     -- Asset Vault (Asset Inventory)
-    total_assets BIGINT DEFAULT 0 COMMENT 'Total asset liquidity available',
-    borrowed_assets BIGINT DEFAULT 0 COMMENT 'Assets borrowed by short positions',
+    total_assets BIGINT DEFAULT 0 COMMENT 'Total asset liquidity available' CHECK (total_assets >= 0),
+    borrowed_assets BIGINT DEFAULT 0 COMMENT 'Assets borrowed by short positions' CHECK (borrowed_assets >= 0),
     
     -- Interest Rates (Snapshot/Current)
-    borrow_rate BIGINT DEFAULT 0 COMMENT 'Long interest rate (Cost to borrow cash)',
-    short_fee BIGINT DEFAULT 0 COMMENT 'Short fee rate (Cost to borrow asset)',
+    borrow_rate BIGINT DEFAULT 0 COMMENT 'Long interest rate (Cost to borrow cash)' CHECK (borrow_rate >= 0),
+    short_fee BIGINT DEFAULT 0 COMMENT 'Short fee rate (Cost to borrow asset)' CHECK (short_fee >= 0),
     
     -- Share Tokens (Lending System)
-    total_cash_shares BIGINT DEFAULT 0 COMMENT 'Total shares issued to cash lenders',
-    total_asset_shares BIGINT DEFAULT 0 COMMENT 'Total shares issued to asset lenders',
+    total_cash_shares BIGINT DEFAULT 0 COMMENT 'Total shares issued to cash lenders' CHECK (total_cash_shares >= 0),
+    total_asset_shares BIGINT DEFAULT 0 COMMENT 'Total shares issued to asset lenders' CHECK (total_asset_shares >= 0),
 
     updated_at BIGINT DEFAULT 0,
     
@@ -463,8 +463,8 @@ CREATE TABLE IF NOT EXISTS margin_pool_providers (
     pool_id INT NOT NULL,
     user_id BIGINT NOT NULL,
 
-    cash_shares BIGINT DEFAULT 0,
-    asset_shares BIGINT DEFAULT 0,
+    cash_shares BIGINT DEFAULT 0 CHECK (cash_shares >= 0),
+    asset_shares BIGINT DEFAULT 0 CHECK (asset_shares >= 0),
 
     updated_at BIGINT DEFAULT 0,
 
@@ -497,7 +497,7 @@ CREATE TABLE IF NOT EXISTS production_recipes (
     recipe_id INT AUTO_INCREMENT PRIMARY KEY,
     company_id INT NOT NULL,
     output_asset_id INT NOT NULL, -- 生産されるコモディティ
-    output_quantity BIGINT NOT NULL DEFAULT 1,
+    output_quantity BIGINT NOT NULL DEFAULT 1 CHECK (output_quantity >= 0),
 
     FOREIGN KEY (company_id) REFERENCES companies(company_id),
     FOREIGN KEY (output_asset_id) REFERENCES assets(asset_id)
@@ -508,7 +508,7 @@ CREATE TABLE IF NOT EXISTS production_inputs (
     input_id INT AUTO_INCREMENT PRIMARY KEY,
     recipe_id INT NOT NULL,
     input_asset_id INT NOT NULL, -- 原材料となるコモディティ
-    input_quantity BIGINT NOT NULL, -- output 1単位を作るのに必要な量
+    input_quantity BIGINT NOT NULL CHECK (input_quantity >= 0), -- output 1単位を作るのに必要な量
 
     FOREIGN KEY (recipe_id) REFERENCES production_recipes(recipe_id),
     FOREIGN KEY (input_asset_id) REFERENCES assets(asset_id)
@@ -530,11 +530,11 @@ CREATE TABLE IF NOT EXISTS contracts (
     description TEXT,
     
     target_asset_id INT NOT NULL,
-    total_required_quantity BIGINT NOT NULL,
-    current_delivered_quantity BIGINT DEFAULT 0,
+    total_required_quantity BIGINT NOT NULL CHECK (total_required_quantity >= 0),
+    current_delivered_quantity BIGINT DEFAULT 0 CHECK (current_delivered_quantity >= 0),
     
-    unit_price BIGINT NOT NULL COMMENT 'Fixed buying price per unit',
-    xp_reward_per_unit INT NOT NULL DEFAULT 0,
+    unit_price BIGINT NOT NULL COMMENT 'Fixed buying price per unit' CHECK (unit_price >= 0),
+    xp_reward_per_unit INT NOT NULL DEFAULT 0 CHECK (xp_reward_per_unit >= 0),
     min_rank_required ENUM('Shrimp', 'Fish', 'Shark', 'Whale', 'Leviathan') DEFAULT 'Shark',
     
     status ENUM('ACTIVE', 'COMPLETED', 'EXPIRED') DEFAULT 'ACTIVE',
@@ -553,9 +553,9 @@ CREATE TABLE IF NOT EXISTS contract_deliveries (
     contract_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
     
-    quantity BIGINT NOT NULL,
-    payout_amount BIGINT NOT NULL,
-    xp_gained INT NOT NULL,
+    quantity BIGINT NOT NULL CHECK (quantity >= 0),
+    payout_amount BIGINT NOT NULL CHECK (payout_amount >= 0),
+    xp_gained INT NOT NULL CHECK (xp_gained >= 0),
     
     delivered_at BIGINT DEFAULT 0,
     
