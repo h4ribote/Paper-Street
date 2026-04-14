@@ -306,6 +306,7 @@ func (s *MarketStore) performMatchingTx(ctx context.Context, tx *sql.Tx, order *
 				}
 
 				guardPrice = s.guardFrom(maker.Price, order.Side)
+				continue
 			}
 			if guardEnabled && !s.guardSatisfied(maker.Price, guardPrice, order.Side) {
 				break
