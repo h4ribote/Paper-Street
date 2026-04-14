@@ -915,32 +915,66 @@ func (q *Queries) AdjustCurrencyBalance(ctx context.Context, tx *sql.Tx, userID 
 		return err
 	}
 
-	upsertQuery := `
-		INSERT INTO currency_balances (user_id, currency_id, amount, locked_amount, updated_at)
-		VALUES (?, ?, ?, ?, ?)
-		ON DUPLICATE KEY UPDATE amount = amount + ?, locked_amount = locked_amount + ?, updated_at = ?
-	`
 	now := time.Now().UTC().UnixMilli()
+	updateQuery := `UPDATE currency_balances SET amount = amount + ?, locked_amount = locked_amount + ?, updated_at = ? WHERE user_id = ? AND currency_id = ?`
+
+	var res sql.Result
 	if tx != nil {
-		_, err = tx.ExecContext(ctx, upsertQuery, userID, currencyID, delta, lockedDelta, now, delta, lockedDelta, now)
+		res, err = tx.ExecContext(ctx, updateQuery, delta, lockedDelta, now, userID, currencyID)
 	} else {
-		_, err = q.Conn.DB.ExecContext(ctx, upsertQuery, userID, currencyID, delta, lockedDelta, now, delta, lockedDelta, now)
+		res, err = q.Conn.DB.ExecContext(ctx, updateQuery, delta, lockedDelta, now, userID, currencyID)
+	}
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		if delta < 0 || lockedDelta < 0 {
+			return errors.New("insufficient balance")
+		}
+		insertQuery := `
+			INSERT INTO currency_balances (user_id, currency_id, amount, locked_amount, updated_at)
+			VALUES (?, ?, ?, ?, ?)
+		`
+		if tx != nil {
+			_, err = tx.ExecContext(ctx, insertQuery, userID, currencyID, delta, lockedDelta, now)
+		} else {
+			_, err = q.Conn.DB.ExecContext(ctx, insertQuery, userID, currencyID, delta, lockedDelta, now)
+		}
 	}
 	return err
 }
 
 func (q *Queries) AdjustAssetBalance(ctx context.Context, tx *sql.Tx, userID int64, assetID int64, delta int64, lockedDelta int64) error {
-	upsertQuery := `
-		INSERT INTO asset_balances (user_id, asset_id, quantity, locked_quantity, average_price, average_acquired_at, updated_at)
-		VALUES (?, ?, ?, ?, 0, 0, ?)
-		ON DUPLICATE KEY UPDATE quantity = quantity + ?, locked_quantity = locked_quantity + ?, updated_at = ?
-	`
 	now := time.Now().UTC().UnixMilli()
+	updateQuery := `UPDATE asset_balances SET quantity = quantity + ?, locked_quantity = locked_quantity + ?, updated_at = ? WHERE user_id = ? AND asset_id = ?`
+
+	var res sql.Result
 	var err error
 	if tx != nil {
-		_, err = tx.ExecContext(ctx, upsertQuery, userID, assetID, delta, lockedDelta, now, delta, lockedDelta, now)
+		res, err = tx.ExecContext(ctx, updateQuery, delta, lockedDelta, now, userID, assetID)
 	} else {
-		_, err = q.Conn.DB.ExecContext(ctx, upsertQuery, userID, assetID, delta, lockedDelta, now, delta, lockedDelta, now)
+		res, err = q.Conn.DB.ExecContext(ctx, updateQuery, delta, lockedDelta, now, userID, assetID)
+	}
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		if delta < 0 || lockedDelta < 0 {
+			return errors.New("insufficient balance")
+		}
+		insertQuery := `
+			INSERT INTO asset_balances (user_id, asset_id, quantity, locked_quantity, average_price, average_acquired_at, updated_at)
+			VALUES (?, ?, ?, ?, 0, 0, ?)
+		`
+		if tx != nil {
+			_, err = tx.ExecContext(ctx, insertQuery, userID, assetID, delta, lockedDelta, now)
+		} else {
+			_, err = q.Conn.DB.ExecContext(ctx, insertQuery, userID, assetID, delta, lockedDelta, now)
+		}
 	}
 	return err
 }
