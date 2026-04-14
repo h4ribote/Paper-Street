@@ -74,11 +74,15 @@ echo "Using DATABASE_DSN=${DATABASE_DSN}"
 echo "------------------------------------------"
 
 # --- 4. Calculate API Key ---
-echo "Calculating Market Maker API Key..."
+echo "Calculating API Key..."
 MM_API_KEY=$(echo -n "market_maker" | openssl dgst -sha256 -hmac "$ADMIN_PASSWORD" | sed 's/^.* //')
-# Take first 20 characters
 MM_API_KEY=${MM_API_KEY:0:20}
 echo "Market Maker API Key: ${MM_API_KEY}"
+
+ARB_API_KEY=$(echo -n "arbitrageur" | openssl dgst -sha256 -hmac "$ADMIN_PASSWORD" | sed 's/^.* //')
+ARB_API_KEY=${ARB_API_KEY:0:20}
+echo "Arbitrageur API Key: ${ARB_API_KEY}"
+
 echo "------------------------------------------"
 
 # Start the server
