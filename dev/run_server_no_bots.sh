@@ -57,15 +57,15 @@ ARB_API_KEY=${ARB_API_KEY:0:20}
 echo "Market Maker API Key: ${MM_API_KEY}"
 echo "Arbitrageur API Key: ${ARB_API_KEY}"
 
-# Write keys to scripts/.env for python scripts
-mkdir -p scripts
-cat <<EOF > scripts/.env
+# Write keys to dev/.env for python scripts
+mkdir -p dev
+cat <<EOF > dev/.env
 PAPERSTREET_BASE_URL=http://localhost:${PORT}
 PAPERSTREET_API_KEY=${MM_API_KEY}
 PAPERSTREET_ARB_API_KEY=${ARB_API_KEY}
 EOF
 
-echo "Saved test environment variables to scripts/.env"
+echo "Saved test environment variables to dev/.env"
 echo "------------------------------------------"
 
 # --- 3. Build Go Server ---

@@ -6,7 +6,7 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 cd "$DIR/.."
 
 if [ ! -f .env ]; then
-  echo "Error: scripts/.env not found. Please run scripts/run_server_no_bots.sh first."
+  echo "Error: dev/.env not found. Please run dev/run_server_no_bots.sh first."
   exit 1
 fi
 
