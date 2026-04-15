@@ -13,9 +13,11 @@ def print_json(data):
 
 def main():
     parser = argparse.ArgumentParser(description="Test Market Data Endpoints")
-    parser.add_argument("action", choices=["health", "assets", "asset", "orderbook", "ticker", "news"], help="Action to perform")
+    parser.add_argument("action", choices=["health", "assets", "asset", "orderbook", "candles", "trades", "ticker", "news", "macro", "fx"], help="Action to perform")
     parser.add_argument("--asset_id", type=int, default=1, help="Asset ID")
     parser.add_argument("--depth", type=int, default=20, help="Orderbook depth")
+    parser.add_argument("--timeframe", type=str, default="1m", help="Candles timeframe")
+    parser.add_argument("--limit", type=int, default=100, help="Limit")
 
     args = parser.parse_args()
     client = get_client()
@@ -31,8 +33,16 @@ def main():
             print_json(client.get_orderbook(args.asset_id, args.depth))
         elif args.action == "ticker":
             print_json(client.get_ticker())
+        elif args.action == "candles":
+            print_json(client.get_candles(args.asset_id, args.timeframe, args.limit))
+        elif args.action == "trades":
+            print_json(client.get_trades(args.asset_id))
         elif args.action == "news":
             print_json(client.get_news())
+        elif args.action == "macro":
+            print_json(client.get_macro_indicators())
+        elif args.action == "fx":
+            print_json(client.get_fx_theoretical())
     except Exception as e:
         print(f"Error: {e}")
 
