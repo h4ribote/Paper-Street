@@ -28,8 +28,12 @@ Once the server is running, you can use the wrapper shell scripts located in `de
 
 **Available Scripts & Usage:**
 
+*   **`test_user.sh`**:
+    *   Usage: `./dev/test_scripts/test_user.sh [me]`
+    *   Example: `./dev/test_scripts/test_user.sh me`
+
 *   **`test_market_data.sh`**:
-    *   Usage: `./dev/test_scripts/test_market_data.sh [health|assets|asset|orderbook|ticker|news] [--asset_id ID] [--depth DEPTH]`
+    *   Usage: `./dev/test_scripts/test_market_data.sh [health|assets|asset|orderbook|candles|trades|ticker|news|macro|fx] [--asset_id ID] [--depth DEPTH] [--timeframe TIMEFRAME] [--limit LIMIT]`
     *   Example: `./dev/test_scripts/test_market_data.sh orderbook --asset_id 1`
 
 *   **`test_orders.sh`**:
@@ -40,13 +44,33 @@ Once the server is running, you can use the wrapper shell scripts located in `de
     *   Usage: `./dev/test_scripts/test_portfolio.sh [balances|assets|positions|history|performance]`
     *   Example: `./dev/test_scripts/test_portfolio.sh balances`
 
+*   **`test_missions.sh`**:
+    *   Usage: `./dev/test_scripts/test_missions.sh [rank|daily|user|complete] [--mission_id ID] [--user_id ID]`
+    *   Example: `./dev/test_scripts/test_missions.sh daily`
+
+*   **`test_contracts.sh`**:
+    *   Usage: `./dev/test_scripts/test_contracts.sh [list|get|deliver|user] [--contract_id ID] [--quantity QTY] [--user_id ID]`
+    *   Example: `./dev/test_scripts/test_contracts.sh list`
+
 *   **`test_pools.sh`**:
-    *   Usage: `./dev/test_scripts/test_pools.sh [list|get|margin_list|margin_get] [--pool_id ID]`
+    *   Usage: `./dev/test_scripts/test_pools.sh [list|get|add_liquidity|positions|remove_liquidity|swap|margin_list|margin_get|margin_supply|margin_withdraw|margin_positions|margin_topup|margin_liquidations] [--pool_id ID] ...`
     *   Example: `./dev/test_scripts/test_pools.sh list`
 
 *   **`test_world.sh`**:
     *   Usage: `./dev/test_scripts/test_world.sh [season|regions|companies|events|leaderboard]`
     *   Example: `./dev/test_scripts/test_world.sh season`
+
+*   **`test_companies.sh`**:
+    *   Usage: `./dev/test_scripts/test_companies.sh [capital|financing|buyback|production|supply_chain|financials|dividends|simulate] [--company_id ID] ...`
+    *   Example: `./dev/test_scripts/test_companies.sh financials --company_id 1`
+
+*   **`test_indices.sh`**:
+    *   Usage: `./dev/test_scripts/test_indices.sh [list|get|create|redeem] [--asset_id ID] [--quantity QTY] [--user_id ID]`
+    *   Example: `./dev/test_scripts/test_indices.sh list`
+
+*   **`test_bonds.sh`**:
+    *   Usage: `./dev/test_scripts/test_bonds.sh [list|get] [--bond_id ID]`
+    *   Example: `./dev/test_scripts/test_bonds.sh list`
 
 *   **`test_websocket.sh`**:
     *   Usage: `./dev/test_scripts/test_websocket.sh [topic] [--duration SECONDS]`
