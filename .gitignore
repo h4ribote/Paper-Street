@@ -7,6 +7,5 @@ __pycache__/
 
 paper-street-server
 node_modules/
-scripts/python_client/venv/
 server_bin
-dev/python_client/venv/
+venv/
