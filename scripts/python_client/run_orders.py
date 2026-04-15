@@ -19,7 +19,7 @@ def main():
     parser.add_argument("--side", choices=["BUY", "SELL"], default="BUY", help="Order Side")
     parser.add_argument("--type", choices=["MARKET", "LIMIT", "STOP", "STOP_LIMIT"], default="LIMIT", help="Order Type")
     parser.add_argument("--quantity", type=int, default=10, help="Order Quantity")
-    parser.add_argument("--price", type=float, help="Order Price")
+    parser.add_argument("--price", type=int, help="Order Price")
     parser.add_argument("--leverage", type=int, default=1, help="Leverage")
 
     args = parser.parse_args()

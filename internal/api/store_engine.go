@@ -36,9 +36,18 @@ func (s *MarketStore) ProcessSubmit(ctx context.Context, order *engine.Order) (e
 	if order.Type != engine.OrderTypeMarket {
 		// Calculate required lock amount
 		var reqAmount int64
+		leverage := normalizeLeverage(order.Leverage)
 		quoteCurrency := s.QuoteCurrency(order.AssetID)
 		if order.Side == engine.SideBuy {
-			reqAmount = order.Quantity * order.Price
+			notional, ok := safeMultiplyInt64(order.Quantity, order.Price)
+			if !ok {
+				return engine.OrderResult{Err: fmt.Errorf("notional calculation failed")}, fmt.Errorf("notional calculation failed")
+			}
+			rm, err := requiredMargin(notional, leverage)
+			if err != nil {
+				return engine.OrderResult{Err: err}, err
+			}
+			reqAmount = rm
 			// Check available balance
 			bal, err := s.queries.GetBalanceRecord(ctx, models.GetBalanceParams{UserID: order.UserID, Currency: quoteCurrency})
 			if err != nil {
@@ -53,19 +62,43 @@ func (s *MarketStore) ProcessSubmit(ctx context.Context, order *engine.Order) (e
 				return engine.OrderResult{Err: err}, err
 			}
 		} else {
-			reqAmount = order.Quantity
-			// Check available balance
-			pos, err := s.queries.GetPositionRecord(ctx, models.GetPositionParams{UserID: order.UserID, AssetID: order.AssetID})
-			if err != nil {
-				return engine.OrderResult{Err: err}, err
-			}
-			if pos.Quantity-pos.LockedQuantity < reqAmount {
-				return engine.OrderResult{Err: fmt.Errorf("insufficient available quantity")}, fmt.Errorf("insufficient available quantity")
-			}
-			// Lock quantity
-			err = s.queries.AdjustAssetBalance(ctx, tx, order.UserID, order.AssetID, 0, reqAmount)
-			if err != nil {
-				return engine.OrderResult{Err: err}, err
+			if leverage > 1 {
+				// Short selling on margin requires quote currency collateral
+				notional, ok := safeMultiplyInt64(order.Quantity, order.Price)
+				if !ok {
+					return engine.OrderResult{Err: fmt.Errorf("notional calculation failed")}, fmt.Errorf("notional calculation failed")
+				}
+				rm, err := requiredMargin(notional, leverage)
+				if err != nil {
+					return engine.OrderResult{Err: err}, err
+				}
+				reqAmount = rm
+				bal, err := s.queries.GetBalanceRecord(ctx, models.GetBalanceParams{UserID: order.UserID, Currency: quoteCurrency})
+				if err != nil {
+					return engine.OrderResult{Err: err}, err
+				}
+				if bal.Amount-bal.LockedAmount < reqAmount {
+					return engine.OrderResult{Err: fmt.Errorf("insufficient available balance for margin sell")}, fmt.Errorf("insufficient available balance for margin sell")
+				}
+				err = s.queries.AdjustCurrencyBalance(ctx, tx, order.UserID, quoteCurrency, 0, reqAmount)
+				if err != nil {
+					return engine.OrderResult{Err: err}, err
+				}
+			} else {
+				reqAmount = order.Quantity
+				// Check available balance
+				pos, err := s.queries.GetPositionRecord(ctx, models.GetPositionParams{UserID: order.UserID, AssetID: order.AssetID})
+				if err != nil {
+					return engine.OrderResult{Err: err}, err
+				}
+				if pos.Quantity-pos.LockedQuantity < reqAmount {
+					return engine.OrderResult{Err: fmt.Errorf("insufficient available quantity")}, fmt.Errorf("insufficient available quantity")
+				}
+				// Lock quantity
+				err = s.queries.AdjustAssetBalance(ctx, tx, order.UserID, order.AssetID, 0, reqAmount)
+				if err != nil {
+					return engine.OrderResult{Err: err}, err
+				}
 			}
 		}
 	} else {
