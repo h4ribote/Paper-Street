@@ -58,3 +58,9 @@ Once the server is running, you can use the wrapper shell scripts located in `de
 2. **Clean up:** If you start the server in the background, remember to kill the process (`kill $(lsof -t -i :8000)`) when you are done or before restarting it.
 3. **Database State:** Keep in mind that restarting `./dev/run_server_no_bots.sh` completely resets the database.
 4. **Python Client Extension:** If you add new API endpoints to the Go server, make sure to update `dev/python_client/client.py` and the relevant runner scripts so they can be easily tested.
+5. **Create Custom Test Scripts:** If necessary, add test scripts reflecting specific operational procedures by editing the files in `python_client/`, `test_scripts/`, and updating `Guide.md` accordingly.
+6. **Autonomous Execution:** Proceed with tasks directly without asking the user for plan approval.
+7. **Comprehensive Modifications:** When modifying code, check if there are other places using the same syntax or logic as the target of your modification, and determine whether additional modifications are necessary across the codebase.
+8. **Update and Add Unit Tests:** When modifying or adding backend logic, update or create corresponding `*_test.go` files to maintain code quality and prevent regressions.
+9. **Proper Error Handling and Logging:** Implement thorough error handling and include sufficient logging (using the internal `logger` package) to facilitate debugging and system monitoring.
+10. **Sync with Documentation:** Ensure that any changes to API endpoints, database schemas, or core system logic are reflected in the corresponding documentation within the `docs/` directory.
