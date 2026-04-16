@@ -1,9 +1,0 @@
-/* trade specific styles */
-.tab-btn.active {
-    color: white;
-    border-bottom-color: #3b82f6;
-}
-.tab-btn {
-    border-bottom-width: 2px;
-    border-bottom-color: transparent;
-}
