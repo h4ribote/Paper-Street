@@ -38,65 +38,140 @@
         </header>
 
         <!-- Main Content -->
-        <main class="flex-1 overflow-y-auto">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <!-- Title -->
-                <div class="mb-8">
-                    <h1 class="text-3xl font-bold text-white mb-2">通貨スワップ</h1>
-                    <p class="text-gray-400">DEXプール経由でのトークンスワップと流動性提供</p>
-                </div>
-
+        <main class="flex-1 overflow-hidden flex">
+            <!-- Left Panel: Liquidity Pools List -->
+            <div class="w-64 border-r border-gray-800 flex flex-col bg-gray-900">
                 <!-- Tabs -->
-                <div class="flex gap-4 mb-8 border-b border-gray-800">
-                    <button onclick="switchTab('swap')" id="tab-swap" class="px-4 py-3 font-semibold text-blue-400 border-b-2 border-blue-400 -mb-px">
-                        スワップ
+                <div class="flex border-b border-gray-800">
+                    <button class="flex-1 px-4 py-3 text-sm font-semibold text-blue-400 border-b-2 border-blue-400 bg-gray-800/50">
+                        プール一覧
                     </button>
-                    <button onclick="switchTab('pools')" id="tab-pools" class="px-4 py-3 font-semibold text-gray-400 hover:text-white transition">
-                        流動性プール
-                    </button>
-                    <button onclick="switchTab('positions')" id="tab-positions" class="px-4 py-3 font-semibold text-gray-400 hover:text-white transition">
-                        LP ポジション
+                    <button class="flex-1 px-4 py-3 text-sm font-semibold text-gray-400 hover:text-white transition">
+                        LPポジション
                     </button>
                 </div>
+                
+                <!-- Pool Search -->
+                <div class="p-3 border-b border-gray-800">
+                    <input type="text" id="poolSearch" placeholder="プールを検索..." 
+                        class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500">
+                </div>
 
-                <!-- Swap Tab -->
-                <div id="swap-content">
-                    <div class="grid lg:grid-cols-3 gap-8">
-                        <!-- Left: Chart -->
-                        <div class="lg:col-span-2">
-                            <div class="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-                                <!-- Pair Info -->
-                                <div class="border-b border-gray-800 px-6 py-4">
-                                    <div class="flex items-center justify-between">
-                                        <div>
-                                            <input type="text" placeholder="ペアを検索" 
-                                                class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 w-64">
-                                        </div>
-                                        <div class="text-right">
-                                            <div class="text-2xl font-bold text-white">$1.00</div>
-                                            <div class="text-gray-500 text-sm">USDC/USDT</div>
-                                        </div>
-                                    </div>
+                <!-- Pool List -->
+                <div class="flex-1 overflow-y-auto">
+                    <div class="text-xs text-gray-500 px-3 py-2 font-semibold sticky top-0 bg-gray-800">プール</div>
+                    <div class="divide-y divide-gray-800">
+                        <div class="px-3 py-2 hover:bg-gray-800/80 cursor-pointer transition border-l-2 border-blue-500 bg-gray-800/50">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <div class="font-semibold text-white text-sm">USDT/USDC</div>
+                                    <div class="text-gray-500 text-xs">0.01% 手数料</div>
                                 </div>
-
-                                <!-- Chart -->
-                                <div class="px-6 py-4 h-96">
-                                    <canvas id="swapChart"></canvas>
-                                </div>
-
-                                <!-- Chart Controls -->
-                                <div class="border-t border-gray-800 px-6 py-3 flex gap-2">
-                                    <button class="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition">1H</button>
-                                    <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">4H</button>
-                                    <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">24H</button>
-                                    <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">1W</button>
-                                    <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">1M</button>
+                                <div class="text-right">
+                                    <div class="text-white font-semibold text-xs">$52.3M</div>
+                                    <div class="text-yellow-500 text-xs">12.8% APR</div>
                                 </div>
                             </div>
                         </div>
+                        <div class="px-3 py-2 hover:bg-gray-800/80 cursor-pointer transition">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <div class="font-semibold text-white text-sm">BTC/ETH</div>
+                                    <div class="text-gray-500 text-xs">0.3% 手数料</div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-white font-semibold text-xs">$128.6M</div>
+                                    <div class="text-yellow-500 text-xs">18.5% APR</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="px-3 py-2 hover:bg-gray-800/80 cursor-pointer transition">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <div class="font-semibold text-white text-sm">SOL/USDT</div>
+                                    <div class="text-gray-500 text-xs">0.3% 手数料</div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-white font-semibold text-xs">$82.3M</div>
+                                    <div class="text-yellow-500 text-xs">24.3% APR</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="px-3 py-2 hover:bg-gray-800/80 cursor-pointer transition">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <div class="font-semibold text-white text-sm">XRP/USDT</div>
+                                    <div class="text-gray-500 text-xs">0.3% 手数料</div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-white font-semibold text-xs">$34.6M</div>
+                                    <div class="text-yellow-500 text-xs">15.6% APR</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-                        <!-- Right: Swap Form -->
-                        <div class="bg-gray-900 border border-gray-800 rounded-lg p-6 h-fit sticky top-24">
+            <!-- Center Panel: Swap Chart -->
+            <div class="flex-1 border-r border-gray-800 flex flex-col">
+                <!-- Pair Info Header -->
+                <div class="border-b border-gray-800 px-6 py-4 bg-gray-900">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-3">
+                            <div>
+                                <div class="text-2xl font-bold text-white">USDT/USDC</div>
+                                <div class="text-gray-500 text-sm">流動性プール</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-3xl font-bold text-white">$1.00</div>
+                            <div class="text-gray-500 text-lg">ペッグ維持</div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-5 gap-4 text-sm">
+                        <div>
+                            <div class="text-gray-400">総流動性</div>
+                            <div class="text-white font-semibold">$52.3M</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-400">24H 出来高</div>
+                            <div class="text-white font-semibold">$12.3B</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-400">手数料率</div>
+                            <div class="text-white font-semibold">0.01%</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-400">APR</div>
+                            <div class="text-yellow-500 font-semibold">12.8%</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-400">流動性提供者</div>
+                            <div class="text-white font-semibold">1,234</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chart -->
+                <div class="flex-1 px-6 py-4 overflow-hidden">
+                    <div class="h-full bg-gray-800 rounded-lg p-4">
+                        <canvas id="swapChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Timeframe -->
+                <div class="border-t border-gray-800 px-6 py-3 bg-gray-900 flex gap-2">
+                    <button class="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition">1H</button>
+                    <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">4H</button>
+                    <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">24H</button>
+                    <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">1W</button>
+                    <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">1M</button>
+                </div>
+            </div>
+
+            <!-- Right Panel: Swap Form -->
+            <div class="w-96 flex flex-col border-gray-800 overflow-hidden bg-gray-900">
                             <h3 class="text-xl font-bold text-white mb-6">スワップ</h3>
 
                             <div class="space-y-4">
@@ -155,212 +230,17 @@
                                 </button>
                             </div>
                         </div>
-                    </div>
+                    <!-- Close Pools and Positions tabs content -->
                 </div>
 
                 <!-- Pools Tab -->
                 <div id="pools-content" class="hidden">
-                    <div class="grid md:grid-cols-2 gap-6">
-                        <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
-                            <div class="flex justify-between items-start mb-4">
-                                <div>
-                                    <h3 class="text-lg font-semibold text-white">USDT/USDC</h3>
-                                    <p class="text-gray-500 text-sm mt-1">安定資産ペア</p>
-                                </div>
-                                <div class="text-right">
-                                    <div class="text-green-500 font-semibold">+$52,345.20</div>
-                                    <div class="text-gray-500 text-sm">総流動性</div>
-                                </div>
-                            </div>
-                            <div class="space-y-3">
-                                <div class="flex justify-between text-sm">
-                                    <span class="text-gray-400">24H 取引高</span>
-                                    <span class="text-white">$12,345,678</span>
-                                </div>
-                                <div class="flex justify-between text-sm">
-                                    <span class="text-gray-400">手数料階級</span>
-                                    <span class="text-white">0.01%</span>
-                                </div>
-                                <div class="flex justify-between text-sm">
-                                    <span class="text-gray-400">APR</span>
-                                    <span class="text-yellow-500">12.8%</span>
-                                </div>
-                            </div>
-                            <button class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded transition">
-                                流動性を提供
-                            </button>
-                        </div>
-
-                        <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
-                            <div class="flex justify-between items-start mb-4">
-                                <div>
-                                    <h3 class="text-lg font-semibold text-white">BTC/ETH</h3>
-                                    <p class="text-gray-500 text-sm mt-1">メジャーペア</p>
-                                </div>
-                                <div class="text-right">
-                                    <div class="text-green-500 font-semibold">$128,567.45</div>
-                                    <div class="text-gray-500 text-sm">総流動性</div>
-                                </div>
-                            </div>
-                            <div class="space-y-3">
-                                <div class="flex justify-between text-sm">
-                                    <span class="text-gray-400">24H 取引高</span>
-                                    <span class="text-white">$45,234,123</span>
-                                </div>
-                                <div class="flex justify-between text-sm">
-                                    <span class="text-gray-400">手数料階級</span>
-                                    <span class="text-white">0.3%</span>
-                                </div>
-                                <div class="flex justify-between text-sm">
-                                    <span class="text-gray-400">APR</span>
-                                    <span class="text-yellow-500">18.5%</span>
-                                </div>
-                            </div>
-                            <button class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded transition">
-                                流動性を提供
-                            </button>
-                        </div>
-
-                        <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
-                            <div class="flex justify-between items-start mb-4">
-                                <div>
-                                    <h3 class="text-lg font-semibold text-white">SOL/USDT</h3>
-                                    <p class="text-gray-500 text-sm mt-1">成長ペア</p>
-                                </div>
-                                <div class="text-right">
-                                    <div class="text-green-500 font-semibold">$82,345.10</div>
-                                    <div class="text-gray-500 text-sm">総流動性</div>
-                                </div>
-                            </div>
-                            <div class="space-y-3">
-                                <div class="flex justify-between text-sm">
-                                    <span class="text-gray-400">24H 取引高</span>
-                                    <span class="text-white">$23,456,789</span>
-                                </div>
-                                <div class="flex justify-between text-sm">
-                                    <span class="text-gray-400">手数料階級</span>
-                                    <span class="text-white">0.3%</span>
-                                </div>
-                                <div class="flex justify-between text-sm">
-                                    <span class="text-gray-400">APR</span>
-                                    <span class="text-yellow-500">24.3%</span>
-                                </div>
-                            </div>
-                            <button class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded transition">
-                                流動性を提供
-                            </button>
-                        </div>
-
-                        <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
-                            <div class="flex justify-between items-start mb-4">
-                                <div>
-                                    <h3 class="text-lg font-semibold text-white">XRP/USDT</h3>
-                                    <p class="text-gray-500 text-sm mt-1">アルトコインペア</p>
-                                </div>
-                                <div class="text-right">
-                                    <div class="text-green-500 font-semibold">$34,567.89</div>
-                                    <div class="text-gray-500 text-sm">総流動性</div>
-                                </div>
-                            </div>
-                            <div class="space-y-3">
-                                <div class="flex justify-between text-sm">
-                                    <span class="text-gray-400">24H 取引高</span>
-                                    <span class="text-white">$12,345,678</span>
-                                </div>
-                                <div class="flex justify-between text-sm">
-                                    <span class="text-gray-400">手数料階級</span>
-                                    <span class="text-white">0.3%</span>
-                                </div>
-                                <div class="flex justify-between text-sm">
-                                    <span class="text-gray-400">APR</span>
-                                    <span class="text-yellow-500">15.6%</span>
-                                </div>
-                            </div>
-                            <button class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded transition">
-                                流動性を提供
-                            </button>
-                        </div>
-                    </div>
+                    <!-- Content removed - moved to sidebar -->
                 </div>
 
                 <!-- Positions Tab -->
                 <div id="positions-content" class="hidden">
-                    <div class="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-                        <div class="bg-gray-800 px-6 py-4 border-b border-gray-700">
-                            <h3 class="font-semibold text-white">アクティブなLP ポジション</h3>
-                        </div>
-                        <div class="divide-y divide-gray-800">
-                            <div class="px-6 py-6 hover:bg-gray-800/50 transition">
-                                <div class="flex justify-between items-start mb-4">
-                                    <div>
-                                        <h4 class="text-lg font-semibold text-white">USDT/USDC</h4>
-                                        <p class="text-gray-500 text-sm mt-1">0.01% 手数料</p>
-                                    </div>
-                                    <div class="text-right">
-                                        <div class="text-green-500 font-semibold">$50,000.00</div>
-                                        <div class="text-gray-500 text-sm">流動性投资額</div>
-                                    </div>
-                                </div>
-                                <div class="grid grid-cols-3 gap-4 mb-4 text-sm">
-                                    <div class="bg-gray-700 rounded p-3">
-                                        <div class="text-gray-400 text-xs mb-1">USDT</div>
-                                        <div class="text-white font-semibold">25,000</div>
-                                    </div>
-                                    <div class="bg-gray-700 rounded p-3">
-                                        <div class="text-gray-400 text-xs mb-1">USDC</div>
-                                        <div class="text-white font-semibold">25,000</div>
-                                    </div>
-                                    <div class="bg-gray-700 rounded p-3">
-                                        <div class="text-gray-400 text-xs mb-1">利益確定</div>
-                                        <div class="text-green-500 font-semibold">+$234.56</div>
-                                    </div>
-                                </div>
-                                <div class="flex gap-2">
-                                    <button class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded transition text-sm">
-                                        詳細
-                                    </button>
-                                    <button class="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 rounded transition text-sm">
-                                        解除
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div class="px-6 py-6 hover:bg-gray-800/50 transition">
-                                <div class="flex justify-between items-start mb-4">
-                                    <div>
-                                        <h4 class="text-lg font-semibold text-white">BTC/ETH</h4>
-                                        <p class="text-gray-500 text-sm mt-1">0.3% 手数料</p>
-                                    </div>
-                                    <div class="text-right">
-                                        <div class="text-green-500 font-semibold">$75,234.50</div>
-                                        <div class="text-gray-500 text-sm">流動性投资額</div>
-                                    </div>
-                                </div>
-                                <div class="grid grid-cols-3 gap-4 mb-4 text-sm">
-                                    <div class="bg-gray-700 rounded p-3">
-                                        <div class="text-gray-400 text-xs mb-1">BTC</div>
-                                        <div class="text-white font-semibold">0.75</div>
-                                    </div>
-                                    <div class="bg-gray-700 rounded p-3">
-                                        <div class="text-gray-400 text-xs mb-1">ETH</div>
-                                        <div class="text-white font-semibold">10.5</div>
-                                    </div>
-                                    <div class="bg-gray-700 rounded p-3">
-                                        <div class="text-gray-400 text-xs mb-1">利益確定</div>
-                                        <div class="text-green-500 font-semibold">+$1,234.89</div>
-                                    </div>
-                                </div>
-                                <div class="flex gap-2">
-                                    <button class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded transition text-sm">
-                                        詳細
-                                    </button>
-                                    <button class="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 rounded transition text-sm">
-                                        解除
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <!-- Content removed - moved to sidebar -->
                 </div>
             </div>
         </main>

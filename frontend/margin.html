@@ -38,47 +38,174 @@
         </header>
 
         <!-- Main Content -->
-        <main class="flex-1 overflow-hidden">
-            <div class="h-full flex flex-col lg:flex-row">
-                <!-- Left Panel: Chart -->
-                <div class="flex-1 border-r border-gray-800 flex flex-col">
-                    <!-- Trading Pair Selector -->
-                    <div class="border-b border-gray-800 px-6 py-4">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="flex items-center gap-4">
+        <main class="flex-1 overflow-hidden flex">
+            <!-- Left Panel: Market List -->
+            <div class="w-64 border-r border-gray-800 flex flex-col bg-gray-900">
+                <!-- Market Tabs -->
+                <div class="flex border-b border-gray-800">
+                    <button class="flex-1 px-4 py-3 text-sm font-semibold text-blue-400 border-b-2 border-blue-400 bg-gray-800/50">
+                        すべて
+                    </button>
+                    <button class="flex-1 px-4 py-3 text-sm font-semibold text-gray-400 hover:text-white transition">
+                        お気に入り
+                    </button>
+                </div>
+                
+                <!-- Market Search -->
+                <div class="p-3 border-b border-gray-800">
+                    <input type="text" id="marketSearch" placeholder="ペアを検索..." 
+                        class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500">
+                </div>
+
+                <!-- Market List -->
+                <div class="flex-1 overflow-y-auto">
+                    <div class="text-xs text-gray-500 px-3 py-2 font-semibold sticky top-0 bg-gray-800">シンボル</div>
+                    <div id="marketList" class="divide-y divide-gray-800">
+                        <div class="px-3 py-2 hover:bg-gray-800/80 cursor-pointer transition border-l-2 border-blue-500 bg-gray-800/50">
+                            <div class="flex justify-between items-center">
                                 <div>
-                                    <input type="text" id="pairSearch" placeholder="ペアを検索" 
-                                        class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 w-64">
+                                    <div class="font-semibold text-white text-sm">BTC/USDT</div>
+                                    <div class="text-gray-500 text-xs">ビットコイン</div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-white font-semibold text-sm">42,580</div>
+                                    <div class="text-green-500 text-xs">+8.2%</div>
                                 </div>
                             </div>
-                            <div class="text-right">
-                                <div class="text-2xl font-bold text-white">$42,580.50</div>
-                                <div class="text-green-500 text-sm">+8.2% (24H)</div>
+                        </div>
+                        <div class="px-3 py-2 hover:bg-gray-800/80 cursor-pointer transition">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <div class="font-semibold text-white text-sm">ETH/USDT</div>
+                                    <div class="text-gray-500 text-xs">イーサリアム</div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-white font-semibold text-sm">2,341</div>
+                                    <div class="text-green-500 text-xs">+6.5%</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="px-3 py-2 hover:bg-gray-800/80 cursor-pointer transition">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <div class="font-semibold text-white text-sm">SOL/USDT</div>
+                                    <div class="text-gray-500 text-xs">ソラナ</div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-white font-semibold text-sm">152.4</div>
+                                    <div class="text-green-500 text-xs">+12.3%</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="px-3 py-2 hover:bg-gray-800/80 cursor-pointer transition">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <div class="font-semibold text-white text-sm">XRP/USDT</div>
+                                    <div class="text-gray-500 text-xs">リップル</div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-white font-semibold text-sm">2.47</div>
+                                    <div class="text-green-500 text-xs">+3.1%</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="px-3 py-2 hover:bg-gray-800/80 cursor-pointer transition">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <div class="font-semibold text-white text-sm">ADA/USDT</div>
+                                    <div class="text-gray-500 text-xs">カルダノ</div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-white font-semibold text-sm">0.92</div>
+                                    <div class="text-red-500 text-xs">-2.8%</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="px-3 py-2 hover:bg-gray-800/80 cursor-pointer transition">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <div class="font-semibold text-white text-sm">MATIC/USDT</div>
+                                    <div class="text-gray-500 text-xs">ポリゴン</div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-white font-semibold text-sm">0.55</div>
+                                    <div class="text-red-500 text-xs">-1.5%</div>
+                                </div>
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
 
-                    <!-- Chart -->
-                    <div class="flex-1 px-6 py-4 overflow-hidden">
-                        <div class="h-full bg-gray-800 rounded-lg p-4">
-                            <canvas id="chartCanvas"></canvas>
+            <!-- Center Panel: Chart -->
+            <div class="flex-1 border-r border-gray-800 flex flex-col">
+                <!-- Pair Info Header -->
+                <div class="border-b border-gray-800 px-6 py-4 bg-gray-900">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-3">
+                            <div>
+                                <div class="text-2xl font-bold text-white">BTC/USDT</div>
+                                <div class="text-gray-500 text-sm">ビットコイン</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-3xl font-bold text-white">$42,580.50</div>
+                            <div class="text-green-500 text-lg font-semibold">+8.2% (24H)</div>
                         </div>
                     </div>
-
-                    <!-- Timeframe Selector -->
-                    <div class="border-t border-gray-800 px-6 py-3 flex gap-2">
-                        <button class="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition">1分</button>
-                        <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">5分</button>
-                        <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">15分</button>
-                        <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">1時間</button>
-                        <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">4時間</button>
-                        <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">日足</button>
-                        <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">週足</button>
+                    <div class="grid grid-cols-5 gap-4 text-sm">
+                        <div>
+                            <div class="text-gray-400">24H 高値</div>
+                            <div class="text-white font-semibold">$42,750.00</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-400">24H 低値</div>
+                            <div class="text-white font-semibold">$41,200.00</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-400">24H 出来高</div>
+                            <div class="text-white font-semibold">$48.2B</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-400">24H 取扱量</div>
+                            <div class="text-white font-semibold">1,234.5K BTC</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-400">時価総額</div>
+                            <div class="text-white font-semibold">$1.2T</div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Right Panel: Order Book and Positions -->
-                <div class="w-full lg:w-96 flex flex-col border-t lg:border-t-0 border-gray-800 overflow-hidden">
+                <!-- Chart -->
+                <div class="flex-1 px-6 py-4 overflow-hidden">
+                    <div class="h-full bg-gray-800 rounded-lg p-4">
+                        <canvas id="chartCanvas"></canvas>
+                    </div>
+                </div>
+
+                <!-- Timeframe & Volume -->
+                <div class="border-t border-gray-800 px-6 py-3 bg-gray-900">
+                    <div class="flex justify-between items-center">
+                        <div class="flex gap-2">
+                            <button class="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition">1分</button>
+                            <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">5分</button>
+                            <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">15分</button>
+                            <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">1時間</button>
+                            <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">4時間</button>
+                            <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">日足</button>
+                            <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">週足</button>
+                        </div>
+                        <div class="text-sm text-gray-400">
+                            <span>出来高 (USDT): </span>
+                            <span class="text-white font-semibold">75,419.38</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Positions and Orders -->
+            <div class="w-96 flex flex-col border-gray-800 overflow-hidden bg-gray-900">
                     <!-- Tabs for Positions -->
                     <div class="border-b border-gray-800 flex bg-gray-900">
                         <button onclick="switchTab('positions')" id="tab-positions" class="flex-1 px-4 py-3 text-sm font-semibold text-blue-400 border-b-2 border-blue-400 bg-gray-800/50">
@@ -321,6 +448,57 @@
         window.switchTab = function(tab) {
             // Hide all content
             const tabs = ['positions', 'orders', 'orderbook'];
+            tabs.forEach(t => {
+                document.getElementById(t + '-content').classList.add('hidden');
+                document.getElementById('tab-' + t).classList.remove('text-blue-400', 'border-b-2', 'border-blue-400');
+            });
+            
+            // Show selected tab
+            document.getElementById(tab + '-content').classList.remove('hidden');
+            document.getElementById('tab-' + tab).classList.add('text-blue-400', 'border-b-2', 'border-blue-400');
+        };
+
+        // Initialize chart
+        const ctx = document.getElementById('chartCanvas').getContext('2d');
+        const priceData = [42000, 42150, 42300, 42250, 42400, 42500, 42580];
+        
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'],
+                datasets: [{
+                    label: 'BTC/USDT',
+                    data: priceData,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 2,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#3b82f6',
+                    pointBorderColor: '#fff',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        grid: { color: 'rgba(107, 114, 128, 0.2)' },
+                        ticks: { color: '#9ca3af' }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#9ca3af' }
+                    }
+                }
+            }
+        });
+    </script>
             tabs.forEach(t => {
                 document.getElementById(t + '-content').classList.add('hidden');
                 document.getElementById('tab-' + t).classList.remove('text-blue-400', 'border-b-2', 'border-blue-400', 'bg-gray-800/50');
