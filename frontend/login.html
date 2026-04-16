@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ログイン - Paper Street</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-gray-950 text-gray-100">
+    <div id="app">
+        <!-- Header -->
+        <header class="border-b border-gray-800 bg-gray-950">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <a href="index.html" class="flex items-center gap-2">
+                        <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                            <span class="text-white font-bold text-sm">PS</span>
+                        </div>
+                        <span class="text-xl font-bold text-white">Paper Street</span>
+                    </a>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="w-full max-w-md">
+                <!-- Login Card -->
+                <div class="bg-gray-900 border border-gray-800 rounded-lg p-8 mb-6">
+                    <h2 class="text-2xl font-bold text-white mb-8 text-center">アカウントにログイン</h2>
+
+                    <!-- Discord Login -->
+                    <div class="mb-6">
+                        <button onclick="discordLogin()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition flex items-center justify-center gap-2">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M20.317 4.369c-1.637-.774-3.396-1.281-5.256-1.511a.052.052 0 00-.052.026c-.228.405-.481.933-.658 1.35a15.382 15.382 0 00-4.602 0c-.177-.417-.43-.945-.659-1.35a.053.053 0 00-.052-.026c-1.86.23-3.619.737-5.256 1.511a.054.054 0 00-.027.024c-3.349 5.018-4.259 9.896-3.809 14.708a.056.056 0 00.021.042c1.149.8 2.263 1.29 3.35 1.613a.055.055 0 00.06-.02c.249-.35.486-.72.707-1.112a.055.055 0 00-.03-.077c-.735-.222-1.435-.487-2.101-.798a.055.055 0 00-.062.009c-.14.105-.276.216-.41.331a.055.055 0 00-.002.064c1.398 1.02 2.893 1.624 4.383 2.147a.055.055 0 00.059-.002c1.378-.932 2.745-1.926 3.997-2.951a.054.054 0 00.021-.037c.527-5.387-.884-10.067-3.742-14.225a.041.041 0 00-.027-.024zm-8.297 11.423c-1.221 0-2.214-1.12-2.214-2.493 0-1.372.989-2.493 2.214-2.493s2.227 1.121 2.214 2.493c0 1.373-.989 2.493-2.214 2.493zm5.372 0c-1.221 0-2.214-1.12-2.214-2.493 0-1.372.989-2.493 2.214-2.493s2.227 1.121 2.214 2.493c0 1.373-.989 2.493-2.214 2.493z"/>
+                            </svg>
+                            Discordでログイン
+                        </button>
+                    </div>
+
+                    <!-- Divider -->
+                    <div class="relative mb-8">
+                        <div class="absolute inset-0 flex items-center">
+                            <div class="w-full border-t border-gray-700"></div>
+                        </div>
+                        <div class="relative flex justify-center text-sm">
+                            <span class="px-2 bg-gray-900 text-gray-400">または</span>
+                        </div>
+                    </div>
+
+                    <!-- API Key Login -->
+                    <div class="space-y-4">
+                        <div>
+                            <label for="apiKey" class="block text-sm font-medium text-gray-300 mb-2">
+                                API キー
+                            </label>
+                            <input 
+                                type="password" 
+                                id="apiKey" 
+                                placeholder="your-api-key-here"
+                                class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            >
+                        </div>
+                        <button onclick="apiKeyLogin()" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition">
+                            ログイン
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Info Box -->
+                <div class="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4 text-sm text-blue-200">
+                    <p class="font-semibold mb-2">デモンストレーション用</p>
+                    <p class="text-blue-300">
+                        このアプリケーションはモックアップです。サンプルデータを使用してダッシュボードにアクセスしてください。
+                    </p>
+                </div>
+
+                <!-- Help Text -->
+                <div class="mt-8 text-center text-gray-400 text-sm">
+                    <p>API キーをお持ちでない場合は、</p>
+                    <a href="index.html" class="text-blue-400 hover:text-blue-300 transition">トップページ</a>に戻ってください。
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { setApiKey } from './js/core/auth.js';
+
+        window.discordLogin = function() {
+            // モックアップの場合はダッシュボードにリダイレクト
+            localStorage.setItem('paperstreet.apiKey', 'demo-key-discord-' + Date.now());
+            window.location.href = 'dashboard.html';
+        };
+
+        window.apiKeyLogin = function() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            if (!apiKey) {
+                alert('APIキーを入力してください');
+                return;
+            }
+            setApiKey(apiKey);
+            window.location.href = 'dashboard.html';
+        };
+
+        // Enter キーでログイン
+        document.getElementById('apiKey').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                apiKeyLogin();
+            }
+        });
+    </script>
+</body>
+</html>

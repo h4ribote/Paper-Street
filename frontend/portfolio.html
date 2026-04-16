@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ポートフォリオ - Paper Street</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@latest"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-gray-950 text-gray-100">
+    <div id="app" class="flex flex-col min-h-screen">
+        <!-- Header -->
+        <header class="border-b border-gray-800 sticky top-0 z-50 bg-gray-950/80 backdrop-blur">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <a href="index.html" class="flex items-center gap-2">
+                        <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                            <span class="text-white font-bold text-sm">PS</span>
+                        </div>
+                        <span class="text-xl font-bold text-white">Paper Street</span>
+                    </a>
+                    <nav class="hidden md:flex items-center gap-8">
+                        <a href="dashboard.html" class="text-gray-400 hover:text-white transition">ダッシュボード</a>
+                        <a href="spot.html" class="text-gray-400 hover:text-white transition">現物取引</a>
+                        <a href="margin.html" class="text-gray-400 hover:text-white transition">信用取引</a>
+                        <a href="swap.html" class="text-gray-400 hover:text-white transition">スワップ</a>
+                        <a href="portfolio.html" class="text-blue-400 hover:text-blue-300 transition border-b-2 border-blue-400 pb-1">ポートフォリオ</a>
+                        <a href="news.html" class="text-gray-400 hover:text-white transition">ニュース</a>
+                    </nav>
+                    <div class="flex items-center gap-4">
+                        <button onclick="logout()" class="px-4 py-2 text-gray-400 hover:text-red-400 transition text-sm">
+                            ログアウト
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-y-auto">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <!-- Title -->
+                <div class="mb-8">
+                    <h1 class="text-3xl font-bold text-white mb-2">ポートフォリオ</h1>
+                    <p class="text-gray-400">資産管理と取引パフォーマンスの分析</p>
+                </div>
+
+                <!-- Portfolio Summary -->
+                <div class="grid md:grid-cols-4 gap-4 mb-8">
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
+                        <div class="text-gray-400 text-sm mb-2">総資産</div>
+                        <div class="text-3xl font-bold text-white">$83,680.50</div>
+                        <div class="text-green-500 text-sm mt-2">+$4,384.50 (5.53%)</div>
+                    </div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
+                        <div class="text-gray-400 text-sm mb-2">現物資産</div>
+                        <div class="text-3xl font-bold text-white">$38,450.00</div>
+                        <div class="text-gray-500 text-sm mt-2">6種類</div>
+                    </div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
+                        <div class="text-gray-400 text-sm mb-2">未決済ポジション</div>
+                        <div class="text-3xl font-bold text-orange-500">$26,895.00</div>
+                        <div class="text-gray-500 text-sm mt-2">3xポジション</div>
+                    </div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
+                        <div class="text-gray-400 text-sm mb-2">現金・ステーブル</div>
+                        <div class="text-3xl font-bold text-blue-400">$18,335.50</div>
+                        <div class="text-gray-500 text-sm mt-2">利用可能</div>
+                    </div>
+                </div>
+
+                <!-- Tabs -->
+                <div class="flex gap-4 mb-8 border-b border-gray-800">
+                    <button onclick="switchTab('overview')" id="tab-overview" class="px-4 py-3 font-semibold text-blue-400 border-b-2 border-blue-400 -mb-px">
+                        概要
+                    </button>
+                    <button onclick="switchTab('assets')" id="tab-assets" class="px-4 py-3 font-semibold text-gray-400 hover:text-white transition">
+                        保有資産
+                    </button>
+                    <button onclick="switchTab('performance')" id="tab-performance" class="px-4 py-3 font-semibold text-gray-400 hover:text-white transition">
+                        パフォーマンス
+                    </button>
+                    <button onclick="switchTab('history')" id="tab-history" class="px-4 py-3 font-semibold text-gray-400 hover:text-white transition">
+                        取引履歴
+                    </button>
+                </div>
+
+                <!-- Overview Tab -->
+                <div id="overview-content">
+                    <div class="grid lg:grid-cols-3 gap-8 mb-8">
+                        <!-- Portfolio Value Chart -->
+                        <div class="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-lg p-6">
+                            <h3 class="text-lg font-semibold text-white mb-4">資産推移</h3>
+                            <div class="h-96">
+                                <canvas id="portfolioChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Asset Allocation -->
+                        <div class="bg-gray-900 border border-gray-800 rounded-lg p-6 h-fit">
+                            <h3 class="text-lg font-semibold text-white mb-4">資産配分</h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <div class="flex justify-between mb-2">
+                                        <span class="text-gray-400">ビットコイン</span>
+                                        <span class="text-white font-semibold">35%</span>
+                                    </div>
+                                    <div class="w-full bg-gray-800 rounded-full h-2">
+                                        <div class="bg-orange-500 h-2 rounded-full" style="width: 35%"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between mb-2">
+                                        <span class="text-gray-400">イーサリアム</span>
+                                        <span class="text-white font-semibold">30%</span>
+                                    </div>
+                                    <div class="w-full bg-gray-800 rounded-full h-2">
+                                        <div class="bg-purple-500 h-2 rounded-full" style="width: 30%"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between mb-2">
+                                        <span class="text-gray-400">ステーブルコイン</span>
+                                        <span class="text-white font-semibold">20%</span>
+                                    </div>
+                                    <div class="w-full bg-gray-800 rounded-full h-2">
+                                        <div class="bg-green-500 h-2 rounded-full" style="width: 20%"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between mb-2">
+                                        <span class="text-gray-400">アルトコイン</span>
+                                        <span class="text-white font-semibold">15%</span>
+                                    </div>
+                                    <div class="w-full bg-gray-800 rounded-full h-2">
+                                        <div class="bg-blue-500 h-2 rounded-full" style="width: 15%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Risk Metrics -->
+                    <div class="grid md:grid-cols-3 gap-6">
+                        <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
+                            <h4 class="text-white font-semibold mb-4">ボラティリティ</h4>
+                            <div class="text-3xl font-bold text-yellow-500 mb-2">24.5%</div>
+                            <p class="text-gray-400 text-sm">年率換算</p>
+                        </div>
+                        <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
+                            <h4 class="text-white font-semibold mb-4">シャープレシオ</h4>
+                            <div class="text-3xl font-bold text-green-500 mb-2">1.45</div>
+                            <p class="text-gray-400 text-sm">リスク調整済み収益</p>
+                        </div>
+                        <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
+                            <h4 class="text-white font-semibold mb-4">最大ドローダウン</h4>
+                            <div class="text-3xl font-bold text-red-500 mb-2">-18.3%</div>
+                            <p class="text-gray-400 text-sm">最大下落率</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Assets Tab -->
+                <div id="assets-content" class="hidden">
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="bg-gray-800 border-b border-gray-700">
+                                    <th class="px-6 py-4 text-left text-sm font-semibold text-gray-400">シンボル</th>
+                                    <th class="px-6 py-4 text-right text-sm font-semibold text-gray-400">数量</th>
+                                    <th class="px-6 py-4 text-right text-sm font-semibold text-gray-400">現在価格</th>
+                                    <th class="px-6 py-4 text-right text-sm font-semibold text-gray-400">合計額</th>
+                                    <th class="px-6 py-4 text-right text-sm font-semibold text-gray-400">変化率</th>
+                                    <th class="px-6 py-4 text-right text-sm font-semibold text-gray-400">損益</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-800">
+                                <tr class="hover:bg-gray-800/50 cursor-pointer transition">
+                                    <td class="px-6 py-4"><div class="text-white font-semibold">Bitcoin</div><div class="text-gray-500 text-sm">BTC</div></td>
+                                    <td class="px-6 py-4 text-right text-white">0.75</td>
+                                    <td class="px-6 py-4 text-right text-white">$42,580.50</td>
+                                    <td class="px-6 py-4 text-right text-white font-semibold">$31,935.38</td>
+                                    <td class="px-6 py-4 text-right text-green-500">+8.2%</td>
+                                    <td class="px-6 py-4 text-right text-green-500 font-semibold">+$2,435.00</td>
+                                </tr>
+                                <tr class="hover:bg-gray-800/50 cursor-pointer transition">
+                                    <td class="px-6 py-4"><div class="text-white font-semibold">Ethereum</div><div class="text-gray-500 text-sm">ETH</div></td>
+                                    <td class="px-6 py-4 text-right text-white">5.5</td>
+                                    <td class="px-6 py-4 text-right text-white">$2,340.75</td>
+                                    <td class="px-6 py-4 text-right text-white font-semibold">$12,874.13</td>
+                                    <td class="px-6 py-4 text-right text-green-500">+6.5%</td>
+                                    <td class="px-6 py-4 text-right text-green-500 font-semibold">+$782.45</td>
+                                </tr>
+                                <tr class="hover:bg-gray-800/50 cursor-pointer transition">
+                                    <td class="px-6 py-4"><div class="text-white font-semibold">USDT</div><div class="text-gray-500 text-sm">USDT</div></td>
+                                    <td class="px-6 py-4 text-right text-white">8,500.00</td>
+                                    <td class="px-6 py-4 text-right text-white">$1.00</td>
+                                    <td class="px-6 py-4 text-right text-white font-semibold">$8,500.00</td>
+                                    <td class="px-6 py-4 text-right text-gray-500">0.0%</td>
+                                    <td class="px-6 py-4 text-right text-gray-500 font-semibold">$0.00</td>
+                                </tr>
+                                <tr class="hover:bg-gray-800/50 cursor-pointer transition">
+                                    <td class="px-6 py-4"><div class="text-white font-semibold">Solana</div><div class="text-gray-500 text-sm">SOL</div></td>
+                                    <td class="px-6 py-4 text-right text-white">32.5</td>
+                                    <td class="px-6 py-4 text-right text-white">$152.40</td>
+                                    <td class="px-6 py-4 text-right text-white font-semibold">$4,953.00</td>
+                                    <td class="px-6 py-4 text-right text-green-500">+12.3%</td>
+                                    <td class="px-6 py-4 text-right text-green-500 font-semibold">+$541.23</td>
+                                </tr>
+                                <tr class="hover:bg-gray-800/50 cursor-pointer transition">
+                                    <td class="px-6 py-4"><div class="text-white font-semibold">Ripple</div><div class="text-gray-500 text-sm">XRP</div></td>
+                                    <td class="px-6 py-4 text-right text-white">2,250.00</td>
+                                    <td class="px-6 py-4 text-right text-white">$2.47</td>
+                                    <td class="px-6 py-4 text-right text-white font-semibold">$5,557.50</td>
+                                    <td class="px-6 py-4 text-right text-green-500">+3.1%</td>
+                                    <td class="px-6 py-4 text-right text-green-500 font-semibold">+$168.23</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Performance Tab -->
+                <div id="performance-content" class="hidden">
+                    <div class="grid lg:grid-cols-2 gap-8">
+                        <!-- Monthly P&L -->
+                        <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
+                            <h3 class="text-lg font-semibold text-white mb-4">月別収益</h3>
+                            <div class="h-80">
+                                <canvas id="monthlyChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Performance Stats -->
+                        <div class="space-y-6">
+                            <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
+                                <h4 class="text-white font-semibold mb-4">2024年パフォーマンス</h4>
+                                <div class="space-y-3">
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-400">総収益</span>
+                                        <span class="text-green-500 font-semibold">+$4,384.50</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-400">実現益</span>
+                                        <span class="text-green-500 font-semibold">+$2,890.00</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-400">未実現益</span>
+                                        <span class="text-green-500 font-semibold">+$1,494.50</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-400">収益率</span>
+                                        <span class="text-green-500 font-semibold">5.53%</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
+                                <h4 class="text-white font-semibold mb-4">取引統計</h4>
+                                <div class="space-y-3">
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-400">総取引回数</span>
+                                        <span class="text-white font-semibold">234</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-400">勝率</span>
+                                        <span class="text-green-500 font-semibold">62.4%</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-400">平均勝利</span>
+                                        <span class="text-white font-semibold">+$24.50</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-400">平均敗北</span>
+                                        <span class="text-red-500 font-semibold">-$12.30</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-400">利益因子</span>
+                                        <span class="text-white font-semibold">1.85</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- History Tab -->
+                <div id="history-content" class="hidden">
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="bg-gray-800 border-b border-gray-700">
+                                    <th class="px-6 py-4 text-left text-sm font-semibold text-gray-400">日時</th>
+                                    <th class="px-6 py-4 text-left text-sm font-semibold text-gray-400">ペア</th>
+                                    <th class="px-6 py-4 text-left text-sm font-semibold text-gray-400">種類</th>
+                                    <th class="px-6 py-4 text-right text-sm font-semibold text-gray-400">数量</th>
+                                    <th class="px-6 py-4 text-right text-sm font-semibold text-gray-400">価格</th>
+                                    <th class="px-6 py-4 text-right text-sm font-semibold text-gray-400">合計額</th>
+                                    <th class="px-6 py-4 text-right text-sm font-semibold text-gray-400">損益</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-800">
+                                <tr class="hover:bg-gray-800/50">
+                                    <td class="px-6 py-4 text-gray-400">2024-04-16 10:35</td>
+                                    <td class="px-6 py-4"><span class="text-white font-semibold">BTC/USDT</span></td>
+                                    <td class="px-6 py-4"><span class="text-green-500">買</span></td>
+                                    <td class="px-6 py-4 text-right text-white">0.1</td>
+                                    <td class="px-6 py-4 text-right text-white">$42,100.00</td>
+                                    <td class="px-6 py-4 text-right text-white">$4,210.00</td>
+                                    <td class="px-6 py-4 text-right text-green-500 font-semibold">+$48.05</td>
+                                </tr>
+                                <tr class="hover:bg-gray-800/50">
+                                    <td class="px-6 py-4 text-gray-400">2024-04-16 09:22</td>
+                                    <td class="px-6 py-4"><span class="text-white font-semibold">ETH/USDT</span></td>
+                                    <td class="px-6 py-4"><span class="text-red-500">売</span></td>
+                                    <td class="px-6 py-4 text-right text-white">1.0</td>
+                                    <td class="px-6 py-4 text-right text-white">$2,340.50</td>
+                                    <td class="px-6 py-4 text-right text-white">$2,340.50</td>
+                                    <td class="px-6 py-4 text-right text-green-500 font-semibold">+$123.45</td>
+                                </tr>
+                                <tr class="hover:bg-gray-800/50">
+                                    <td class="px-6 py-4 text-gray-400">2024-04-15 16:45</td>
+                                    <td class="px-6 py-4"><span class="text-white font-semibold">SOL/USDT</span></td>
+                                    <td class="px-6 py-4"><span class="text-green-500">買</span></td>
+                                    <td class="px-6 py-4 text-right text-white">10</td>
+                                    <td class="px-6 py-4 text-right text-white">$152.00</td>
+                                    <td class="px-6 py-4 text-right text-white">$1,520.00</td>
+                                    <td class="px-6 py-4 text-right text-green-500 font-semibold">+$42.30</td>
+                                </tr>
+                                <tr class="hover:bg-gray-800/50">
+                                    <td class="px-6 py-4 text-gray-400">2024-04-15 14:12</td>
+                                    <td class="px-6 py-4"><span class="text-white font-semibold">XRP/USDT</span></td>
+                                    <td class="px-6 py-4"><span class="text-red-500">売</span></td>
+                                    <td class="px-6 py-4 text-right text-white">500</td>
+                                    <td class="px-6 py-4 text-right text-white">$2.45</td>
+                                    <td class="px-6 py-4 text-right text-white">$1,225.00</td>
+                                    <td class="px-6 py-4 text-right text-red-500 font-semibold">-$35.20</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module">
+        import Chart from 'https://cdn.jsdelivr.net/npm/chart.js@latest/+esm';
+
+        window.logout = function() {
+            localStorage.removeItem('paperstreet.apiKey');
+            window.location.href = 'login.html';
+        };
+
+        window.switchTab = function(tab) {
+            const tabs = ['overview', 'assets', 'performance', 'history'];
+            tabs.forEach(t => {
+                document.getElementById(t + '-content').classList.add('hidden');
+                document.getElementById('tab-' + t).classList.remove('text-blue-400', 'border-b-2', 'border-blue-400');
+                document.getElementById('tab-' + t).classList.add('text-gray-400', 'hover:text-white');
+            });
+
+            document.getElementById(tab + '-content').classList.remove('hidden');
+            document.getElementById('tab-' + tab).classList.add('text-blue-400', 'border-b-2', 'border-blue-400');
+            document.getElementById('tab-' + tab).classList.remove('text-gray-400', 'hover:text-white');
+        };
+
+        // Portfolio Value Chart
+        const portfolioCtx = document.getElementById('portfolioChart').getContext('2d');
+        new Chart(portfolioCtx, {
+            type: 'line',
+            data: {
+                labels: ['1月', '2月', '3月', '4月5日', '4月10日', '4月15日', '4月16日'],
+                datasets: [{
+                    label: '総資産額',
+                    data: [60000, 65000, 72000, 78000, 79500, 82000, 83680.50],
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    borderWidth: 2,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#3b82f6',
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: true, labels: { color: '#e5e7eb' } }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        grid: { color: '#374151' },
+                        ticks: { color: '#9ca3af' }
+                    },
+                    x: {
+                        grid: { color: '#374151' },
+                        ticks: { color: '#9ca3af' }
+                    }
+                }
+            }
+        });
+
+        // Monthly P&L Chart
+        const monthlyCtx = document.getElementById('monthlyChart').getContext('2d');
+        new Chart(monthlyCtx, {
+            type: 'bar',
+            data: {
+                labels: ['1月', '2月', '3月', '4月'],
+                datasets: [{
+                    label: '月別利益/損失',
+                    data: [800, 1200, 1450, 934.50],
+                    backgroundColor: ['#10b981', '#10b981', '#10b981', '#3b82f6'],
+                    borderRadius: 4,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: undefined,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        grid: { color: '#374151' },
+                        ticks: { color: '#9ca3af' }
+                    },
+                    x: {
+                        grid: { color: '#374151' },
+                        ticks: { color: '#9ca3af' }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

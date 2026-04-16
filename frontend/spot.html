@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>現物取引 - Paper Street</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@latest"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-gray-950 text-gray-100">
+    <div id="app" class="flex flex-col min-h-screen">
+        <!-- Header -->
+        <header class="border-b border-gray-800 sticky top-0 z-50 bg-gray-950/80 backdrop-blur">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <a href="index.html" class="flex items-center gap-2">
+                        <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                            <span class="text-white font-bold text-sm">PS</span>
+                        </div>
+                        <span class="text-xl font-bold text-white">Paper Street</span>
+                    </a>
+                    <nav class="hidden md:flex items-center gap-8">
+                        <a href="dashboard.html" class="text-gray-400 hover:text-white transition">ダッシュボード</a>
+                        <a href="spot.html" class="text-blue-400 hover:text-blue-300 transition border-b-2 border-blue-400 pb-1">現物取引</a>
+                        <a href="margin.html" class="text-gray-400 hover:text-white transition">信用取引</a>
+                        <a href="swap.html" class="text-gray-400 hover:text-white transition">スワップ</a>
+                        <a href="portfolio.html" class="text-gray-400 hover:text-white transition">ポートフォリオ</a>
+                        <a href="news.html" class="text-gray-400 hover:text-white transition">ニュース</a>
+                    </nav>
+                    <div class="flex items-center gap-4">
+                        <button onclick="logout()" class="px-4 py-2 text-gray-400 hover:text-red-400 transition text-sm">
+                            ログアウト
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-hidden">
+            <div class="h-full flex flex-col lg:flex-row">
+                <!-- Left Panel: Chart -->
+                <div class="flex-1 border-r border-gray-800 flex flex-col">
+                    <!-- Trading Pair Selector -->
+                    <div class="border-b border-gray-800 px-6 py-4">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-4">
+                                <div>
+                                    <input type="text" id="pairSearch" placeholder="ペアを検索 (BTC/USDT など)" 
+                                        class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 w-64">
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-2xl font-bold text-white">$42,580.50</div>
+                                <div class="text-green-500 text-sm">+8.2% (24H)</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chart -->
+                    <div class="flex-1 px-6 py-4 overflow-hidden">
+                        <div class="h-full bg-gray-800 rounded-lg p-4">
+                            <canvas id="chartCanvas"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Timeframe Selector -->
+                    <div class="border-t border-gray-800 px-6 py-3 flex gap-2">
+                        <button class="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition">1分</button>
+                        <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">5分</button>
+                        <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">15分</button>
+                        <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">1時間</button>
+                        <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">4時間</button>
+                        <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">日足</button>
+                        <button class="px-3 py-1 text-xs text-gray-400 hover:text-white transition">週足</button>
+                    </div>
+                </div>
+
+                <!-- Right Panel: Order Book and Orders -->
+                <div class="w-full lg:w-80 flex flex-col border-t lg:border-t-0 border-gray-800 overflow-hidden">
+                    <!-- Tabs -->
+                    <div class="border-b border-gray-800 flex bg-gray-900">
+                        <button onclick="switchTab('orderbook')" id="tab-orderbook" class="flex-1 px-4 py-3 text-sm font-semibold text-blue-400 border-b-2 border-blue-400 bg-gray-800/50">
+                            オーダーブック
+                        </button>
+                        <button onclick="switchTab('orders')" id="tab-orders" class="flex-1 px-4 py-3 text-sm font-semibold text-gray-400 hover:text-white">
+                            注文
+                        </button>
+                        <button onclick="switchTab('trades')" id="tab-trades" class="flex-1 px-4 py-3 text-sm font-semibold text-gray-400 hover:text-white">
+                            取引履歴
+                        </button>
+                    </div>
+
+                    <!-- Orderbook Tab -->
+                    <div id="orderbook-content" class="flex-1 overflow-y-auto flex flex-col">
+                        <!-- Asks -->
+                        <div class="flex-1 border-b border-gray-800 overflow-y-auto">
+                            <div class="text-xs text-gray-500 px-4 py-2 font-semibold sticky top-0 bg-gray-800">
+                                売り注文
+                            </div>
+                            <div id="asks" class="space-y-0.5">
+                                <div class="px-4 py-1 text-xs hover:bg-gray-800/50 cursor-pointer">
+                                    <div class="flex justify-between">
+                                        <span class="text-red-500">42,600.00</span>
+                                        <span class="text-gray-400">1.23</span>
+                                        <span class="text-gray-500">52,458.00</span>
+                                    </div>
+                                </div>
+                                <div class="px-4 py-1 text-xs hover:bg-gray-800/50 cursor-pointer">
+                                    <div class="flex justify-between">
+                                        <span class="text-red-500">42,601.50</span>
+                                        <span class="text-gray-400">2.45</span>
+                                        <span class="text-gray-500">104,403.35</span>
+                                    </div>
+                                </div>
+                                <div class="px-4 py-1 text-xs hover:bg-gray-800/50 cursor-pointer">
+                                    <div class="flex justify-between">
+                                        <span class="text-red-500">42,605.00</span>
+                                        <span class="text-gray-400">0.87</span>
+                                        <span class="text-gray-500">37,065.95</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Current Price -->
+                        <div class="px-4 py-3 font-bold text-center text-lg">
+                            <span class="text-green-500">42,580.50</span>
+                        </div>
+
+                        <!-- Bids -->
+                        <div class="flex-1 overflow-y-auto">
+                            <div class="text-xs text-gray-500 px-4 py-2 font-semibold sticky top-0 bg-gray-800">
+                                買い注文
+                            </div>
+                            <div id="bids" class="space-y-0.5">
+                                <div class="px-4 py-1 text-xs hover:bg-gray-800/50 cursor-pointer">
+                                    <div class="flex justify-between">
+                                        <span class="text-green-500">42,579.00</span>
+                                        <span class="text-gray-400">3.21</span>
+                                        <span class="text-gray-500">136,729.59</span>
+                                    </div>
+                                </div>
+                                <div class="px-4 py-1 text-xs hover:bg-gray-800/50 cursor-pointer">
+                                    <div class="flex justify-between">
+                                        <span class="text-green-500">42,575.50</span>
+                                        <span class="text-gray-400">1.54</span>
+                                        <span class="text-gray-500">65,566.07</span>
+                                    </div>
+                                </div>
+                                <div class="px-4 py-1 text-xs hover:bg-gray-800/50 cursor-pointer">
+                                    <div class="flex justify-between">
+                                        <span class="text-green-500">42,570.00</span>
+                                        <span class="text-gray-400">2.67</span>
+                                        <span class="text-gray-500">113,613.90</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Orders Tab (Hidden) -->
+                    <div id="orders-content" class="hidden flex-1 overflow-y-auto">
+                        <div class="divide-y divide-gray-800">
+                            <div class="px-4 py-3 hover:bg-gray-800/50">
+                                <div class="text-sm font-semibold text-white mb-1">BTC/USDT - 買い</div>
+                                <div class="text-xs text-gray-400">0.5 BTC @ $42,000.00</div>
+                                <div class="text-xs text-gray-500 mt-1">部分約定: 0.1 BTC</div>
+                                <button class="text-xs text-red-400 hover:text-red-300 mt-2">キャンセル</button>
+                            </div>
+                            <div class="px-4 py-3 hover:bg-gray-800/50">
+                                <div class="text-sm font-semibold text-white mb-1">ETH/USDT - 売り</div>
+                                <div class="text-xs text-gray-400">2.0 ETH @ $2,350.00</div>
+                                <div class="text-xs text-gray-500 mt-1">未約定</div>
+                                <button class="text-xs text-red-400 hover:text-red-300 mt-2">キャンセル</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Trades Tab (Hidden) -->
+                    <div id="trades-content" class="hidden flex-1 overflow-y-auto">
+                        <div class="divide-y divide-gray-800">
+                            <div class="px-4 py-3">
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="text-sm font-semibold text-white">BTC/USDT</span>
+                                    <span class="text-xs text-gray-400">買い</span>
+                                </div>
+                                <div class="text-xs text-gray-400">0.1 BTC @ $42,100.00</div>
+                                <div class="text-xs text-gray-500 mt-1">2024-04-16 10:35:42</div>
+                            </div>
+                            <div class="px-4 py-3">
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="text-sm font-semibold text-white">ETH/USDT</span>
+                                    <span class="text-xs text-gray-400">売り</span>
+                                </div>
+                                <div class="text-xs text-gray-400">1.0 ETH @ $2,340.50</div>
+                                <div class="text-xs text-gray-500 mt-1">2024-04-16 09:22:15</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Floating Order Panel (Bottom) -->
+        <div class="border-t border-gray-800 bg-gray-900">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                <div class="grid md:grid-cols-2 gap-6">
+                    <!-- Buy Order Form -->
+                    <div class="bg-gray-800 rounded-lg p-6 border border-green-900/50">
+                        <h3 class="text-lg font-semibold text-green-500 mb-4">買い注文</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm text-gray-400 mb-2">価格</label>
+                                <input type="number" value="42580.50" 
+                                    class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-green-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-400 mb-2">数量</label>
+                                <input type="number" placeholder="0.00" 
+                                    class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-green-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-400 mb-2">注文タイプ</label>
+                                <select class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-green-500">
+                                    <option>リミット</option>
+                                    <option>成行</option>
+                                </select>
+                            </div>
+                            <button class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded transition">
+                                買い注文を送信
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Sell Order Form -->
+                    <div class="bg-gray-800 rounded-lg p-6 border border-red-900/50">
+                        <h3 class="text-lg font-semibold text-red-500 mb-4">売り注文</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm text-gray-400 mb-2">価格</label>
+                                <input type="number" value="42580.50" 
+                                    class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-red-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-400 mb-2">数量</label>
+                                <input type="number" placeholder="0.00" 
+                                    class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-red-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-400 mb-2">注文タイプ</label>
+                                <select class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-red-500">
+                                    <option>リミット</option>
+                                    <option>成行</option>
+                                </select>
+                            </div>
+                            <button class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2 rounded transition">
+                                売り注文を送信
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        window.logout = function() {
+            localStorage.removeItem('paperstreet.apiKey');
+            window.location.href = 'login.html';
+        };
+
+        window.switchTab = function(tab) {
+            // Hide all content
+            document.getElementById('orderbook-content').classList.add('hidden');
+            document.getElementById('orders-content').classList.add('hidden');
+            document.getElementById('trades-content').classList.add('hidden');
+
+            // Remove active state from all tabs
+            document.getElementById('tab-orderbook').classList.remove('text-blue-400', 'border-b-2', 'border-blue-400', 'bg-gray-800/50');
+            document.getElementById('tab-orderbook').classList.add('text-gray-400', 'hover:text-white');
+            document.getElementById('tab-orders').classList.remove('text-blue-400', 'border-b-2', 'border-blue-400', 'bg-gray-800/50');
+            document.getElementById('tab-orders').classList.add('text-gray-400', 'hover:text-white');
+            document.getElementById('tab-trades').classList.remove('text-blue-400', 'border-b-2', 'border-blue-400', 'bg-gray-800/50');
+            document.getElementById('tab-trades').classList.add('text-gray-400', 'hover:text-white');
+
+            // Show selected content and activate tab
+            document.getElementById(tab + '-content').classList.remove('hidden');
+            document.getElementById('tab-' + tab).classList.add('text-blue-400', 'border-b-2', 'border-blue-400', 'bg-gray-800/50');
+            document.getElementById('tab-' + tab).classList.remove('text-gray-400', 'hover:text-white');
+        };
+
+        // Initialize chart
+        const ctx = document.getElementById('chartCanvas').getContext('2d');
+        const priceData = [42000, 42150, 42300, 42250, 42400, 42500, 42580];
+        const labels = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '現在'];
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'BTC/USDT',
+                    data: priceData,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    borderWidth: 2,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#3b82f6',
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        grid: { color: '#374151' },
+                        ticks: { color: '#9ca3af' }
+                    },
+                    x: {
+                        grid: { color: '#374151' },
+                        ticks: { color: '#9ca3af' }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

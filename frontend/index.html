@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paper Street - 仮想通貨取引プラットフォーム</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-gray-950 text-gray-100">
+    <div id="app">
+        <!-- Header -->
+        <header class="border-b border-gray-800 sticky top-0 z-50 bg-gray-950/80 backdrop-blur">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                            <span class="text-white font-bold text-sm">PS</span>
+                        </div>
+                        <span class="text-xl font-bold text-white">Paper Street</span>
+                    </div>
+                    <nav class="hidden md:flex items-center gap-8">
+                        <a href="#" class="text-gray-400 hover:text-white transition">取引</a>
+                        <a href="#" class="text-gray-400 hover:text-white transition">マーケット</a>
+                        <a href="#" class="text-gray-400 hover:text-white transition">ニュース</a>
+                        <a href="#" class="text-gray-400 hover:text-white transition">ラーニング</a>
+                    </nav>
+                    <div class="flex items-center gap-4">
+                        <button onclick="navigateTo('login.html')" class="px-6 py-2 text-blue-400 border border-blue-400 rounded-lg hover:bg-blue-400/10 transition">
+                            ログイン
+                        </button>
+                        <button onclick="navigateTo('dashboard.html')" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                            ダッシュボード
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Hero Section -->
+        <section class="py-20 px-4">
+            <div class="max-w-4xl mx-auto text-center">
+                <h1 class="text-5xl md:text-6xl font-bold text-white mb-6">
+                    次世代の暗号資産取引プラットフォーム
+                </h1>
+                <p class="text-xl text-gray-400 mb-8">
+                    リアルタイムマーケットデータ、充実した取引ツール、そして高速な取引実行
+                </p>
+                <div class="flex gap-4 justify-center mb-12">
+                    <button onclick="navigateTo('dashboard.html')" class="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold">
+                        今すぐ始める
+                    </button>
+                    <button class="px-8 py-3 border border-gray-600 text-white rounded-lg hover:border-white transition">
+                        販売資料を見る
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Market Overview -->
+        <section class="py-16 px-4 bg-gray-900/50">
+            <div class="max-w-7xl mx-auto">
+                <h2 class="text-3xl font-bold text-white mb-12 text-center">市場の最新トレンド</h2>
+                <div class="grid md:grid-cols-4 gap-4">
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
+                        <div class="text-gray-400 text-sm mb-2">24H 上昇率</div>
+                        <div class="text-3xl font-bold text-green-500">+12.5%</div>
+                        <div class="text-gray-500 text-sm mt-2">ビットコイン +8.2%</div>
+                    </div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
+                        <div class="text-gray-400 text-sm mb-2">時価総額</div>
+                        <div class="text-2xl font-bold text-white">$2.3T</div>
+                        <div class="text-gray-500 text-sm mt-2">前日比 +4.8%</div>
+                    </div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
+                        <div class="text-gray-400 text-sm mb-2">24H 取引高</div>
+                        <div class="text-2xl font-bold text-white">$145B</div>
+                        <div class="text-gray-500 text-sm mt-2">史上2番目の高さ</div>
+                    </div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
+                        <div class="text-gray-400 text-sm mb-2">時価総額ランキング</div>
+                        <div class="text-lg font-semibold text-white mt-4">
+                            <div class="flex justify-between py-1">
+                                <span>BTC</span>
+                                <span>42.5%</span>
+                            </div>
+                            <div class="flex justify-between py-1">
+                                <span>ETH</span>
+                                <span>18.3%</span>
+                            </div>
+                            <div class="flex justify-between py-1">
+                                <span>その他</span>
+                                <span>39.2%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features -->
+        <section class="py-16 px-4">
+            <div class="max-w-7xl mx-auto">
+                <h2 class="text-3xl font-bold text-white mb-12 text-center">プラットフォームの特徴</h2>
+                <div class="grid md:grid-cols-3 gap-8">
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-8">
+                        <div class="text-blue-500 text-3xl mb-4">⚡</div>
+                        <h3 class="text-xl font-bold text-white mb-4">超高速取引</h3>
+                        <p class="text-gray-400">
+                            ミリ秒単位のレイテンシで、市場の機会を逃さない
+                        </p>
+                    </div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-8">
+                        <div class="text-blue-500 text-3xl mb-4">📊</div>
+                        <h3 class="text-xl font-bold text-white mb-4">充実したツール</h3>
+                        <p class="text-gray-400">
+                            高度なチャート分析、リアルタイムデータ、カスタマイズ可能なレイアウト
+                        </p>
+                    </div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-8">
+                        <div class="text-blue-500 text-3xl mb-4">🔒</div>
+                        <h3 class="text-xl font-bold text-white mb-4">セキュリティ</h3>
+                        <p class="text-gray-400">
+                            銀行レベルのセキュリティ対策と複数段階認証
+                        </p>
+                    </div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-8">
+                        <div class="text-blue-500 text-3xl mb-4">💼</div>
+                        <h3 class="text-xl font-bold text-white mb-4">複数の取引タイプ</h3>
+                        <p class="text-gray-400">
+                            現物、信用、スワップ取引に対応
+                        </p>
+                    </div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-8">
+                        <div class="text-blue-500 text-3xl mb-4">📱</div>
+                        <h3 class="text-xl font-bold text-white mb-4">マルチプラットフォーム</h3>
+                        <p class="text-gray-400">
+                            Web、モバイルアプリで同期された取引管理
+                        </p>
+                    </div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-8">
+                        <div class="text-blue-500 text-3xl mb-4">🌐</div>
+                        <h3 class="text-xl font-bold text-white mb-4">グローバル対応</h3>
+                        <p class="text-gray-400">
+                            多言語対応、複数通貨サポート
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CTA Section -->
+        <section class="py-16 px-4 bg-gradient-to-r from-blue-900/30 to-purple-900/30 border-y border-gray-800">
+            <div class="max-w-4xl mx-auto text-center">
+                <h2 class="text-3xl font-bold text-white mb-6">今すぐ取引を開始しましょう</h2>
+                <p class="text-gray-400 mb-8">
+                    簡単な登録で、即座にダッシュボードにアクセス可能です。
+                </p>
+                <button onclick="navigateTo('login.html')" class="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold">
+                    ログイン / サインアップ
+                </button>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="border-t border-gray-800 py-8 px-4 bg-gray-950">
+            <div class="max-w-7xl mx-auto">
+                <div class="grid md:grid-cols-4 gap-8 mb-8">
+                    <div>
+                        <h4 class="text-white font-bold mb-4">製品</h4>
+                        <ul class="space-y-2 text-gray-400">
+                            <li><a href="#" class="hover:text-white transition">取引</a></li>
+                            <li><a href="#" class="hover:text-white transition">マーケット</a></li>
+                            <li><a href="#" class="hover:text-white transition">API</a></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="text-white font-bold mb-4">リソース</h4>
+                        <ul class="space-y-2 text-gray-400">
+                            <li><a href="#" class="hover:text-white transition">ドキュメント</a></li>
+                            <li><a href="#" class="hover:text-white transition">チュートリアル</a></li>
+                            <li><a href="#" class="hover:text-white transition">FAQ</a></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="text-white font-bold mb-4">会社</h4>
+                        <ul class="space-y-2 text-gray-400">
+                            <li><a href="#" class="hover:text-white transition">ブログ</a></li>
+                            <li><a href="#" class="hover:text-white transition">キャリア</a></li>
+                            <li><a href="#" class="hover:text-white transition">お問い合わせ</a></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="text-white font-bold mb-4">法務</h4>
+                        <ul class="space-y-2 text-gray-400">
+                            <li><a href="#" class="hover:text-white transition">利用規約</a></li>
+                            <li><a href="#" class="hover:text-white transition">プライバシー</a></li>
+                            <li><a href="#" class="hover:text-white transition">リスク開示</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="border-t border-gray-800 pt-8 flex justify-between items-center">
+                    <p class="text-gray-500 text-sm">© 2024 Paper Street. All rights reserved.</p>
+                    <div class="flex gap-4 text-gray-400">
+                        <a href="#" class="hover:text-white transition">Twitter</a>
+                        <a href="#" class="hover:text-white transition">Discord</a>
+                        <a href="#" class="hover:text-white transition">GitHub</a>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        function navigateTo(page) {
+            window.location.href = page;
+        }
+    </script>
+</body>
+</html>
