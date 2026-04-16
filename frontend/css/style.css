@@ -1,25 +1,3 @@
-/* Base Tailwind setup handles most utility classes.
-   Here we can add custom scrollbars or complex overriding styles. */
-
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: #0b0e11; }
-::-webkit-scrollbar-thumb { background: #2b3139; border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: #474d57; }
-
-.hide-scrollbar::-webkit-scrollbar { display: none; }
-.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-.noselect { user-select: none; }
-
-.app-loading {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    font-size: 1.5rem;
-    color: #848e9c;
-}
-
 /* Chrome, Safari, Edge, Opera */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
