@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ダッシュボード | Paper Street</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#0b0e11', panel: '#181a20', border: '#2b3139',
+                        primary: '#fcd535', buy: '#0ecb81', sell: '#f6465d', textMuted: '#848e9c',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>body { background-color: #0b0e11; color: #eaecef; }</style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <!-- Logged in Header -->
+    <nav class="bg-panel border-b border-border px-4 py-3 flex items-center justify-between sticky top-0 z-50">
+        <div class="flex items-center gap-6">
+            <a href="dashboard.html" class="text-xl font-bold text-primary tracking-tighter">PAPER STREET</a>
+            <div class="hidden md:flex items-center gap-4 text-sm font-medium text-textMuted">
+                <a href="dashboard.html" class="text-white">ダッシュボード</a>
+                <a href="spot.html" class="hover:text-white transition">現物取引</a>
+                <a href="margin.html" class="hover:text-white transition">信用取引</a>
+                <a href="swap.html" class="hover:text-white transition">スワップ</a>
+                <a href="news.html" class="hover:text-white transition">ニュース</a>
+            </div>
+        </div>
+        <div class="flex items-center gap-4">
+            <a href="portfolio.html" class="text-sm font-medium hover:text-white transition"><i class="fa-solid fa-wallet mr-1"></i>ウォレット</a>
+            <div class="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center cursor-pointer">
+                <i class="fa-solid fa-user text-sm"></i>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow p-6 max-w-7xl mx-auto w-full grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Left Col: Asset & Quick Links -->
+        <div class="md:col-span-1 space-y-6">
+            <!-- Asset Summary -->
+            <div class="bg-panel border border-border rounded-lg p-6">
+                <h2 class="text-textMuted text-sm font-medium mb-2">推定総残高</h2>
+                <div class="text-3xl font-bold mb-1">12,450.00 <span class="text-lg text-textMuted font-normal">USD</span></div>
+                <div class="text-sm text-buy"><i class="fa-solid fa-arrow-trend-up mr-1"></i>+450.20 (+3.5%) 今日</div>
+                
+                <div class="flex gap-2 mt-6">
+                    <button class="flex-1 bg-primary text-black py-2 rounded text-sm font-bold hover:bg-yellow-500 transition">入金</button>
+                    <button class="flex-1 bg-border text-white py-2 rounded text-sm font-bold hover:bg-gray-700 transition">出金</button>
+                    <button class="flex-1 bg-border text-white py-2 rounded text-sm font-bold hover:bg-gray-700 transition">振替</button>
+                </div>
+            </div>
+
+            <!-- Quick Markets -->
+            <div class="bg-panel border border-border rounded-lg p-0 overflow-hidden">
+                <div class="p-4 border-b border-border flex justify-between items-center">
+                    <h2 class="font-bold">お気に入り</h2>
+                    <a href="spot.html" class="text-xs text-primary">すべて表示</a>
+                </div>
+                <div class="divide-y divide-border">
+                    <div class="p-4 flex justify-between items-center hover:bg-dark cursor-pointer transition">
+                        <div class="flex items-center gap-3">
+                            <i class="fa-brands fa-bitcoin text-primary text-xl"></i>
+                            <div>
+                                <div class="font-bold text-sm">BTC/USD</div>
+                                <div class="text-xs text-textMuted">Bitcoin</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-bold text-sm">64,230.50</div>
+                            <div class="text-xs text-buy">+2.45%</div>
+                        </div>
+                    </div>
+                    <div class="p-4 flex justify-between items-center hover:bg-dark cursor-pointer transition">
+                        <div class="flex items-center gap-3">
+                            <i class="fa-brands fa-ethereum text-gray-400 text-xl"></i>
+                            <div>
+                                <div class="font-bold text-sm">ETH/USD</div>
+                                <div class="text-xs text-textMuted">Ethereum</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-bold text-sm">3,420.10</div>
+                            <div class="text-xs text-sell">-0.85%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Col: Market Trends & News -->
+        <div class="md:col-span-2 space-y-6">
+            <!-- Market Trends -->
+            <div class="bg-panel border border-border rounded-lg p-0">
+                <div class="p-4 border-b border-border flex gap-4">
+                    <button class="text-white font-bold border-b-2 border-primary pb-2">急上昇</button>
+                    <button class="text-textMuted font-bold pb-2 hover:text-white transition">急落</button>
+                    <button class="text-textMuted font-bold pb-2 hover:text-white transition">24h 取引高</button>
+                </div>
+                <table class="w-full text-left text-sm">
+                    <thead>
+                        <tr class="text-textMuted border-b border-border">
+                            <th class="p-4 font-normal">ペア</th>
+                            <th class="p-4 font-normal">現在価格</th>
+                            <th class="p-4 font-normal">24h変動</th>
+                            <th class="p-4 font-normal text-right">アクション</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-border">
+                        <tr class="hover:bg-dark transition">
+                            <td class="p-4 font-bold">PST/USD</td>
+                            <td class="p-4">1.2420</td>
+                            <td class="p-4 text-buy">+12.40%</td>
+                            <td class="p-4 text-right"><a href="spot.html" class="text-primary text-xs border border-primary px-3 py-1 rounded hover:bg-primary hover:text-black transition">トレード</a></td>
+                        </tr>
+                        <tr class="hover:bg-dark transition">
+                            <td class="p-4 font-bold">SOL/USD</td>
+                            <td class="p-4">145.80</td>
+                            <td class="p-4 text-buy">+5.12%</td>
+                            <td class="p-4 text-right"><a href="spot.html" class="text-primary text-xs border border-primary px-3 py-1 rounded hover:bg-primary hover:text-black transition">トレード</a></td>
+                        </tr>
+                        <tr class="hover:bg-dark transition">
+                            <td class="p-4 font-bold">AVAX/USD</td>
+                            <td class="p-4">35.60</td>
+                            <td class="p-4 text-buy">+4.80%</td>
+                            <td class="p-4 text-right"><a href="spot.html" class="text-primary text-xs border border-primary px-3 py-1 rounded hover:bg-primary hover:text-black transition">トレード</a></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Latest News Widget -->
+            <div class="bg-panel border border-border rounded-lg p-0">
+                <div class="p-4 border-b border-border flex justify-between items-center">
+                    <h2 class="font-bold"><i class="fa-regular fa-newspaper mr-2 text-textMuted"></i>ヘッドライン</h2>
+                    <a href="news.html" class="text-xs text-primary">ニュース一覧</a>
+                </div>
+                <div class="p-4 space-y-4">
+                    <div class="flex gap-4">
+                        <span class="text-xs text-textMuted shrink-0 mt-0.5">10:45</span>
+                        <div>
+                            <span class="bg-red-900/50 text-red-400 text-xs px-2 py-0.5 rounded mr-2">重要</span>
+                            <a href="#" class="text-sm hover:text-primary transition line-clamp-1">FRB、予想外の金利引き上げを発表。市場は急落の兆し。</a>
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <span class="text-xs text-textMuted shrink-0 mt-0.5">09:12</span>
+                        <div>
+                            <span class="bg-blue-900/50 text-blue-400 text-xs px-2 py-0.5 rounded mr-2">企業</span>
+                            <a href="#" class="text-sm hover:text-primary transition line-clamp-1">大手仮想通貨取引所、新たな流動性マイニングプログラムを開始。</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</body>
+</html>

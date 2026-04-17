@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>現物取引 - BTC/USD | Paper Street</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#0b0e11', panel: '#181a20', border: '#2b3139',
+                        primary: '#fcd535', buy: '#0ecb81', sell: '#f6465d', textMuted: '#848e9c',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #0b0e11; color: #eaecef; overflow: hidden; }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #2b3139; border-radius: 2px; }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+    <!-- Header -->
+    <nav class="bg-panel border-b border-border px-4 py-2 flex items-center justify-between shrink-0 h-[56px]">
+        <div class="flex items-center gap-6">
+            <a href="dashboard.html" class="text-lg font-bold text-primary tracking-tighter">PAPER STREET</a>
+            <div class="flex items-center gap-4 text-sm font-medium text-textMuted">
+                <a href="spot.html" class="text-white">現物</a>
+                <a href="margin.html" class="hover:text-white">信用</a>
+                <a href="swap.html" class="hover:text-white">スワップ</a>
+            </div>
+        </div>
+        <!-- Ticker Info in Header -->
+        <div class="flex items-center gap-6 text-sm">
+            <div>
+                <span class="text-xl font-bold">BTC/USD</span>
+                <span class="text-xs text-textMuted ml-2 underline decoration-dashed decoration-textMuted">Bitcoin</span>
+            </div>
+            <div>
+                <div class="text-xs text-textMuted">現在価格</div>
+                <div class="font-bold text-buy">64,230.50</div>
+            </div>
+            <div class="hidden md:block">
+                <div class="text-xs text-textMuted">24h 変動</div>
+                <div class="font-bold text-buy">+2.45%</div>
+            </div>
+            <div class="hidden lg:block">
+                <div class="text-xs text-textMuted">24h 高値</div>
+                <div class="font-bold">65,100.00</div>
+            </div>
+            <div class="hidden lg:block">
+                <div class="text-xs text-textMuted">24h 安値</div>
+                <div class="font-bold">62,800.00</div>
+            </div>
+        </div>
+        <div>
+            <a href="portfolio.html" class="text-sm hover:text-primary"><i class="fa-solid fa-wallet"></i></a>
+        </div>
+    </nav>
+
+    <!-- Trading Layout -->
+    <main class="flex-1 flex gap-1 p-1 bg-dark overflow-hidden">
+        
+        <!-- Left: Market List -->
+        <aside class="w-[280px] bg-panel flex flex-col shrink-0 rounded-sm overflow-hidden">
+            <div class="p-2 border-b border-border flex gap-2">
+                <input type="text" placeholder="検索" class="w-full bg-dark text-xs px-2 py-1.5 rounded border border-border focus:border-primary focus:outline-none">
+            </div>
+            <div class="flex text-xs text-textMuted px-3 py-2 border-b border-border">
+                <div class="flex-1">ペア</div>
+                <div class="w-20 text-right">価格</div>
+                <div class="w-16 text-right">変動</div>
+            </div>
+            <div class="flex-1 overflow-y-auto">
+                <div class="flex text-xs px-3 py-2 hover:bg-dark cursor-pointer bg-dark border-l-2 border-primary">
+                    <div class="flex-1 font-bold">BTC/USD</div>
+                    <div class="w-20 text-right">64,230.5</div>
+                    <div class="w-16 text-right text-buy">+2.45%</div>
+                </div>
+                <div class="flex text-xs px-3 py-2 hover:bg-dark cursor-pointer">
+                    <div class="flex-1 font-bold">ETH/USD</div>
+                    <div class="w-20 text-right">3,420.1</div>
+                    <div class="w-16 text-right text-sell">-0.85%</div>
+                </div>
+                <div class="flex text-xs px-3 py-2 hover:bg-dark cursor-pointer">
+                    <div class="flex-1 font-bold">SOL/USD</div>
+                    <div class="w-20 text-right">145.8</div>
+                    <div class="w-16 text-right text-buy">+5.12%</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Center: Chart & Order Form -->
+        <section class="flex-1 flex flex-col gap-1 min-w-0">
+            <!-- Chart Area -->
+            <div class="flex-1 bg-panel rounded-sm relative flex items-center justify-center border border-border">
+                <div class="absolute top-2 left-4 flex gap-4 text-xs text-textMuted">
+                    <span>時間足: <button class="text-white ml-1">15m</button> <button class="ml-1 hover:text-white">1H</button> <button class="ml-1 hover:text-white">4H</button></span>
+                    <span><i class="fa-solid fa-chart-line"></i> TradingView Chart Placeholder</span>
+                </div>
+                <div class="text-border text-6xl opacity-20"><i class="fa-solid fa-chart-candlestick"></i></div>
+            </div>
+            
+            <!-- Order Form -->
+            <div class="h-[320px] shrink-0 bg-panel rounded-sm p-4 flex flex-col border border-border">
+                <div class="flex gap-6 mb-4 text-sm font-medium border-b border-border pb-2">
+                    <button class="text-primary border-b-2 border-primary -mb-[9px] pb-2">指値</button>
+                    <button class="text-textMuted hover:text-white pb-2">成行</button>
+                    <button class="text-textMuted hover:text-white pb-2">ストップリミット</button>
+                </div>
+                <div class="flex-1 flex gap-8">
+                    <!-- Buy Side -->
+                    <div class="flex-1 flex flex-col">
+                        <div class="flex justify-between text-xs text-textMuted mb-2">
+                            <span>利用可能残高</span>
+                            <span>12,450.00 USD</span>
+                        </div>
+                        <div class="flex items-center bg-dark border border-border rounded px-3 py-2 mb-4">
+                            <span class="text-textMuted text-xs w-12 shrink-0">価格</span>
+                            <input type="number" value="64230.50" class="w-full bg-transparent text-right text-sm focus:outline-none">
+                            <span class="text-textMuted text-xs ml-2">USD</span>
+                        </div>
+                        <div class="flex items-center bg-dark border border-border rounded px-3 py-2 mb-4">
+                            <span class="text-textMuted text-xs w-12 shrink-0">数量</span>
+                            <input type="number" placeholder="0.00" class="w-full bg-transparent text-right text-sm focus:outline-none">
+                            <span class="text-textMuted text-xs ml-2">BTC</span>
+                        </div>
+                        <!-- Slider -->
+                        <div class="flex justify-between mb-4 mt-2 px-1">
+                            <div class="w-2 h-2 rounded-full bg-border"></div>
+                            <div class="w-2 h-2 rounded-full bg-border"></div>
+                            <div class="w-2 h-2 rounded-full bg-border"></div>
+                            <div class="w-2 h-2 rounded-full bg-border"></div>
+                            <div class="w-2 h-2 rounded-full bg-border"></div>
+                        </div>
+                        <div class="mt-auto">
+                            <div class="flex justify-between text-xs mb-2">
+                                <span class="text-textMuted">合計</span>
+                                <span>0.00 USD</span>
+                            </div>
+                            <button class="w-full bg-buy text-white font-bold py-2 rounded hover:bg-green-600 transition">BTC を買う</button>
+                        </div>
+                    </div>
+                    <!-- Sell Side -->
+                    <div class="flex-1 flex flex-col">
+                        <div class="flex justify-between text-xs text-textMuted mb-2">
+                            <span>利用可能残高</span>
+                            <span>0.5420 BTC</span>
+                        </div>
+                        <div class="flex items-center bg-dark border border-border rounded px-3 py-2 mb-4">
+                            <span class="text-textMuted text-xs w-12 shrink-0">価格</span>
+                            <input type="number" value="64230.50" class="w-full bg-transparent text-right text-sm focus:outline-none">
+                            <span class="text-textMuted text-xs ml-2">USD</span>
+                        </div>
+                        <div class="flex items-center bg-dark border border-border rounded px-3 py-2 mb-4">
+                            <span class="text-textMuted text-xs w-12 shrink-0">数量</span>
+                            <input type="number" placeholder="0.00" class="w-full bg-transparent text-right text-sm focus:outline-none">
+                            <span class="text-textMuted text-xs ml-2">BTC</span>
+                        </div>
+                        <!-- Slider -->
+                        <div class="flex justify-between mb-4 mt-2 px-1">
+                            <div class="w-2 h-2 rounded-full bg-border"></div>
+                            <div class="w-2 h-2 rounded-full bg-border"></div>
+                            <div class="w-2 h-2 rounded-full bg-border"></div>
+                            <div class="w-2 h-2 rounded-full bg-border"></div>
+                            <div class="w-2 h-2 rounded-full bg-border"></div>
+                        </div>
+                        <div class="mt-auto">
+                            <div class="flex justify-between text-xs mb-2">
+                                <span class="text-textMuted">合計</span>
+                                <span>0.00 USD</span>
+                            </div>
+                            <button class="w-full bg-sell text-white font-bold py-2 rounded hover:bg-red-600 transition">BTC を売る</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right: Orderbook -->
+        <aside class="w-[320px] flex flex-col gap-1 shrink-0">
+            <div class="flex-1 bg-panel rounded-sm flex flex-col border border-border">
+                <div class="p-2 border-b border-border flex justify-between items-center text-xs text-textMuted">
+                    <span>オーダーブック</span>
+                    <div class="flex gap-2">
+                        <i class="fa-solid fa-list cursor-pointer hover:text-white"></i>
+                        <i class="fa-solid fa-arrow-down-short-wide text-buy cursor-pointer"></i>
+                        <i class="fa-solid fa-arrow-up-short-wide text-sell cursor-pointer"></i>
+                    </div>
+                </div>
+                <div class="flex text-xs text-textMuted px-3 py-2">
+                    <div class="w-24 text-left">価格(USD)</div>
+                    <div class="w-20 text-right">数量(BTC)</div>
+                    <div class="flex-1 text-right">合計</div>
+                </div>
+                <!-- Asks -->
+                <div class="flex-1 overflow-y-hidden flex flex-col justify-end pb-1 text-xs font-mono">
+                    <div class="flex px-3 py-0.5 hover:bg-dark relative cursor-pointer">
+                        <div class="absolute right-0 top-0 bottom-0 bg-sell/10 w-[80%]"></div>
+                        <div class="w-24 text-left text-sell z-10">64,240.00</div>
+                        <div class="w-20 text-right z-10">0.450</div>
+                        <div class="flex-1 text-right z-10">28,908.00</div>
+                    </div>
+                    <div class="flex px-3 py-0.5 hover:bg-dark relative cursor-pointer">
+                        <div class="absolute right-0 top-0 bottom-0 bg-sell/10 w-[60%]"></div>
+                        <div class="w-24 text-left text-sell z-10">64,235.50</div>
+                        <div class="w-20 text-right z-10">1.200</div>
+                        <div class="flex-1 text-right z-10">77,082.60</div>
+                    </div>
+                    <div class="flex px-3 py-0.5 hover:bg-dark relative cursor-pointer">
+                        <div class="absolute right-0 top-0 bottom-0 bg-sell/10 w-[30%]"></div>
+                        <div class="w-24 text-left text-sell z-10">64,231.00</div>
+                        <div class="w-20 text-right z-10">0.050</div>
+                        <div class="flex-1 text-right z-10">3,211.55</div>
+                    </div>
+                </div>
+                
+                <!-- Spread -->
+                <div class="py-2 px-3 border-y border-border flex items-center justify-between">
+                    <div class="text-lg font-bold text-buy">64,230.50 <i class="fa-solid fa-arrow-up text-sm"></i></div>
+                    <div class="text-xs text-textMuted hover:underline cursor-pointer">詳細</div>
+                </div>
+
+                <!-- Bids -->
+                <div class="flex-1 overflow-y-hidden pt-1 text-xs font-mono">
+                    <div class="flex px-3 py-0.5 hover:bg-dark relative cursor-pointer">
+                        <div class="absolute right-0 top-0 bottom-0 bg-buy/10 w-[40%]"></div>
+                        <div class="w-24 text-left text-buy z-10">64,230.00</div>
+                        <div class="w-20 text-right z-10">0.850</div>
+                        <div class="flex-1 text-right z-10">54,595.50</div>
+                    </div>
+                    <div class="flex px-3 py-0.5 hover:bg-dark relative cursor-pointer">
+                        <div class="absolute right-0 top-0 bottom-0 bg-buy/10 w-[55%]"></div>
+                        <div class="w-24 text-left text-buy z-10">64,225.00</div>
+                        <div class="w-20 text-right z-10">2.100</div>
+                        <div class="flex-1 text-right z-10">134,872.50</div>
+                    </div>
+                    <div class="flex px-3 py-0.5 hover:bg-dark relative cursor-pointer">
+                        <div class="absolute right-0 top-0 bottom-0 bg-buy/10 w-[90%]"></div>
+                        <div class="w-24 text-left text-buy z-10">64,210.00</div>
+                        <div class="w-20 text-right z-10">5.000</div>
+                        <div class="flex-1 text-right z-10">321,050.00</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Trades -->
+            <div class="h-[250px] bg-panel rounded-sm flex flex-col border border-border">
+                <div class="p-2 border-b border-border text-xs text-textMuted">マーケット履歴</div>
+                <div class="flex text-xs text-textMuted px-3 py-2">
+                    <div class="w-20 text-left">価格</div>
+                    <div class="w-20 text-right">数量</div>
+                    <div class="flex-1 text-right">時間</div>
+                </div>
+                <div class="flex-1 overflow-y-auto text-xs font-mono">
+                    <div class="flex px-3 py-1 hover:bg-dark cursor-pointer">
+                        <div class="w-20 text-left text-buy">64,230.50</div>
+                        <div class="w-20 text-right">0.015</div>
+                        <div class="flex-1 text-right text-textMuted">10:45:12</div>
+                    </div>
+                    <div class="flex px-3 py-1 hover:bg-dark cursor-pointer">
+                        <div class="w-20 text-left text-sell">64,230.50</div>
+                        <div class="w-20 text-right">0.100</div>
+                        <div class="flex-1 text-right text-textMuted">10:45:10</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <!-- Bottom: Orders & Positions -->
+    <footer class="h-[200px] shrink-0 bg-panel border-t border-border flex flex-col">
+        <div class="flex gap-6 px-4 pt-2 border-b border-border text-sm font-medium">
+            <button class="text-primary border-b-2 border-primary -mb-[1px] pb-2">オープンオーダー (1)</button>
+            <button class="text-textMuted hover:text-white pb-2">注文履歴</button>
+            <button class="text-textMuted hover:text-white pb-2">約定履歴</button>
+            <button class="text-textMuted hover:text-white pb-2">資産</button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-4">
+            <table class="w-full text-left text-xs">
+                <thead class="text-textMuted">
+                    <tr>
+                        <th class="pb-2 font-normal">時間</th>
+                        <th class="pb-2 font-normal">ペア</th>
+                        <th class="pb-2 font-normal">タイプ</th>
+                        <th class="pb-2 font-normal">サイド</th>
+                        <th class="pb-2 font-normal text-right">価格</th>
+                        <th class="pb-2 font-normal text-right">数量</th>
+                        <th class="pb-2 font-normal text-right">未約定</th>
+                        <th class="pb-2 font-normal text-right">アクション</th>
+                    </tr>
+                </thead>
+                <tbody class="font-mono">
+                    <tr class="hover:bg-dark">
+                        <td class="py-2">2026-04-17 10:30:00</td>
+                        <td class="py-2 font-sans font-bold">BTC/USD</td>
+                        <td class="py-2 font-sans">指値</td>
+                        <td class="py-2 font-sans text-buy">買</td>
+                        <td class="py-2 text-right">62,000.00</td>
+                        <td class="py-2 text-right">0.100</td>
+                        <td class="py-2 text-right">0.100</td>
+                        <td class="py-2 text-right"><button class="text-primary font-sans hover:underline">キャンセル</button></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </footer>
+</body>
+</html>

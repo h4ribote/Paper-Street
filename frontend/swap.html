@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スワップ & プール | Paper Street</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#0b0e11', panel: '#181a20', border: '#2b3139',
+                        primary: '#fcd535', primaryHover: '#f0c722', textMuted: '#848e9c',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>body { background-color: #0b0e11; color: #eaecef; }</style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <nav class="bg-panel border-b border-border px-4 py-3 flex items-center justify-between sticky top-0 z-50">
+        <!-- Dashboard nav copy -->
+        <div class="flex items-center gap-6">
+            <a href="dashboard.html" class="text-xl font-bold text-primary tracking-tighter">PAPER STREET</a>
+            <div class="hidden md:flex items-center gap-4 text-sm font-medium text-textMuted">
+                <a href="dashboard.html" class="hover:text-white transition">ダッシュボード</a>
+                <a href="spot.html" class="hover:text-white transition">現物</a>
+                <a href="swap.html" class="text-white border-b-2 border-primary pb-1">スワップ</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow p-6 flex flex-col items-center justify-center">
+        <!-- Swap Card -->
+        <div class="bg-panel border border-border rounded-xl p-6 w-full max-w-md shadow-2xl relative">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-lg font-bold">スワップ</h2>
+                <i class="fa-solid fa-gear text-textMuted hover:text-white cursor-pointer transition"></i>
+            </div>
+
+            <!-- From -->
+            <div class="bg-dark border border-border rounded-lg p-4 mb-2">
+                <div class="flex justify-between text-xs text-textMuted mb-2">
+                    <span>振替元</span>
+                    <span>残高: 2.5000</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <input type="number" value="1.0" class="bg-transparent text-2xl w-1/2 focus:outline-none text-white">
+                    <button class="bg-panel border border-border rounded-full px-3 py-1 flex items-center gap-2 hover:bg-border transition">
+                        <i class="fa-brands fa-ethereum text-gray-400"></i>
+                        <span class="font-bold">ETH</span>
+                        <i class="fa-solid fa-chevron-down text-xs"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Swap Arrow -->
+            <div class="absolute left-1/2 top-[165px] -translate-x-1/2 -translate-y-1/2 bg-panel border border-border rounded-lg p-2 cursor-pointer hover:border-primary transition z-10">
+                <i class="fa-solid fa-arrow-down text-textMuted"></i>
+            </div>
+
+            <!-- To -->
+            <div class="bg-dark border border-border rounded-lg p-4 mt-2 mb-6">
+                <div class="flex justify-between text-xs text-textMuted mb-2">
+                    <span>振替先（推定）</span>
+                    <span>残高: 1,200.50</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <input type="number" value="3415.20" class="bg-transparent text-2xl w-1/2 focus:outline-none text-white" readonly>
+                    <button class="bg-panel border border-border rounded-full px-3 py-1 flex items-center gap-2 hover:bg-border transition">
+                        <i class="fa-solid fa-dollar-sign text-green-500"></i>
+                        <span class="font-bold">USD</span>
+                        <i class="fa-solid fa-chevron-down text-xs"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Rate Details -->
+            <div class="text-xs text-textMuted space-y-2 mb-6 px-1">
+                <div class="flex justify-between">
+                    <span>為替レート</span>
+                    <span>1 ETH = 3,415.20 USD</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>スリッページ許容度</span>
+                    <span>0.5%</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>ネットワーク手数料</span>
+                    <span>0.002 ETH</span>
+                </div>
+            </div>
+
+            <button class="w-full bg-primary text-black py-4 rounded-lg font-bold text-lg hover:bg-primaryHover transition">
+                スワップを確定
+            </button>
+        </div>
+
+        <!-- Liquidity Pools Section -->
+        <div class="w-full max-w-4xl mt-16">
+            <h3 class="text-xl font-bold mb-4">流動性プール</h3>
+            <div class="bg-panel border border-border rounded-lg overflow-hidden">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-dark border-b border-border">
+                        <tr class="text-textMuted">
+                            <th class="p-4 font-normal">プール</th>
+                            <th class="p-4 font-normal text-right">TVL</th>
+                            <th class="p-4 font-normal text-right">24h ボリューム</th>
+                            <th class="p-4 font-normal text-right">APR</th>
+                            <th class="p-4 font-normal text-center">アクション</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-border">
+                        <tr class="hover:bg-dark transition">
+                            <td class="p-4 font-bold flex items-center gap-2">
+                                <div class="flex -space-x-2">
+                                    <div class="w-6 h-6 rounded-full bg-blue-500 border border-dark z-10 flex items-center justify-center text-[10px]">E</div>
+                                    <div class="w-6 h-6 rounded-full bg-green-500 border border-dark z-0 flex items-center justify-center text-[10px]">$</div>
+                                </div>
+                                ETH/USD
+                            </td>
+                            <td class="p-4 text-right font-mono">$12.5M</td>
+                            <td class="p-4 text-right font-mono">$4.2M</td>
+                            <td class="p-4 text-right text-green-400 font-bold">12.4%</td>
+                            <td class="p-4 text-center">
+                                <button class="text-primary text-xs border border-primary px-3 py-1 rounded hover:bg-primary hover:text-black transition">追加</button>
+                            </td>
+                        </tr>
+                        <tr class="hover:bg-dark transition">
+                            <td class="p-4 font-bold flex items-center gap-2">
+                                <div class="flex -space-x-2">
+                                    <div class="w-6 h-6 rounded-full bg-orange-500 border border-dark z-10 flex items-center justify-center text-[10px]">B</div>
+                                    <div class="w-6 h-6 rounded-full bg-green-500 border border-dark z-0 flex items-center justify-center text-[10px]">$</div>
+                                </div>
+                                BTC/USD
+                            </td>
+                            <td class="p-4 text-right font-mono">$45.1M</td>
+                            <td class="p-4 text-right font-mono">$18.9M</td>
+                            <td class="p-4 text-right text-green-400 font-bold">8.2%</td>
+                            <td class="p-4 text-center">
+                                <button class="text-primary text-xs border border-primary px-3 py-1 rounded hover:bg-primary hover:text-black transition">追加</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+</body>
+</html>

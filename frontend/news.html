@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>マーケットニュース | Paper Street</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#0b0e11', panel: '#181a20', border: '#2b3139',
+                        primary: '#fcd535', textMuted: '#848e9c',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>body { background-color: #0b0e11; color: #eaecef; }</style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <nav class="bg-panel border-b border-border px-4 py-3 flex items-center justify-between sticky top-0 z-50">
+        <div class="flex items-center gap-6">
+            <a href="dashboard.html" class="text-xl font-bold text-primary tracking-tighter">PAPER STREET</a>
+            <div class="hidden md:flex items-center gap-4 text-sm font-medium text-textMuted">
+                <a href="dashboard.html" class="hover:text-white transition">ダッシュボード</a>
+                <a href="spot.html" class="hover:text-white transition">現物</a>
+                <a href="news.html" class="text-white border-b-2 border-primary pb-1">ニュース</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="bg-dark border-b border-border py-8">
+        <div class="max-w-7xl mx-auto px-6">
+            <h1 class="text-3xl font-bold mb-2">ニュースターミナル</h1>
+            <p class="text-textMuted">市場を動かす最新のファンダメンタルズ情報をリアルタイムで提供します。</p>
+        </div>
+    </div>
+
+    <main class="flex-grow p-6 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-4 gap-6">
+        
+        <!-- Left Col: Macro Indicators -->
+        <aside class="lg:col-span-1 space-y-6">
+            <div class="bg-panel border border-border rounded-lg p-4">
+                <h3 class="font-bold border-b border-border pb-2 mb-4">マクロ経済指標</h3>
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-textMuted">政策金利 (米国)</span>
+                        <span class="font-bold font-mono text-red-400">5.50% <i class="fa-solid fa-caret-up"></i></span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-textMuted">インフレ率 (CPI)</span>
+                        <span class="font-bold font-mono">3.20% =</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-textMuted">失業率</span>
+                        <span class="font-bold font-mono text-green-400">3.80% <i class="fa-solid fa-caret-down"></i></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-panel border border-border rounded-lg p-4">
+                <h3 class="font-bold border-b border-border pb-2 mb-4">フィルター</h3>
+                <div class="space-y-2 text-sm">
+                    <label class="flex items-center gap-2 cursor-pointer hover:text-white text-textMuted"><input type="checkbox" checked class="accent-primary"> すべて</label>
+                    <label class="flex items-center gap-2 cursor-pointer hover:text-white text-textMuted"><input type="checkbox" class="accent-primary"> マクロ経済</label>
+                    <label class="flex items-center gap-2 cursor-pointer hover:text-white text-textMuted"><input type="checkbox" class="accent-primary"> 規制・法律</label>
+                    <label class="flex items-center gap-2 cursor-pointer hover:text-white text-textMuted"><input type="checkbox" class="accent-primary"> 企業発表</label>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Right Col: News Feed -->
+        <section class="lg:col-span-3 space-y-4">
+            <!-- News Item 1 -->
+            <article class="bg-panel border border-border rounded-lg p-5 hover:border-primary/50 transition cursor-pointer">
+                <div class="flex justify-between items-start mb-2">
+                    <div class="flex gap-2 items-center">
+                        <span class="bg-red-900/50 text-red-400 text-xs px-2 py-0.5 rounded font-bold">重要・マクロ</span>
+                        <span class="text-sm text-textMuted">10分前</span>
+                    </div>
+                    <span class="text-xs text-textMuted">Paper Street News</span>
+                </div>
+                <h2 class="text-xl font-bold mb-2">FRB、予想外の0.25%利上げを発表。市場はリスクオフの動き。</h2>
+                <p class="text-textMuted text-sm mb-4 line-clamp-2">
+                    インフレ懸念の再燃を受け、連邦準備制度理事会（FRB）は事前の予想に反して政策金利の引き上げを決定しました。これにより、暗号資産を含むリスク資産市場全体で売り圧力が強まっています。
+                </p>
+                <div class="flex gap-2">
+                    <span class="text-xs bg-dark border border-border px-2 py-1 rounded text-textMuted">#BTC</span>
+                    <span class="text-xs bg-dark border border-border px-2 py-1 rounded text-textMuted">#USD</span>
+                </div>
+            </article>
+
+            <!-- News Item 2 -->
+            <article class="bg-panel border border-border rounded-lg p-5 hover:border-primary/50 transition cursor-pointer">
+                <div class="flex justify-between items-start mb-2">
+                    <div class="flex gap-2 items-center">
+                        <span class="bg-blue-900/50 text-blue-400 text-xs px-2 py-0.5 rounded font-bold">企業発表</span>
+                        <span class="text-sm text-textMuted">1時間前</span>
+                    </div>
+                </div>
+                <h2 class="text-lg font-bold mb-2">大手テクノロジー企業、バランスシートに巨額のビットコインを追加</h2>
+                <p class="text-textMuted text-sm mb-4 line-clamp-2">
+                    シグマ・コーポレーションは四半期決算にて、インフレヘッジとして新たに1万BTCを購入したことを明らかにしました。
+                </p>
+                <div class="flex gap-2">
+                    <span class="text-xs bg-dark border border-border px-2 py-1 rounded text-textMuted">#BTC</span>
+                </div>
+            </article>
+            
+            <button class="w-full py-3 border border-border rounded text-textMuted hover:text-white hover:bg-dark transition">さらに読み込む</button>
+        </section>
+    </main>
+</body>
+</html>

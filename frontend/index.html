@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paper Street | The Next Generation Exchange</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#0b0e11', panel: '#181a20', border: '#2b3139',
+                        primary: '#fcd535', primaryHover: '#f0c722',
+                        buy: '#0ecb81', sell: '#f6465d', textMuted: '#848e9c',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #0b0e11; color: #eaecef; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen">
+    <!-- Header -->
+    <nav class="bg-panel border-b border-border px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-8">
+            <a href="index.html" class="text-2xl font-bold text-primary tracking-tighter"><i class="fa-solid fa-chart-line mr-2"></i>PAPER STREET</a>
+            <div class="hidden md:flex items-center gap-6 text-sm font-medium text-textMuted">
+                <a href="dashboard.html" class="hover:text-white transition">マーケット</a>
+                <a href="spot.html" class="hover:text-white transition">トレード</a>
+                <a href="news.html" class="hover:text-white transition">ニュース</a>
+            </div>
+        </div>
+        <div class="flex items-center gap-4">
+            <a href="login.html" class="text-sm font-medium hover:text-white transition">ログイン</a>
+            <a href="login.html" class="bg-primary text-black px-5 py-2 rounded font-bold hover:bg-primaryHover transition">口座開設</a>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <main class="flex-grow flex flex-col items-center justify-center text-center px-4 py-20">
+        <h1 class="text-5xl md:text-7xl font-bold mb-6">次世代の仮想暗号資産取引プラットフォーム</h1>
+        <p class="text-lg md:text-xl text-textMuted mb-10 max-w-2xl">高度な取引ツール、リアルタイムの市場データ、そして洗練されたAIボットと競い合う新しい市場体験。</p>
+        <div class="flex gap-4">
+            <a href="login.html" class="bg-primary text-black px-8 py-3 rounded text-lg font-bold hover:bg-primaryHover transition">今すぐはじめる</a>
+            <a href="dashboard.html" class="bg-panel border border-border px-8 py-3 rounded text-lg font-bold hover:bg-border transition">マーケットを見る</a>
+        </div>
+
+        <!-- Market Ticker Mockup -->
+        <div class="mt-20 w-full max-w-5xl bg-panel rounded-lg border border-border overflow-hidden">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-6">
+                <div class="text-left border-r border-border last:border-0 px-4">
+                    <div class="text-textMuted text-sm mb-1">BTC/USD</div>
+                    <div class="text-2xl font-bold text-buy">64,230.50</div>
+                    <div class="text-sm text-buy">+2.45%</div>
+                </div>
+                <div class="text-left border-r border-border md:border-r last:border-0 px-4">
+                    <div class="text-textMuted text-sm mb-1">ETH/USD</div>
+                    <div class="text-2xl font-bold text-sell">3,420.10</div>
+                    <div class="text-sm text-sell">-0.85%</div>
+                </div>
+                <div class="text-left border-r border-border last:border-0 px-4">
+                    <div class="text-textMuted text-sm mb-1">SOL/USD</div>
+                    <div class="text-2xl font-bold text-buy">145.80</div>
+                    <div class="text-sm text-buy">+5.12%</div>
+                </div>
+                <div class="text-left px-4">
+                    <div class="text-textMuted text-sm mb-1">PST/USD</div>
+                    <div class="text-2xl font-bold text-buy">1.24</div>
+                    <div class="text-sm text-buy">+12.4%</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-panel border-t border-border py-8 text-center text-textMuted text-sm">
+        <p>&copy; 2026 Paper Street Exchange. All rights reserved.</p>
+    </footer>
+</body>
+</html>

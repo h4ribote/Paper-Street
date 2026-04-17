@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ログイン | Paper Street</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#0b0e11', panel: '#181a20', border: '#2b3139',
+                        primary: '#fcd535', primaryHover: '#f0c722', textMuted: '#848e9c',
+                        discord: '#5865F2', discordHover: '#4752C4'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>body { background-color: #0b0e11; color: #eaecef; }</style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+    <div class="w-full max-w-md bg-panel border border-border rounded-xl p-8 shadow-2xl">
+        <div class="text-center mb-8">
+            <a href="index.html" class="inline-block text-3xl font-bold text-primary tracking-tighter mb-2"><i class="fa-solid fa-chart-line mr-2"></i>PAPER STREET</a>
+            <p class="text-textMuted">アカウントにログインしてください</p>
+        </div>
+
+        <!-- Discord Login -->
+        <a href="dashboard.html" class="w-full flex items-center justify-center gap-3 bg-discord hover:bg-discordHover text-white py-3 px-4 rounded font-bold transition mb-6">
+            <i class="fa-brands fa-discord text-xl"></i>
+            Discordでログイン
+        </a>
+
+        <div class="relative flex items-center py-4">
+            <div class="flex-grow border-t border-border"></div>
+            <span class="flex-shrink-0 mx-4 text-textMuted text-sm">または APIキーを入力</span>
+            <div class="flex-grow border-t border-border"></div>
+        </div>
+
+        <!-- API Key Login -->
+        <form action="dashboard.html" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-textMuted mb-1">API Key</label>
+                <input type="text" class="w-full bg-dark border border-border rounded px-4 py-3 focus:outline-none focus:border-primary text-white" placeholder="YOUR_API_KEY" required>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-textMuted mb-1">API Secret (オプション)</label>
+                <input type="password" class="w-full bg-dark border border-border rounded px-4 py-3 focus:outline-none focus:border-primary text-white" placeholder="YOUR_API_SECRET">
+            </div>
+            <button type="submit" class="w-full bg-primary text-black py-3 rounded font-bold hover:bg-primaryHover transition mt-2">
+                ログイン
+            </button>
+        </form>
+    </div>
+</body>
+</html>

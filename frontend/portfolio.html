@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ウォレット・ポートフォリオ | Paper Street</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#0b0e11', panel: '#181a20', border: '#2b3139',
+                        primary: '#fcd535', buy: '#0ecb81', sell: '#f6465d', textMuted: '#848e9c',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>body { background-color: #0b0e11; color: #eaecef; }</style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <nav class="bg-panel border-b border-border px-4 py-3 flex items-center justify-between sticky top-0 z-50">
+        <div class="flex items-center gap-6">
+            <a href="dashboard.html" class="text-xl font-bold text-primary tracking-tighter">PAPER STREET</a>
+            <div class="hidden md:flex items-center gap-4 text-sm font-medium text-textMuted">
+                <a href="dashboard.html" class="hover:text-white">ダッシュボード</a>
+                <a href="spot.html" class="hover:text-white">現物</a>
+            </div>
+        </div>
+        <div class="flex items-center gap-4">
+            <div class="w-8 h-8 bg-primary text-black font-bold rounded-full flex items-center justify-center">U</div>
+        </div>
+    </nav>
+
+    <div class="flex flex-1">
+        <!-- Sidebar Navigation -->
+        <aside class="w-64 bg-panel border-r border-border shrink-0 hidden md:block">
+            <div class="p-4 text-textMuted text-sm font-bold tracking-wider">ウォレット</div>
+            <ul class="space-y-1 px-2">
+                <li><a href="#" class="block px-4 py-2 bg-dark text-white rounded font-medium"><i class="fa-solid fa-chart-pie w-6"></i> 概要</a></li>
+                <li><a href="#" class="block px-4 py-2 hover:bg-dark rounded text-textMuted hover:text-white transition"><i class="fa-solid fa-coins w-6"></i> 現物・資金</a></li>
+                <li><a href="#" class="block px-4 py-2 hover:bg-dark rounded text-textMuted hover:text-white transition"><i class="fa-solid fa-bolt w-6"></i> 信用取引</a></li>
+                <li><a href="#" class="block px-4 py-2 hover:bg-dark rounded text-textMuted hover:text-white transition"><i class="fa-solid fa-water w-6"></i> プール・流動性</a></li>
+            </ul>
+            <div class="mt-8 p-4 text-textMuted text-sm font-bold tracking-wider">履歴</div>
+            <ul class="space-y-1 px-2">
+                <li><a href="#" class="block px-4 py-2 hover:bg-dark rounded text-textMuted hover:text-white transition"><i class="fa-solid fa-clock-rotate-left w-6"></i> 取引履歴</a></li>
+            </ul>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 p-6 lg:p-10 max-w-5xl">
+            <h1 class="text-2xl font-bold mb-6">ポートフォリオ概要</h1>
+
+            <!-- Total Balance Card -->
+            <div class="bg-panel border border-border rounded-xl p-8 mb-8 flex justify-between items-center">
+                <div>
+                    <div class="text-textMuted text-sm mb-2">推定総残高</div>
+                    <div class="flex items-end gap-3 mb-2">
+                        <span class="text-4xl font-bold font-mono">12,450.00</span>
+                        <span class="text-xl text-textMuted font-bold pb-1">USD</span>
+                    </div>
+                    <div class="text-sm">
+                        <span class="text-textMuted">今日の損益: </span>
+                        <span class="text-buy font-bold">+450.20 (+3.5%)</span>
+                    </div>
+                </div>
+                <div class="hidden sm:flex gap-3">
+                    <button class="bg-primary text-black px-6 py-2 rounded font-bold hover:bg-primaryHover transition">入金</button>
+                    <button class="bg-dark border border-border text-white px-6 py-2 rounded font-bold hover:bg-border transition">出金</button>
+                </div>
+            </div>
+
+            <!-- Asset Allocation (Mock) -->
+            <h2 class="text-xl font-bold mb-4">資産内訳</h2>
+            <div class="bg-panel border border-border rounded-xl overflow-hidden">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-dark border-b border-border">
+                        <tr class="text-textMuted">
+                            <th class="p-4 font-normal">資産</th>
+                            <th class="p-4 font-normal text-right">合計残高</th>
+                            <th class="p-4 font-normal text-right">利用可能</th>
+                            <th class="p-4 font-normal text-right">USD評価額</th>
+                            <th class="p-4 font-normal text-center">アクション</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-border">
+                        <tr class="hover:bg-dark transition">
+                            <td class="p-4 font-bold flex items-center gap-3">
+                                <i class="fa-brands fa-bitcoin text-primary text-2xl"></i>
+                                <div>
+                                    <div>BTC</div>
+                                    <div class="text-xs text-textMuted font-normal">Bitcoin</div>
+                                </div>
+                            </td>
+                            <td class="p-4 text-right font-mono">0.15000000</td>
+                            <td class="p-4 text-right font-mono text-textMuted">0.05000000</td>
+                            <td class="p-4 text-right font-mono">9,634.50</td>
+                            <td class="p-4 text-center">
+                                <a href="spot.html" class="text-primary hover:underline mr-3">トレード</a>
+                            </td>
+                        </tr>
+                        <tr class="hover:bg-dark transition">
+                            <td class="p-4 font-bold flex items-center gap-3">
+                                <div class="w-6 h-6 rounded-full bg-green-500 text-black flex items-center justify-center font-bold text-xs">$</div>
+                                <div>
+                                    <div>USD</div>
+                                    <div class="text-xs text-textMuted font-normal">US Dollar</div>
+                                </div>
+                            </td>
+                            <td class="p-4 text-right font-mono">2,815.50</td>
+                            <td class="p-4 text-right font-mono text-textMuted">2,815.50</td>
+                            <td class="p-4 text-right font-mono">2,815.50</td>
+                            <td class="p-4 text-center">
+                                <a href="spot.html" class="text-primary hover:underline">トレード</a>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+</body>
+</html>
